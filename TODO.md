@@ -12,7 +12,10 @@ met a jour le man a chaque fois si tu ajoutes des choses.
 - [x] Trancher sur le nom définitif — **Reelflow**
 
 ## Core Engine
-- [ ] Parser YAML → pipeline object
+- [x] Parser YAML + validateur contre la spec (`reelflow validate`)
+- [x] CLI `run` / `validate` / `init` (run = stub honnête, moteur média à venir)
+- [x] Tests unitaires (pytest) + lint (ruff)
+- [x] CI GitHub Actions (lint + tests, matrice Python 3.10-3.12)
 - [ ] DAG builder (résolution des dépendances entre étapes)
 - [ ] Executor (parallélisme, gestion des states)
 - [ ] Système de cache / checkpoints (skip si output existe déjà)
