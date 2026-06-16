@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="820" viewBox="0 0 1500 820" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 z" fill="#57606a"/>
+    </marker>
+    <marker id="arrowDash" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 z" fill="#8250df"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1500" height="820" fill="#f6f8fa"/>
+
+  <!-- titles -->
+  <text x="24" y="44" font-size="22" font-weight="700" fill="#1f2328">Reelflow</text>
+  <text x="120" y="44" font-size="18" fill="#57606a">— from a YAML file to a running workflow</text>
+
+  <!-- ============ LEFT: YAML PANEL ============ -->
+  <rect x="24" y="68" width="470" height="724" rx="10" fill="#0d1117"/>
+  <text x="44" y="96" font-size="13" font-weight="700" fill="#8b949e" letter-spacing="1">podcast-to-clips.yaml</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">
+    <text x="44" y="128" fill="#e6edf3">reelflow: "1.0"</text>
+    <text x="44" y="147" fill="#e6edf3">name: podcast-to-clips</text>
+    <text x="44" y="185" fill="#e6edf3">input:</text>
+    <text x="44" y="204" fill="#e6edf3">  type: video</text>
+    <text x="44" y="223" fill="#e6edf3">  source: ./video-example.mp4</text>
+    <text x="44" y="261" fill="#e6edf3">steps:</text>
+    <text x="44" y="280" fill="#e6edf3">  - id: transcript</text>
+    <text x="44" y="299" fill="#79c0ff" font-weight="700">    stt:</text>
+    <text x="44" y="318" fill="#e6edf3">      model: base</text>
+    <text x="44" y="337" fill="#e6edf3">      lang: fr</text>
+    <text x="44" y="375" fill="#e6edf3">  - id: clips</text>
+    <text x="44" y="394" fill="#79c0ff" font-weight="700">    detect_clips:</text>
+    <text x="44" y="413" fill="#e6edf3">      method: silence</text>
+    <text x="44" y="432" fill="#e6edf3">      max_clips: 5</text>
+    <text x="44" y="451" fill="#e6edf3">      emit: clip_channel</text>
+    <text x="44" y="489" fill="#79c0ff" font-weight="700">  - cut:</text>
+    <text x="44" y="508" fill="#e6edf3">      from: clip_channel</text>
+    <text x="44" y="546" fill="#79c0ff" font-weight="700">  - captions:</text>
+    <text x="44" y="565" fill="#e6edf3">      from: clip_channel</text>
+    <text x="44" y="584" fill="#e6edf3">      segments: "{{ ... }}"</text>
+    <text x="44" y="603" fill="#e6edf3">      style: tiktok</text>
+    <text x="44" y="641" fill="#79c0ff" font-weight="700">  - export:</text>
+    <text x="44" y="660" fill="#e6edf3">      from: clip_channel</text>
+    <text x="44" y="679" fill="#e6edf3">      format: vertical</text>
+    <text x="44" y="717" fill="#e6edf3">output:</text>
+    <text x="44" y="736" fill="#e6edf3">  dir: ./output</text>
+  </g>
+
+  <!-- run arrow between panels -->
+  <line x1="504" y1="120" x2="876" y2="120" stroke="#2da44e" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="600" y="96" width="148" height="24" rx="12" fill="#dafbe1" stroke="#2da44e"/>
+  <text x="674" y="113" font-size="13" font-weight="700" fill="#04391b" text-anchor="middle">reelflow run</text>
+
+  <!-- ============ RIGHT: DAG ============ -->
+
+  <!-- input -->
+  <rect x="880" y="92" width="240" height="56" rx="10" fill="#1f2328"/>
+  <text x="1000" y="118" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">video-example.mp4</text>
+  <text x="1000" y="137" font-size="11" fill="#9198a1" text-anchor="middle">input · video</text>
+
+  <line x1="1000" y1="148" x2="1000" y2="186" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- stt -->
+  <rect x="880" y="188" width="240" height="56" rx="10" fill="#ddf4ff" stroke="#54aeff"/>
+  <text x="1000" y="214" font-size="14" font-weight="700" fill="#0a3069" text-anchor="middle">stt</text>
+  <text x="1000" y="232" font-size="11" fill="#0a3069" text-anchor="middle">whisper · transcript + segments</text>
+
+  <line x1="1000" y1="244" x2="1000" y2="282" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- detect_clips -->
+  <rect x="880" y="284" width="240" height="64" rx="10" fill="#fbefff" stroke="#c297ff"/>
+  <text x="1000" y="312" font-size="14" font-weight="700" fill="#4c2889" text-anchor="middle">detect_clips</text>
+  <text x="1000" y="330" font-size="11" fill="#4c2889" text-anchor="middle">finds 5 strong moments</text>
+  <rect x="1124" y="300" width="150" height="24" rx="12" fill="#fbefff" stroke="#c297ff"/>
+  <text x="1199" y="317" font-size="11" font-weight="700" fill="#4c2889" text-anchor="middle">emit: clip_channel</text>
+
+  <!-- detect -> channel -->
+  <path d="M1000,348 C1000,392 720,400 720,470" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- channel container -->
+  <rect x="560" y="410" width="880" height="210" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="584" y="438" font-size="13" font-weight="700" fill="#57606a">clip_channel</text>
+  <text x="668" y="438" font-size="12" fill="#8c959f">· 5 clips processed in parallel, one chain per clip</text>
+
+  <!-- cut (with stacked shadows for x5) -->
+  <rect x="622" y="490" width="220" height="78" rx="10" fill="#dafbe1" opacity="0.45"/>
+  <rect x="616" y="484" width="220" height="78" rx="10" fill="#dafbe1" opacity="0.7"/>
+  <rect x="610" y="478" width="220" height="78" rx="10" fill="#dafbe1" stroke="#4ac26b"/>
+  <text x="720" y="510" font-size="14" font-weight="700" fill="#04391b" text-anchor="middle">cut</text>
+  <text x="720" y="528" font-size="11" fill="#04391b" text-anchor="middle">extract segment</text>
+  <text x="720" y="544" font-size="11" fill="#04391b" text-anchor="middle">via FFmpeg</text>
+
+  <!-- captions -->
+  <rect x="882" y="490" width="220" height="78" rx="10" fill="#dafbe1" opacity="0.45"/>
+  <rect x="876" y="484" width="220" height="78" rx="10" fill="#dafbe1" opacity="0.7"/>
+  <rect x="870" y="478" width="220" height="78" rx="10" fill="#dafbe1" stroke="#4ac26b"/>
+  <text x="980" y="510" font-size="14" font-weight="700" fill="#04391b" text-anchor="middle">captions</text>
+  <text x="980" y="528" font-size="11" fill="#04391b" text-anchor="middle">burn subtitles</text>
+  <text x="980" y="544" font-size="11" fill="#04391b" text-anchor="middle">style: tiktok</text>
+
+  <!-- export -->
+  <rect x="1142" y="490" width="220" height="78" rx="10" fill="#dafbe1" opacity="0.45"/>
+  <rect x="1136" y="484" width="220" height="78" rx="10" fill="#dafbe1" opacity="0.7"/>
+  <rect x="1130" y="478" width="220" height="78" rx="10" fill="#dafbe1" stroke="#4ac26b"/>
+  <text x="1240" y="510" font-size="14" font-weight="700" fill="#04391b" text-anchor="middle">export</text>
+  <text x="1240" y="528" font-size="11" fill="#04391b" text-anchor="middle">render 1080x1920</text>
+  <text x="1240" y="544" font-size="11" fill="#04391b" text-anchor="middle">vertical</text>
+
+  <!-- inner arrows -->
+  <line x1="830" y1="517" x2="870" y2="517" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1090" y1="517" x2="1130" y2="517" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- segments dashed ref: stt -> captions -->
+  <path d="M1120,212 C1300,250 1240,440 1092,486" fill="none" stroke="#8250df" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrowDash)"/>
+  <text x="1268" y="360" font-size="11" font-weight="700" fill="#8250df" text-anchor="middle">segments</text>
+
+  <!-- export -> output -->
+  <path d="M1240,556 C1240,650 1000,650 1000,692" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- output -->
+  <rect x="830" y="692" width="340" height="58" rx="10" fill="#2da44e"/>
+  <text x="1000" y="718" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">./output/</text>
+  <text x="1000" y="737" font-size="11" fill="#d2f8d2" text-anchor="middle">5 × vertical .mp4 clips, ready to post</text>
+
+  <!-- legend -->
+  <line x1="584" y1="780" x2="616" y2="780" stroke="#8250df" stroke-width="1.8" stroke-dasharray="5 4"/>
+  <text x="624" y="784" font-size="11" fill="#57606a">data reference between steps</text>
+  <rect x="824" y="772" width="16" height="16" rx="3" fill="#dafbe1" stroke="#4ac26b"/>
+  <rect x="830" y="778" width="16" height="16" rx="3" fill="#dafbe1" opacity="0.6"/>
+  <text x="852" y="784" font-size="11" fill="#57606a">stacked = channel runs in parallel (×5)</text>
+</svg>

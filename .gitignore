@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Reelflow runtime
+output/
+.reelflow/
+models/
+
+# Media artifacts (don't commit heavy media)
+*.mp4
+*.mov
+*.mkv
+*.mp3
+*.wav
+!docs/**
+!examples/**
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
