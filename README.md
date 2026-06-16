@@ -4,6 +4,8 @@
 
 Reelflow is a declarative YAML pipeline framework for automating the creation of viral videos — Shorts, Reels, TikToks and more — without writing the same boilerplate code for every new trend.
 
+![Reelflow example workflow](docs/workflow-example.svg)
+
 ## Vision
 
 Just as TailwindCSS became the undisputed standard for styling web interfaces, Reelflow aims to become the standard language for describing automated video creation workflows.
@@ -57,10 +59,8 @@ steps:
 
 ## Example workflow
 
-From a single YAML file and one `video-example.mp4`, Reelflow builds a DAG that
-fans a long video out into 5 captioned vertical clips — all in parallel:
-
-![Reelflow example workflow](docs/workflow-example.svg)
+The diagram above is built from a single YAML file and one `video-example.mp4`:
+Reelflow turns a long video into 5 captioned vertical clips, all in parallel.
 
 > Full pipeline: [`examples/podcast-to-clips.yaml`](examples/podcast-to-clips.yaml)
 
