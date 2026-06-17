@@ -157,8 +157,13 @@ At runtime each step moves through:
 ```
 pending → running → success
                   ↘ failed
-                  ↘ skipped   (cached, or on_failure: skip, or requires unmet)
+                  ↘ skipped   (on_failure: skip, or requires unmet)
 ```
+
+A **cached** step reports as `success` (its earlier result is reused, only the
+recompute is skipped), so it still satisfies a downstream
+`requires: <id>.success`. `skipped` is reserved for steps that did *not* produce
+a result this run (`on_failure: skip`, or an unmet `requires`).
 
 ---
 
@@ -180,8 +185,10 @@ Transcribes the input (or a referenced media) to timed text.
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `model` | enum | `base` | Whisper model size (via `faster-whisper`). |
-| `lang` | string | `auto` | Language code or `auto` to detect. |
+| `model` | enum | `base` | Whisper model size (via `faster-whisper`). Larger = more accurate, slower. |
+| `lang` | string | `auto` | Language code or `auto` to detect. A wrong code garbles the transcript. |
+| `vad_filter` | bool | `true` | Drop non-speech (silence, crowd, music) before transcribing — removes most hallucinated text. |
+| `beam_size` | int | `5` | Beam search width; higher = more accurate, slower. |
 | `input` | path | pipeline input | Media to transcribe. |
 
 **Outputs:** `text` (full transcript), `segments` (list of `{start, end, text}`),
@@ -218,7 +225,7 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 ```yaml
 - id: clips
   detect_clips:
-    method: silence       # silence | scene_change
+    method: silence       # silence | scene_change | loudness
     min_duration: 30s
     max_duration: 60s
     max_clips: 5
@@ -227,11 +234,20 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness`. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
 | `emit` | string | — | Channel name to emit clips into. |
+
+**Methods.** `silence` keeps the spoken spans (best for talking-head / podcast).
+`scene_change` splits on camera cuts. `loudness` ranks 1-second windows by audio
+level (via `astats`) and keeps the loudest, non-overlapping moments — the best
+local proxy for action highlights (crowd roar, commentator excitement) in sports
+footage. For `loudness`, each clip's boundaries are found **automatically** by
+expanding around the peak while the level stays high, so the build-up and the
+sustained reaction are both captured; `min_duration`/`max_duration` only bound
+the resulting length (no manual offset).
 
 **Outputs:** `count`, `timestamps` (list of `{start, end}`), plus the named
 channel.
@@ -286,6 +302,7 @@ Generates and renders subtitles onto a video.
 | `style` | enum | `default` | `default` \| `tiktok` \| `minimal`. |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
+| `max_chars` | int | `42` | Max characters per subtitle cue; longer segments are split so the text never fills the frame. |
 
 **Outputs:** `clips` (captioned paths) or `srt` (sidecar path when `burn: false`).
 
@@ -309,9 +326,47 @@ Renders the final video(s) to disk.
 | `resolution` | string | per-format | e.g. `1080x1920`. |
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
-| `output` | path | `output.dir` | Output path; supports `{{ index }}` when mapping a channel. |
+| `title` | string | — | Persistent title banner at the top of the frame, for the whole clip. `\n` splits lines. |
+| `title_size` | int | `34` | Title font size, in pixels of the export resolution. |
+| `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
+| `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
+| `output` | path | `output.dir` | Output path; supports `{{ index }}` and `{{ name }}` when mapping a channel. |
+
+**Title tokens.** Inside `title`, `output` and overlays you can use `{{ part }}`
+(1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and `{{ name }}`
+(pipeline name).
+
+**Title fonts.** The presets are bundled-by-download: on first use the (OFL)
+font is fetched to `~/.reelflow/fonts/` and given to libass via `fontsdir`, so
+they render **identically on every machine, no system install**:
+`font1`=Anton, `font2`=Bebas Neue, `font3`=Bangers, `font4`=Archivo Black,
+`font5`=Fjalla One. You can also pass any installed family name directly, or drop
+your own `.ttf` in `~/.reelflow/fonts/` and reference it by family. A custom name
+that can't be found is substituted by libass — Reelflow prints a warning when
+that happens.
 
 **Outputs:** `files` (list of written paths).
+
+---
+
+### 6.7 `concat` — stitch clips into one video
+
+Joins a channel's clips, in order, into a single file. A channel *aggregator*:
+unlike mapped consumers it receives the whole channel at once. Place it after
+`export` to assemble the rendered clips into a final reel.
+
+```yaml
+- concat:
+    from: clip_channel
+    output: "./output/{{ name }}-reel.mp4"
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel | — | Channel whose clips are concatenated (required). |
+| `output` | path | `<name>-reel.mp4` | Output path; supports `{{ name }}`. |
+
+**Outputs:** `file` (the joined video), `parts` (the source clips, in order).
 
 ---
 
@@ -326,6 +381,7 @@ Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
 | `detect_clips` | `count`, `timestamps`, + channel |
 | `cut` | `clips` / `clip` |
 | `captions` | `clips` / `srt` |
+| `concat` | `file`, `parts` |
 | `export` | `files` |
 
 ---
@@ -458,3 +514,45 @@ steps:
 output:
   dir: ./output
 ```
+
+---
+
+## 13. Running pipelines
+
+`reelflow run pipeline.yaml` validates the file, then executes it. The engine:
+
+- builds a **DAG** from the steps (channel wiring + `{{ steps.* }}` references
+  define the edges) and runs it in dependency order;
+- fans **channels** out in parallel (one run per item) and **matrix** out across
+  cells (§8, §9);
+- honours **states**, `cache` checkpoints, and `on_failure` / `retries` (§5);
+- writes produced files under `output.dir` and intermediates under
+  `output.dir/.reelflow/`.
+
+```bash
+reelflow run pipeline.yaml --var lang=en   # override a vars entry (repeatable)
+```
+
+### 13.1 Time values
+
+Durations (`min_duration`, …) and timecodes (`start`, `end`) accept:
+
+| Form | Examples |
+|---|---|
+| bare seconds | `90`, `5.5` |
+| compact duration | `30s`, `2m`, `1m30s` |
+| timecode | `00:01:30`, `01:30` |
+
+### 13.2 Local models
+
+`run` needs the engine extra (`pip install "reelflow[engine]"`). Models are
+fetched on first use and cached:
+
+- **STT** (`faster-whisper`) — cached by the library (HuggingFace cache).
+- **TTS** (`kokoro-onnx`) — model + voices downloaded to `~/.reelflow/models/`
+  (override the base dir with the `REELFLOW_HOME` environment variable).
+- **Title fonts** (`export.title_font` presets) — downloaded to
+  `~/.reelflow/fonts/` and used by libass, so titles look the same everywhere.
+
+FFmpeg is used for all media work: a system `ffmpeg` on `PATH` is preferred,
+otherwise the static binary bundled with `imageio-ffmpeg` is used.

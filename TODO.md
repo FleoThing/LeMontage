@@ -16,32 +16,32 @@ met a jour le man a chaque fois si tu ajoutes des choses.
 - [x] CLI `run` / `validate` / `init` (run = stub honnête, moteur média à venir)
 - [x] Tests unitaires (pytest) + lint (ruff)
 - [x] CI GitHub Actions (lint + tests, matrice Python 3.10-3.12)
-- [ ] DAG builder (résolution des dépendances entre étapes)
-- [ ] Executor (parallélisme, gestion des states)
-- [ ] Système de cache / checkpoints (skip si output existe déjà)
-- [ ] Gestion des erreurs (retry, skip, on_failure)
-- [ ] Logs et progress bar
+- [x] DAG builder (résolution des dépendances entre étapes) — `engine/dag.py`
+- [x] Executor (parallélisme, gestion des states) — `engine/executor.py`
+- [x] Système de cache / checkpoints (skip si output existe déjà)
+- [x] Gestion des erreurs (retry, skip, on_failure)
+- [x] Logs (reporter ligne par ligne ; barre de progression riche à venir)
 
 ## Blocks natifs v1
-- [ ] `stt` — transcription via faster-whisper
-- [ ] `tts` — synthèse vocale via kokoro-onnx
-- [ ] `detect_clips` — détection de moments forts
-- [ ] `cut` — découpe vidéo via FFmpeg
-- [ ] `captions` — génération de sous-titres
-- [ ] `export` — rendu final (format, résolution, output path)
+- [x] `stt` — transcription via faster-whisper
+- [x] `tts` — synthèse vocale via kokoro-onnx
+- [x] `detect_clips` — détection de moments forts (silence / scene_change)
+- [x] `cut` — découpe vidéo via FFmpeg
+- [x] `captions` — génération de sous-titres (burn ou sidecar .srt)
+- [x] `export` — rendu final (format, résolution, output path)
 
 ## Providers
-- [ ] Interface `TTSProvider` (base)
-- [ ] Interface `STTProvider` (base)
-- [ ] Provider Whisper (faster-whisper)
-- [ ] Provider Coqui / kokoro-onnx
-- [ ] Provider Ollama (LLM local)
+- [x] Interface `TTSProvider` (base)
+- [x] Interface `STTProvider` (base)
+- [x] Provider Whisper (faster-whisper)
+- [x] Provider Coqui / kokoro-onnx
+- [ ] Provider Ollama (LLM local) — pas de block LLM en v1 (`engagement` réservé)
 
 ## Paradigmes pipeline
-- [ ] Channels (flux de données entre étapes)
-- [ ] Matrix (multi-plateforme / multi-langue en une passe)
-- [ ] Named outputs (`steps.x.output`)
-- [ ] States (pending → running → success / failed / skipped)
+- [x] Channels (flux de données entre étapes)
+- [x] Matrix (multi-plateforme / multi-langue en une passe)
+- [x] Named outputs (`steps.x.output`)
+- [x] States (pending → running → success / failed / skipped)
 - [ ] Wildcards
 
 ## Distribution
@@ -49,6 +49,11 @@ met a jour le man a chaque fois si tu ajoutes des choses.
 - [ ] Script d'installation curl (`install.sh`)
 - [ ] Téléchargement des modèles au premier run (`~/.reelflow/models/`)
 - [ ] Packaging pip / uv (plus tard)
+
+## DX / Outillage (v2)
+- [ ] `reelflow explain pipeline.yaml` — décrire en clair ce que le pipeline va produire (étapes, fan-out channels, fichiers de sortie) avant de lancer ; sert d'auto-vérification, utile aux pipelines générés par IA
+- [ ] JSON Schema publié du format YAML (contrainte + autocomplétion éditeur + cible idéale pour génération IA)
+- [ ] Messages de validation qui suggèrent la correction (« valeur inconnue 'silenced', tu voulais 'silence' ? »)
 
 ## Hub communautaire (hors v1)
 - [ ] Définir la structure du hub (repo GitHub ? API ?)

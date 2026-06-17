@@ -94,9 +94,9 @@ The more pipelines in the hub, the better AI models become at generating them �
 | Layer | Technology |
 |---|---|
 | Orchestration engine | Python |
-| Media processing | FFmpeg via `ffmpeg-python` |
-| STT | Whisper (local) |
-| TTS | Coqui (local) |
+| Media processing | FFmpeg (system, or bundled via `imageio-ffmpeg`) |
+| STT | Whisper via `faster-whisper` (local) |
+| TTS | `kokoro-onnx` (local) |
 | LLM | Ollama (local) |
 
 The entire pipeline runs on your machine. No API key, no internet connection, no usage cost.
@@ -116,27 +116,23 @@ Switching provider = one line change in your YAML. The pipeline logic stays the 
 ## Architecture
 
 ```
-reelflow/
-├── core/
-│   ├── parser.py       # YAML → pipeline object
-│   ├── dag.py          # dependency graph builder
-│   └── executor.py     # parallel task runner
-│
-├── blocks/             # built-in steps
-│   ├── stt.py          # speech-to-text
-│   ├── tts.py          # text-to-speech
-│   ├── cut.py          # clip detection & cutting
-│   └── captions.py     # subtitle generation
-│
-└── providers/          # swappable adapters
-    ├── tts/
-    │   ├── base.py     # TTSProvider interface
-    │   ├── coqui.py
-    │   └── elevenlabs.py
-    └── stt/
-        ├── base.py     # STTProvider interface
-        ├── whisper.py
-        └── deepgram.py
+src/reelflow/
+├── validator.py        # validate a pipeline against the v1 spec
+├── spec.py             # single source of truth for the spec constants
+├── cli.py              # run / validate / init
+└── engine/
+    ├── template.py     # {{ }} reference resolution
+    ├── dag.py          # dependency graph builder
+    ├── executor.py     # states, cache, on_failure, channels, matrix
+    ├── ffmpeg.py       # FFmpeg wrapper (system or bundled binary)
+    ├── timecode.py     # duration / timecode parsing
+    ├── blocks/         # built-in steps
+    │   ├── stt.py  tts.py  detect_clips.py
+    │   └── cut.py  captions.py  export.py
+    └── providers/      # swappable adapters
+        ├── base.py     # STTProvider / TTSProvider interfaces
+        ├── whisper.py  # faster-whisper
+        └── kokoro.py   # kokoro-onnx
 ```
 
 ## Key design principles
@@ -176,13 +172,29 @@ docker run -v $(pwd):/workspace ghcr.io/reelflow/reelflow validate pipeline.yaml
 docker run -v $(pwd):/workspace ghcr.io/reelflow/reelflow init
 ```
 
-### 2. Coming soon — install script
+### 2. From source (local, engine included)
+
+```bash
+git clone https://github.com/reelflow/reelflow && cd reelflow
+python -m venv .venv && . .venv/bin/activate
+pip install -e ".[engine]"        # add the media/model dependencies
+
+reelflow init pipeline.yaml        # write a starter pipeline
+reelflow validate pipeline.yaml    # check it against the spec
+reelflow run pipeline.yaml         # produce the clips into ./output/
+```
+
+> `reelflow validate` works with the base install; `run` needs the `[engine]`
+> extra (FFmpeg, faster-whisper, kokoro-onnx). Models download on first use —
+> see [SPEC §13](docs/SPEC.md).
+
+### 3. Coming soon — install script
 
 ```bash
 curl -fsSL https://install.reelflow.dev | sh
 ```
 
-### 3. Coming soon — pip / uv
+### 4. Coming soon — pip / uv
 
 ```bash
 # pip
@@ -197,6 +209,7 @@ Native installation with optional extras for STT, TTS, and LLM blocks will be av
 ## Documentation
 
 - [YAML Specification](docs/SPEC.md) — the authoritative reference for the pipeline file format and all built-in blocks.
+- [`man` page](docs/reelflow.1) — CLI reference. View with `man -l docs/reelflow.1`, or install with `cp docs/reelflow.1 ~/.local/share/man/man1/ && mandb` then `man reelflow`.
 
 ## License
 
@@ -204,4 +217,7 @@ MIT — free to use, modify, and distribute.
 
 ## Status
 
-> Early design phase. Contributors welcome.
+> v1 engine implemented: the six built-in blocks run end to end (STT, clip
+> detection, cutting, captions, export) with channels, matrix, caching and
+> `on_failure` handling. Distribution (Docker, install script, pip) and the
+> community hub are next. Contributors welcome.
