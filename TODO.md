@@ -46,7 +46,7 @@ met a jour le man a chaque fois si tu ajoutes des choses.
 
 ## Distribution
 - [ ] Dockerfile (image slim sans modèles)
-- [ ] Script d'installation curl (`install.sh`)
+- [x] Script d'installation `install.sh` (Lubuntu/Ubuntu/Debian) — reste : hébergement du one-liner curl
 - [ ] Téléchargement des modèles au premier run (`~/.reelflow/models/`)
 - [ ] Packaging pip / uv (plus tard)
 

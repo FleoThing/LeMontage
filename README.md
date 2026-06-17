@@ -196,11 +196,17 @@ reelflow run pipeline.yaml         # produce the clips into ./output/
 > extra (FFmpeg via `imageio-ffmpeg`, `faster-whisper`). The Whisper model and
 > title fonts download on first use — see [SPEC §13](docs/SPEC.md).
 
-### 3. Coming soon — install script
+### 3. Lubuntu / Ubuntu / Debian — `install.sh`
+
+Installs the system prerequisites, creates a venv and installs Reelflow:
 
 ```bash
-curl -fsSL https://install.reelflow.dev | sh
+git clone https://github.com/reelflow/reelflow && cd reelflow
+./install.sh
 ```
+
+(A hosted `curl -fsSL https://install.reelflow.dev | sh` one-liner will come once
+published.)
 
 ### 4. Coming soon — pip / uv
 
