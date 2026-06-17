@@ -1,0 +1,34 @@
+reelflow: "1.0"
+name: my-pipeline
+description: "A starter Reelflow pipeline"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  - id: transcript
+    stt:
+      model: base
+      lang: fr
+
+  - id: clips
+    detect_clips:
+      method: silence
+      max_clips: 5
+      emit: clip_channel
+
+  - cut:
+      from: clip_channel
+
+  - captions:
+      from: clip_channel
+      segments: "{{ steps.transcript.segments }}"
+      style: tiktok
+
+  - export:
+      from: clip_channel
+      format: vertical
+
+output:
+  dir: ./output

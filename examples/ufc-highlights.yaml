@@ -1,0 +1,61 @@
+reelflow: "1.0"
+name: ufc-highlights
+description: "Extraits verticaux d'un combat UFC, avec titre permanent et sous-titres"
+
+vars:
+  lang: fr          # commentaires en français (piste audio 'fra')
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Transcrire les commentaires (VAD coupe le bruit de foule)
+  - id: transcript
+    stt:
+      model: small
+      lang: "{{ vars.lang }}"
+      vad_filter: true
+      beam_size: 5
+    cache: true
+    on_failure: retry
+    retries: 2
+
+  # 2. Le moment le plus viral = la zone sonore la plus forte (foule + commentateur).
+  #    Les bornes du clip sont trouvées automatiquement autour du pic ; min/max
+  #    bornent juste la durée. max_clips: 1 -> on ne garde QUE le KO / la finition.
+  - id: moments
+    detect_clips:
+      method: loudness
+      min_duration: 12s
+      max_duration: 40s
+      max_clips: 1
+      emit: highlights
+
+  # 3. Découper chaque extrait, en parallèle
+  - cut:
+      from: highlights
+
+  # 4. Sous-titres courts style TikTok, en bas
+  - captions:
+      from: highlights
+      segments: "{{ steps.transcript.segments }}"
+      style: tiktok
+      position: bottom
+      max_chars: 32
+    requires: transcript.success
+
+  # 5. Export vertical 1080x1920 + titre permanent en haut, tout le long du clip
+  - export:
+      from: highlights
+      format: vertical
+      resolution: 1080x1920
+      fps: 30
+      title: "UFC Maison Blanche\nCyril Gane vs Pereira"
+      title_font: font2      # font1..font5 (réseaux) ou un nom de police installé
+      title_size: 62
+      title_margin: 330
+      output: "./output/{{ name }}-{{ index }}.mp4"
+
+output:
+  dir: ./output
