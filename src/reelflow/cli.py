@@ -54,6 +54,13 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser("run", help="run a pipeline")
     p_run.add_argument("file", help="pipeline YAML file")
+    p_run.add_argument(
+        "--var",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a value from the 'vars' block (repeatable)",
+    )
 
     p_validate = sub.add_parser("validate", help="validate a pipeline without running it")
     p_validate.add_argument("file", help="pipeline YAML file")
@@ -69,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "init":
         return _cmd_init(args.file, args.force)
     if args.command == "run":
-        return _cmd_run(args.file)
+        return _cmd_run(args.file, args.var)
     parser.print_help()
     return 1
 
@@ -95,18 +102,47 @@ def _cmd_init(file: str, force: bool) -> int:
     return 0
 
 
-def _cmd_run(file: str) -> int:
+def _cmd_run(file: str, var_args: list[str]) -> int:
+    import yaml
+
+    from .engine import run_pipeline
+
     errors = validate_file(file)
     if errors:
         print(f"✗ {file}: {len(errors)} error(s)", file=sys.stderr)
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
         return 1
-    # The media execution engine (blocks running FFmpeg/Whisper/...) is not
-    # implemented yet. Validation passes; execution is the next milestone.
-    print(f"✓ {file}: valid", file=sys.stderr)
-    print("▶ execution engine not implemented yet — coming in the next milestone", file=sys.stderr)
-    return 2
+
+    try:
+        overrides = _parse_var_overrides(var_args)
+    except ValueError as exc:
+        print(f"✗ {exc}", file=sys.stderr)
+        return 1
+
+    doc = yaml.safe_load(Path(file).read_text(encoding="utf-8"))
+    print(f"▶ running {doc.get('name', file)}", file=sys.stderr)
+    try:
+        result = run_pipeline(doc, var_overrides=overrides)
+    except Exception as exc:  # noqa: BLE001 - surface engine errors to the user
+        print(f"✗ {exc}", file=sys.stderr)
+        return 1
+
+    if result.ok:
+        print(f"✓ {file}: done ({len(result.cells)} run(s))", file=sys.stderr)
+        return 0
+    print(f"✗ {file}: pipeline finished with failures", file=sys.stderr)
+    return 1
+
+
+def _parse_var_overrides(var_args: list[str]) -> dict[str, str]:
+    overrides: dict[str, str] = {}
+    for raw in var_args:
+        if "=" not in raw:
+            raise ValueError(f"--var expects KEY=VALUE, got '{raw}'")
+        key, _, value = raw.partition("=")
+        overrides[key.strip()] = value
+    return overrides
 
 
 # Re-exported so tests can build docs without importing the file path machinery.
