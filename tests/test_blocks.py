@@ -9,7 +9,13 @@ from pathlib import Path
 import pytest
 
 from reelflow.engine import ffmpeg, providers
-from reelflow.engine.blocks.captions import CaptionsBlock, _pack_words, _write_srt
+from reelflow.engine.blocks.captions import (
+    CaptionsBlock,
+    _ass_time,
+    _build_lines,
+    _dialogue,
+    _lines_from_words,
+)
 from reelflow.engine.blocks.detect_clips import _select_loud_clips, _windowed_clips
 from reelflow.engine.blocks.export import (
     ExportBlock,
@@ -20,7 +26,7 @@ from reelflow.engine.blocks.export import (
 from reelflow.engine.blocks.stt import SttBlock
 from reelflow.engine.blocks.tts import TtsBlock
 from reelflow.engine.context import RunContext
-from reelflow.engine.providers.base import Segment, Transcript, TTSResult
+from reelflow.engine.providers.base import Segment, Transcript, TTSResult, Word
 
 
 def ctx(tmp_path, **kw):
@@ -43,7 +49,10 @@ def test_stt_maps_transcript_to_outputs(tmp_path, monkeypatch):
         def transcribe(self, media, lang="auto", **options):
             return Transcript(
                 text="hello world",
-                segments=[Segment(0.0, 1.0, "hello"), Segment(1.0, 2.0, "world")],
+                segments=[
+                    Segment(0.0, 1.0, "hello", words=[Word(0.0, 0.5, "hello")]),
+                    Segment(1.0, 2.0, "world", words=[Word(1.0, 1.5, "world")]),
+                ],
                 lang="en",
             )
 
@@ -51,7 +60,12 @@ def test_stt_maps_transcript_to_outputs(tmp_path, monkeypatch):
     out = SttBlock().execute({"model": "base", "lang": "en"}, ctx(tmp_path), "t").outputs
     assert out["text"] == "hello world"
     assert out["lang"] == "en"
-    assert out["segments"][0] == {"start": 0.0, "end": 1.0, "text": "hello"}
+    assert out["segments"][0]["text"] == "hello"
+    # flat word list exposed for karaoke captions
+    assert out["words"] == [
+        {"start": 0.0, "end": 0.5, "text": "hello"},
+        {"start": 1.0, "end": 1.5, "text": "world"},
+    ]
 
 
 def test_stt_requires_media(tmp_path, monkeypatch):
@@ -150,40 +164,60 @@ def test_select_loud_clips_empty_timeline():
     assert _select_loud_clips([], total=100.0, min_dur=8, max_dur=20, max_clips=5) == []
 
 
-# --- captions SRT ----------------------------------------------------------
+# --- captions (word-level karaoke) -----------------------------------------
 
 
-def test_write_srt_shifts_and_filters_by_offset(tmp_path):
-    segments = [
-        {"start": 1.0, "end": 2.0, "text": "before"},  # before clip -> dropped
-        {"start": 11.0, "end": 13.0, "text": "inside"},
-    ]
-    srt, count = _write_srt(segments, offset=10.0, path=tmp_path / "x.srt", max_chars=42)
-    text = srt.read_text()
-    assert count == 1
-    assert "inside" in text
-    assert "before" not in text
-    # 11s - 10s offset -> 1s, formatted with comma decimals.
-    assert "00:00:01,000 --> 00:00:03,000" in text
+def _words(*specs):
+    return [{"start": s, "end": e, "text": t} for s, e, t in specs]
 
 
-def test_write_srt_empty_when_no_segments_in_window(tmp_path):
-    _, count = _write_srt(
-        [{"start": 1.0, "end": 2.0, "text": "x"}], offset=100.0, path=tmp_path / "e.srt", max_chars=42
-    )
-    assert count == 0
+def test_lines_from_words_groups_by_char_limit():
+    words = _words((0.0, 0.3, "one"), (0.3, 0.6, "two"), (0.6, 0.9, "three"), (0.9, 1.2, "four"))
+    lines = _lines_from_words(words, offset=0.0, max_chars=9)
+    assert len(lines) >= 2
+    assert all(len(line["text"]) <= 11 for line in lines)
 
 
-def test_pack_words_respects_max_chars():
-    chunks = _pack_words("the quick brown fox jumps over the lazy dog", max_chars=15)
-    assert all(len(c) <= 15 for c in chunks)
-    assert " ".join(chunks) == "the quick brown fox jumps over the lazy dog"
+def test_lines_from_words_breaks_on_big_gap():
+    words = _words((0.0, 0.3, "hi"), (5.0, 5.3, "later"))  # >1.2s gap -> new line
+    lines = _lines_from_words(words, offset=0.0, max_chars=99)
+    assert len(lines) == 2
 
 
-def test_write_srt_splits_long_segment_into_several_cues(tmp_path):
-    seg = [{"start": 0.0, "end": 8.0, "text": "one two three four five six seven eight nine ten"}]
-    _, count = _write_srt(seg, offset=0.0, path=tmp_path / "s.srt", max_chars=20)
-    assert count >= 2  # a long line is broken into multiple short cues
+def test_lines_from_words_applies_offset_and_drops_past_words():
+    words = _words((1.0, 1.5, "before"), (11.0, 11.5, "after"))
+    lines = _lines_from_words(words, offset=10.0, max_chars=99)
+    assert len(lines) == 1
+    assert lines[0]["text"] == "after"
+    assert lines[0]["start"] == 1.0  # 11.0 - 10.0
+
+
+def test_dialogue_emits_karaoke_tags_absorbing_gaps():
+    line = {
+        "start": 0.0,
+        "end": 1.0,
+        "text": "a b",
+        "words": [{"start": 0.0, "end": 0.3, "text": "a"}, {"start": 0.5, "end": 1.0, "text": "b"}],
+    }
+    d = _dialogue(line)
+    # first word's \k spans to the next word's start (0.5s -> 50cs), absorbing the gap
+    assert r"{\k50}a" in d
+    assert r"{\k50}b" in d  # last word: its own 0.5s duration
+
+
+def test_dialogue_plain_text_for_segment_fallback():
+    line = {"start": 0.0, "end": 1.0, "text": "hello world", "words": []}
+    assert _dialogue(line).endswith(",hello world")
+
+
+def test_ass_time_format():
+    assert _ass_time(75.5) == "0:01:15.50"
+
+
+def test_build_lines_prefers_words_over_segments():
+    params = {"words": _words((0.0, 0.5, "hi")), "segments": [{"start": 0, "end": 9, "text": "x"}]}
+    lines = _build_lines(params, offset=0.0)
+    assert lines[0]["words"]  # used word timing, not the segment
 
 
 def test_stt_forwards_vad_and_beam_options(tmp_path, monkeypatch):
@@ -199,9 +233,9 @@ def test_stt_forwards_vad_and_beam_options(tmp_path, monkeypatch):
     assert captured == {"vad_filter": True, "beam_size": 3}
 
 
-def test_captions_requires_segments_list(tmp_path):
+def test_captions_requires_words_or_segments(tmp_path):
     with pytest.raises(ValueError):
-        CaptionsBlock().execute({"segments": "nope"}, ctx(tmp_path), "c")
+        CaptionsBlock().execute({}, ctx(tmp_path), "c")
 
 
 # --- export ----------------------------------------------------------------

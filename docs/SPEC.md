@@ -191,8 +191,9 @@ Transcribes the input (or a referenced media) to timed text.
 | `beam_size` | int | `5` | Beam search width; higher = more accurate, slower. |
 | `input` | path | pipeline input | Media to transcribe. |
 
-**Outputs:** `text` (full transcript), `segments` (list of `{start, end, text}`),
-`lang` (detected language).
+**Outputs:** `text` (full transcript), `segments` (list of
+`{start, end, text, words}`), `words` (flat list of `{start, end, text}` with
+per-word timing, for karaoke captions), `lang` (detected language).
 
 ---
 
@@ -285,24 +286,32 @@ channel.
 
 ### 6.5 `captions` — burned-in subtitles
 
-Generates and renders subtitles onto a video.
+Generates and renders subtitles onto a video. With **per-word timing**
+(`words`) it burns **karaoke** captions — short lines where each word lights up
+exactly when spoken (the TikTok / CapCut look). With only `segments` it renders
+segment-level cues.
 
 ```yaml
 - captions:
     from: clip_channel
-    segments: "{{ steps.transcript.segments }}"
+    words: "{{ steps.transcript.words }}"   # karaoke (recommended)
     style: tiktok
     burn: true
 ```
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `segments` | ref | — | Timed segments (usually `steps.<stt>.segments`). |
+| `words` | ref | — | Per-word timing (`steps.<stt>.words`). Enables karaoke; preferred. |
+| `segments` | ref | — | Segment timing (`steps.<stt>.segments`). Used if `words` is absent. |
 | `from` | channel | — | Channel of clips to caption. |
-| `style` | enum | `default` | `default` \| `tiktok` \| `minimal`. |
-| `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
+| `style` | enum | `tiktok` | `default` \| `tiktok` \| `minimal` (outline/weight). |
+| `font` | string | `font1` | Caption font: a preset `font1`–`font5` or an installed family. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
-| `max_chars` | int | `42` | Max characters per subtitle cue; longer segments are split so the text never fills the frame. |
+| `max_chars` | int | `24` | Max characters per line (lines stay short for word-by-word reading). |
+| `caption_size` | int | ~7% of height | Font size in pixels of the clip. |
+| `caption_margin` | int | ~8% of height | Distance from the edge (per `position`). |
+| `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
+| `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 
 **Outputs:** `clips` (captioned paths) or `srt` (sidecar path when `burn: false`).
 
@@ -376,7 +385,7 @@ Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
 
 | Block | Outputs |
 |---|---|
-| `stt` | `text`, `segments`, `lang` |
+| `stt` | `text`, `segments`, `words`, `lang` |
 | `tts` | `audio`, `duration` |
 | `detect_clips` | `count`, `timestamps`, + channel |
 | `cut` | `clips` / `clip` |

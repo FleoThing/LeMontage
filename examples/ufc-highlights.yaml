@@ -36,10 +36,10 @@ steps:
   - cut:
       from: highlights
 
-  # 4. Sous-titres courts style TikTok, en bas
+  # 4. Sous-titres karaoké mot-à-mot (style TikTok/CapCut), en bas
   - captions:
       from: highlights
-      segments: "{{ steps.transcript.segments }}"
+      words: "{{ steps.transcript.words }}"
       style: tiktok
       position: bottom
       max_chars: 32

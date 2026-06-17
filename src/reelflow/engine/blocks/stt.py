@@ -27,10 +27,12 @@ class SttBlock(Block):
             beam_size=params.get("beam_size", 5),
         )
 
+        words = [w.as_dict() for seg in transcript.segments for w in seg.words]
         return BlockResult(
             outputs={
                 "text": transcript.text,
                 "segments": [s.as_dict() for s in transcript.segments],
+                "words": words,
                 "lang": transcript.lang,
             }
         )

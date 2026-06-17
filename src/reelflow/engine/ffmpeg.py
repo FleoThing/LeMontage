@@ -6,6 +6,7 @@ by ``imageio-ffmpeg`` so Reelflow works out of the box without a system install.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from functools import lru_cache
@@ -77,9 +78,16 @@ def probe_duration(path: str | Path) -> float:
     return _parse_duration(proc.stderr)
 
 
-def _parse_duration(stderr: str) -> float:
-    import re
+def probe_resolution(path: str | Path) -> tuple[int, int]:
+    """Return (width, height) of the first video stream."""
+    proc = subprocess.run([ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True)
+    match = re.search(r",\s*(\d{2,5})x(\d{2,5})", proc.stderr)
+    if not match:
+        raise FFmpegError("could not determine video resolution")
+    return int(match.group(1)), int(match.group(2))
 
+
+def _parse_duration(stderr: str) -> float:
     match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", stderr)
     if not match:
         raise FFmpegError("could not determine media duration")

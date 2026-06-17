@@ -32,13 +32,13 @@ steps:
   - cut:
       from: reel
 
-  # Sous-titres TikTok (courts) sur chaque extrait
+  # Sous-titres karaoké mot-à-mot (style TikTok/CapCut) sur chaque extrait
   - captions:
       from: reel
-      segments: "{{ steps.transcript.segments }}"
+      words: "{{ steps.transcript.words }}"
       style: tiktok
       position: bottom
-      max_chars: 32
+      max_chars: 24
     requires: transcript.success
 
   # Export vertical + titre permanent avec le numéro de partie ({{ part }} = 1,2,3)

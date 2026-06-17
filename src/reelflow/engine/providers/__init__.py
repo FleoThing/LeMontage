@@ -7,9 +7,9 @@ providers can be added later without touching the blocks.
 
 from __future__ import annotations
 
-from .base import STTProvider, Segment, Transcript, TTSProvider, TTSResult
+from .base import STTProvider, Segment, Transcript, TTSProvider, TTSResult, Word
 
-__all__ = ["STTProvider", "TTSProvider", "Segment", "Transcript", "TTSResult"]
+__all__ = ["STTProvider", "TTSProvider", "Segment", "Transcript", "TTSResult", "Word"]
 
 
 def default_stt(model: str = "base") -> STTProvider:

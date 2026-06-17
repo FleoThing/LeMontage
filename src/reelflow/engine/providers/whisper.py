@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .base import Segment, STTProvider, Transcript
+from .base import Segment, STTProvider, Transcript, Word
 
 _VALID_SIZES = frozenset({"tiny", "base", "small", "medium", "large", "large-v3"})
 
@@ -54,15 +54,29 @@ class WhisperSTT(STTProvider):
         language = None if lang in (None, "", "auto") else lang
         # vad_filter drops non-speech (silence, crowd, music), which removes most
         # of Whisper's hallucinated text; a wider beam improves accuracy.
+        # word_timestamps gives per-word timing for karaoke-style captions.
         raw_segments, info = model.transcribe(
             str(media),
             language=language,
             beam_size=int(beam_size),
             vad_filter=bool(vad_filter),
+            word_timestamps=True,
         )
 
         segments = [
-            Segment(start=round(s.start, 3), end=round(s.end, 3), text=s.text.strip())
+            Segment(
+                start=round(float(s.start), 3),
+                end=round(float(s.end), 3),
+                text=s.text.strip(),
+                words=[
+                    Word(
+                        start=round(float(w.start), 3),
+                        end=round(float(w.end), 3),
+                        text=w.word.strip(),
+                    )
+                    for w in (s.words or [])
+                ],
+            )
             for s in raw_segments
         ]
         text = " ".join(s.text for s in segments).strip()

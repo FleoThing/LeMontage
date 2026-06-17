@@ -35,7 +35,7 @@ steps:
 
   - captions:
       from: clip_channel
-      segments: "{{ steps.transcript.segments }}"
+      words: "{{ steps.transcript.words }}"
       style: tiktok
 
   - export:

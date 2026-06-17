@@ -1,11 +1,16 @@
-"""``captions`` — render subtitles onto a video, or write a sidecar (SPEC §6.5)."""
+"""``captions`` — render subtitles onto a video (SPEC §6.5).
+
+With per-word timing (``words``, from ``stt``) it burns **karaoke** captions:
+short lines where each word lights up exactly when it's spoken — the TikTok /
+CapCut look. Without word timing it falls back to segment-level SRT cues.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from .. import ffmpeg
+from .. import ffmpeg, fonts
 from ..context import RunContext
 from ..timecode import to_timecode
 from .base import Block, BlockResult, ItemResult
@@ -13,19 +18,38 @@ from .base import Block, BlockResult, ItemResult
 # ASS Alignment is numpad-style: 2=bottom-centre, 5=middle, 8=top.
 _POSITION = {"bottom": 2, "center": 5, "top": 8}
 
-# MarginV / MarginL / MarginR keep the text inside a band instead of edge-to-edge.
+# Per-style (outline weight, bold). Colours/size are handled by the karaoke path.
 _STYLES = {
-    "default": "FontName=Arial,FontSize=16,Outline=1,Shadow=0,MarginV=40,MarginL=60,MarginR=60",
-    "tiktok": (
-        "FontName=Arial,FontSize=20,Bold=1,Outline=2,Shadow=1,"
-        "PrimaryColour=&H00FFFFFF,MarginV=60,MarginL=80,MarginR=80"
-    ),
-    "minimal": "FontName=Arial,FontSize=14,Outline=0,MarginV=30,MarginL=60,MarginR=60",
+    "default": (1, 0),
+    "tiktok": (3, -1),
+    "minimal": (1, 0),
 }
 
-# Default max characters per subtitle cue; longer segments are split so the text
-# never fills the frame. Overridable via the captions `max_chars` param.
-_DEFAULT_MAX_CHARS = 42
+_DEFAULT_MAX_CHARS = 24  # short lines read better word-by-word
+_MAX_WORDS_PER_LINE = 5
+_LINE_GAP = 1.2  # start a new line after a silence longer than this (seconds)
+# ASS colours are &HAABBGGRR. Default: spoken word yellow, upcoming word white.
+_HIGHLIGHT = "&H0000FFFF"
+_BASE = "&H00FFFFFF"
+
+_KARAOKE_ASS = """\
+[Script Info]
+ScriptType: v4.00+
+PlayResX: {w}
+PlayResY: {h}
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, \
+Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, \
+Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,{font},{size},{hi},{base},&H00000000,&H64000000,{bold},0,0,0,100,100,0,0,1,{outline},1,{align},80,80,{marginv},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+{events}
+"""
 
 
 class CaptionsBlock(Block):
@@ -35,16 +59,9 @@ class CaptionsBlock(Block):
         media = params.get("input") or ctx.input.get("source")
         if media is None:
             raise ValueError("captions: no input media")
-        segments = _segments(params)
-        max_chars = int(params.get("max_chars", _DEFAULT_MAX_CHARS))
-        srt, count = _write_srt(segments, 0.0, ctx.work_dir() / f"{step_id}.srt", max_chars)
-        if not params.get("burn", True):
-            return BlockResult(outputs={"srt": str(srt)})
-        if count == 0:  # nothing to caption — pass the media through unchanged
-            return BlockResult(outputs={"clips": str(media)})
-        out = ctx.work_dir() / f"{step_id}-captioned.mp4"
-        _burn(media, srt, params, out)
-        return BlockResult(outputs={"clips": str(out)})
+        out = self._caption(media, params, ctx, step_id, offset=0.0)
+        key = "srt" if not params.get("burn", True) else "clips"
+        return BlockResult(outputs={key: str(out)}) if out else BlockResult(outputs={})
 
     def execute_item(
         self, params: dict[str, Any], item: dict[str, Any], ctx: RunContext, step_id: str
@@ -52,103 +69,146 @@ class CaptionsBlock(Block):
         clip = item.get("clip")
         if clip is None:
             raise ValueError("captions: channel item has no 'clip' (run 'cut' first)")
-        # Shift segments into the clip's local timeline (clip starts at 0).
         offset = float(item.get("start", 0.0))
-        segments = _segments(params)
-        max_chars = int(params.get("max_chars", _DEFAULT_MAX_CHARS))
-        srt, count = _write_srt(
-            segments, offset, ctx.work_dir() / f"{step_id}-{item['index']}.srt", max_chars
-        )
-
-        if not params.get("burn", True):
-            return ItemResult(item={"srt": str(srt)}, outputs={"srt": str(srt)})
-        if count == 0:  # nothing in this clip's window — leave it unchanged
+        out = self._caption(clip, params, ctx, f"{step_id}-{item['index']}", offset)
+        if out is None:  # nothing in this clip's window — leave it unchanged
             return ItemResult(item={"clip": str(clip)}, outputs={"clips": str(clip)})
-
-        out = ctx.work_dir() / f"{step_id}-{item['index']}-captioned.mp4"
-        _burn(clip, srt, params, out)
+        if not params.get("burn", True):
+            return ItemResult(item={"srt": str(out)}, outputs={"srt": str(out)})
         return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
 
+    def _caption(self, media, params, ctx, name, offset) -> Path | None:
+        lines = _build_lines(params, offset)
+        if not lines:
+            return None
+        if not params.get("burn", True):
+            return _write_srt(lines, ctx.work_dir() / f"{name}.srt")
+        ass = _write_karaoke_ass(lines, params, media, ctx.work_dir() / f"{name}.ass")
+        out = ctx.work_dir() / f"{name}-captioned.mp4"
+        _burn(media, ass, params, out)
+        return out
 
-def _segments(params: dict[str, Any]) -> list[dict[str, Any]]:
+
+def _build_lines(params: dict[str, Any], offset: float) -> list[dict[str, Any]]:
+    """Group words (preferred) or segments into short, clip-local caption lines."""
+    words = params.get("words")
+    if isinstance(words, list) and words:
+        max_chars = int(params.get("max_chars", _DEFAULT_MAX_CHARS))
+        return _lines_from_words(words, offset, max_chars)
     segments = params.get("segments")
     if not isinstance(segments, list):
-        raise ValueError("captions: 'segments' must be a list of {start, end, text}")
-    return segments
+        raise ValueError("captions: provide 'words' (from stt) or 'segments'")
+    return _lines_from_segments(segments, offset)
 
 
-def _write_srt(
-    segments: list[dict[str, Any]], offset: float, path: Path, max_chars: int
-) -> tuple[Path, int]:
-    """Write an SRT shifted into the clip's local timeline. Returns (path, count).
-
-    Long segments are split into short cues (``max_chars`` each) so the burned
-    text never fills the frame.
-    """
-    lines: list[str] = []
-    counter = 1
-    for seg in segments:
-        for cue in _split_cue(seg, max_chars):
-            start = cue["start"] - offset
-            end = cue["end"] - offset
-            if end <= 0:  # entirely before this clip
-                continue
-            start = max(0.0, start)
-            lines.append(str(counter))
-            lines.append(f"{_srt_ts(start)} --> {_srt_ts(end)}")
-            lines.append(cue["text"])
-            lines.append("")
-            counter += 1
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path, counter - 1
-
-
-def _split_cue(seg: dict[str, Any], max_chars: int) -> list[dict[str, Any]]:
-    """Split one segment into short cues, sharing its time span by text length."""
-    text = str(seg.get("text", "")).strip()
-    if not text:
-        return []
-    chunks = _pack_words(text, max_chars)
-    start, end = float(seg["start"]), float(seg["end"])
-    span = max(0.0, end - start)
-    total = sum(len(c) for c in chunks) or 1
-
-    cues: list[dict[str, Any]] = []
-    cursor = start
-    for chunk in chunks:
-        dur = span * (len(chunk) / total)
-        cues.append({"start": cursor, "end": cursor + dur, "text": chunk})
-        cursor += dur
-    cues[-1]["end"] = end  # avoid float drift on the last cue
-    return cues
-
-
-def _pack_words(text: str, max_chars: int) -> list[str]:
-    """Greedily pack words into lines of at most ``max_chars`` characters."""
-    chunks: list[str] = []
-    current = ""
-    for word in text.split():
-        if not current:
-            current = word
-        elif len(current) + 1 + len(word) <= max_chars:
-            current = f"{current} {word}"
-        else:
-            chunks.append(current)
-            current = word
+def _lines_from_words(
+    words: list[dict[str, Any]], offset: float, max_chars: int
+) -> list[dict[str, Any]]:
+    lines: list[dict[str, Any]] = []
+    current: list[dict[str, Any]] = []
+    length = 0
+    for w in words:
+        start = float(w["start"]) - offset
+        end = float(w["end"]) - offset
+        if end <= 0:  # entirely before this clip
+            continue
+        text = str(w.get("text", "")).strip()
+        if not text:
+            continue
+        word = {"start": max(0.0, start), "end": end, "text": text}
+        too_long = length + len(text) + 1 > max_chars or len(current) >= _MAX_WORDS_PER_LINE
+        big_gap = current and word["start"] - current[-1]["end"] > _LINE_GAP
+        if current and (too_long or big_gap):
+            lines.append(_line(current))
+            current, length = [], 0
+        current.append(word)
+        length += len(text) + 1
     if current:
-        chunks.append(current)
-    return chunks or [text]
+        lines.append(_line(current))
+    return lines
+
+
+def _lines_from_segments(segments: list[dict[str, Any]], offset: float) -> list[dict[str, Any]]:
+    lines: list[dict[str, Any]] = []
+    for seg in segments:
+        start = float(seg["start"]) - offset
+        end = float(seg["end"]) - offset
+        if end <= 0:
+            continue
+        text = str(seg.get("text", "")).strip()
+        if text:
+            lines.append({"start": max(0.0, start), "end": end, "words": [], "text": text})
+    return lines
+
+
+def _line(words: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "start": words[0]["start"],
+        "end": words[-1]["end"],
+        "words": words,
+        "text": " ".join(w["text"] for w in words),
+    }
+
+
+def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
+    width, height = ffmpeg.probe_resolution(media)
+    outline, bold = _STYLES.get(params.get("style", "tiktok"), _STYLES["tiktok"])
+    size = int(params.get("caption_size") or round(height * 0.07))
+    align = _POSITION.get(params.get("position", "bottom"), 2)
+    marginv = int(params.get("caption_margin", round(height * 0.08)))
+    hi = params.get("highlight") or _HIGHLIGHT
+    font = fonts.family(params.get("font"))
+
+    events = "\n".join(_dialogue(line) for line in lines)
+    path.write_text(
+        _KARAOKE_ASS.format(
+            w=width, h=height, font=font, size=size, hi=hi, base=_BASE,
+            bold=bold, outline=outline, align=align, marginv=marginv, events=events,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _dialogue(line: dict[str, Any]) -> str:
+    start, end = _ass_time(line["start"]), _ass_time(line["end"])
+    words = line["words"]
+    if not words:  # segment fallback: plain text, no karaoke
+        return f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{line['text']}"
+    parts = []
+    for i, w in enumerate(words):
+        nxt = words[i + 1]["start"] if i + 1 < len(words) else w["end"]
+        cs = max(1, round((nxt - w["start"]) * 100))  # absorb the gap to the next word
+        parts.append(f"{{\\k{cs}}}{w['text']} ")
+    return f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{''.join(parts).rstrip()}"
+
+
+def _ass_time(seconds: float) -> str:
+    seconds = max(0.0, seconds)
+    cs = int(round(seconds * 100))
+    hours, cs = divmod(cs, 360000)
+    minutes, cs = divmod(cs, 6000)
+    secs, cs = divmod(cs, 100)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
+
+
+def _write_srt(lines: list[dict[str, Any]], path: Path) -> Path:
+    out: list[str] = []
+    for i, line in enumerate(lines, start=1):
+        out.append(str(i))
+        out.append(f"{_srt_ts(line['start'])} --> {_srt_ts(line['end'])}")
+        out.append(line["text"])
+        out.append("")
+    path.write_text("\n".join(out), encoding="utf-8")
+    return path
 
 
 def _srt_ts(seconds: float) -> str:
     return to_timecode(max(0.0, seconds)).replace(".", ",")
 
 
-def _burn(media: str, srt: Path, params: dict[str, Any], out: Path) -> None:
-    style = _STYLES.get(params.get("style", "default"), _STYLES["default"])
-    alignment = _POSITION.get(params.get("position", "bottom"), 2)
-    force_style = f"{style},Alignment={alignment}"
-    # Escape the path for ffmpeg's filter parser (colons, backslashes).
-    escaped = str(srt).replace("\\", "\\\\").replace(":", "\\:")
-    vf = f"subtitles='{escaped}':force_style='{force_style}'"
-    ffmpeg.run(["-i", str(media), "-vf", vf, "-c:a", "copy", str(out)])
+def _burn(media: str, ass: Path, params: dict[str, Any], out: Path) -> None:
+    fonts.ensure(params.get("font"))
+    esc_ass = str(ass).replace("\\", "\\\\").replace(":", "\\:")
+    esc_dir = str(fonts.fonts_dir()).replace("\\", "\\\\").replace(":", "\\:")
+    ffmpeg.run(["-i", str(media), "-vf", f"ass='{esc_ass}':fontsdir='{esc_dir}'", "-c:a", "copy", str(out)])

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
 @dataclass
-class Segment:
-    """A timed slice of transcribed speech."""
+class Word:
+    """A single word with its own start/end (for karaoke-style captions)."""
 
     start: float
     end: float
@@ -17,6 +17,24 @@ class Segment:
 
     def as_dict(self) -> dict[str, object]:
         return {"start": self.start, "end": self.end, "text": self.text}
+
+
+@dataclass
+class Segment:
+    """A timed slice of transcribed speech, optionally with per-word timing."""
+
+    start: float
+    end: float
+    text: str
+    words: list["Word"] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "start": self.start,
+            "end": self.end,
+            "text": self.text,
+            "words": [w.as_dict() for w in self.words],
+        }
 
 
 @dataclass
