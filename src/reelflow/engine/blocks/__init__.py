@@ -9,14 +9,12 @@ from .cut import CutBlock
 from .detect_clips import DetectClipsBlock
 from .export import ExportBlock
 from .stt import SttBlock
-from .tts import TtsBlock
 
 # Maps a block name to its implementation. The executor looks blocks up here.
 REGISTRY: dict[str, Block] = {
     block.name: block
     for block in (
         SttBlock(),
-        TtsBlock(),
         DetectClipsBlock(),
         CutBlock(),
         CaptionsBlock(),

@@ -25,12 +25,10 @@ an ordered list of steps \(em transcription, clip detection, cutting, captions,
 export \(em that the engine compiles into a DAG and runs, with channel fan\-out,
 matrix runs, checkpoints and per\-step failure handling.
 .PP
-Everything runs locally: FFmpeg for media work,
+Everything runs locally: FFmpeg for media work and
 .B faster\-whisper
-for speech\-to\-text and
-.B kokoro\-onnx
-for text\-to\-speech. No API key or network is required once the models are
-cached.
+for speech\-to\-text. No API key or network is required once the model is cached.
+(Text\-to\-speech is planned for v2.)
 .PP
 The authoritative description of the YAML format and every built\-in block lives
 in the specification (see
@@ -96,7 +94,7 @@ Fan the whole pipeline out over every combination of the listed values
 .B output
 Global output settings, e.g. \fBdir: ./output\fR (optional).
 .PP
-Built\-in blocks: \fBstt\fR, \fBtts\fR, \fBdetect_clips\fR, \fBcut\fR,
+Built\-in blocks: \fBstt\fR, \fBdetect_clips\fR, \fBcut\fR,
 \fBcaptions\fR, \fBexport\fR, \fBconcat\fR. Common per\-step fields: \fBid\fR, \fBcache\fR,
 \fBon_failure\fR (\fBabort\fR|\fBskip\fR|\fBretry\fR), \fBretries\fR,
 \fBrequires\fR.
@@ -117,9 +115,6 @@ Intermediate artifacts (cut clips, SRT files, captioned clips).
 .TP
 .B ./output/.reelflow/cache/
 Per\-step checkpoints used to skip work whose output already exists.
-.TP
-.B ~/.reelflow/models/
-Cached kokoro TTS model and voices (see \fBREELFLOW_HOME\fR).
 .TP
 .B ~/.reelflow/fonts/
 Cached title fonts (the \fBexport.title_font\fR presets). Drop your own

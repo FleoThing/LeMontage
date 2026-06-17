@@ -22,5 +22,6 @@
 ## Contexte
 
 - v1 : entrée MP4 locale uniquement, exécution 100 % locale (FFmpeg via
-  `imageio-ffmpeg`, `faster-whisper`, `kokoro-onnx`). Pas de provider cloud.
+  `imageio-ffmpeg`, `faster-whisper`). Pas de provider cloud. La TTS (kokoro-onnx)
+  est reportée en v2.
 - Demander à l'utilisateur dès le début si un point de contexte est ambigu.

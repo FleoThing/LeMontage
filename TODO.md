@@ -24,7 +24,7 @@ met a jour le man a chaque fois si tu ajoutes des choses.
 
 ## Blocks natifs v1
 - [x] `stt` — transcription via faster-whisper
-- [x] `tts` — synthèse vocale via kokoro-onnx
+- [ ] `tts` — synthèse vocale (reporté en v2 : nécessite le mux audio→vidéo ; kokoro-onnx + soundfile + onnxruntime)
 - [x] `detect_clips` — détection de moments forts (silence / scene_change)
 - [x] `cut` — découpe vidéo via FFmpeg
 - [x] `captions` — génération de sous-titres (burn ou sidecar .srt)
@@ -34,7 +34,7 @@ met a jour le man a chaque fois si tu ajoutes des choses.
 - [x] Interface `TTSProvider` (base)
 - [x] Interface `STTProvider` (base)
 - [x] Provider Whisper (faster-whisper)
-- [x] Provider Coqui / kokoro-onnx
+- [ ] Provider Coqui / kokoro-onnx (reporté en v2 avec le block `tts`)
 - [ ] Provider Ollama (LLM local) — pas de block LLM en v1 (`engagement` réservé)
 
 ## Paradigmes pipeline

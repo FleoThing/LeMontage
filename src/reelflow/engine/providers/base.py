@@ -1,4 +1,4 @@
-"""Provider contracts shared by every STT/TTS backend."""
+"""Provider contracts for speech backends (STT). TTS is deferred to v2."""
 
 from __future__ import annotations
 
@@ -46,14 +46,6 @@ class Transcript:
     lang: str
 
 
-@dataclass
-class TTSResult:
-    """The result of a synthesis: path to the written audio and its duration."""
-
-    audio: Path
-    duration: float
-
-
 class STTProvider(ABC):
     """Transcribes an audio/video file into timed text."""
 
@@ -64,13 +56,3 @@ class STTProvider(ABC):
         Backends may accept extra ``options`` (e.g. ``vad_filter``, ``beam_size``)
         and ignore any they do not support.
         """
-
-
-class TTSProvider(ABC):
-    """Synthesizes speech audio from text."""
-
-    @abstractmethod
-    def synthesize(
-        self, text: str, out_path: str | Path, voice: str = "default", speed: float = 1.0
-    ) -> TTSResult:
-        """Write spoken ``text`` to ``out_path`` and return the result."""

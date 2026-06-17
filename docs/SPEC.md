@@ -169,7 +169,8 @@ a result this run (`on_failure: skip`, or an unmet `requires`).
 
 ## 6. Built-in blocks
 
-The six blocks shipped in v1. All run locally — no API key required.
+The blocks shipped in v1 (`tts` is reserved for v2). All run locally — no API key
+required.
 
 ### 6.1 `stt` — speech-to-text
 
@@ -197,25 +198,11 @@ per-word timing, for karaoke captions), `lang` (detected language).
 
 ---
 
-### 6.2 `tts` — text-to-speech
+### 6.2 `tts` — text-to-speech (reserved, v2)
 
-Synthesizes speech from text.
-
-```yaml
-- id: voice
-  tts:
-    text: "{{ vars.script }}"
-    voice: default
-    speed: 1.0
-```
-
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `text` | string | — | Text to speak (required). |
-| `voice` | string | `default` | Voice name (via `kokoro-onnx`). |
-| `speed` | float | `1.0` | Playback speed multiplier. |
-
-**Outputs:** `audio` (path to generated audio file), `duration` (seconds).
+Deferred to v2 — using `tts` in v1 is a validation error. It needs a way to mux
+the synthesized audio onto video (voiceover / faceless content), which v1 does
+not have. Planned with `kokoro-onnx` + `soundfile` (+ `onnxruntime`).
 
 ---
 
@@ -386,7 +373,6 @@ Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
 | Block | Outputs |
 |---|---|
 | `stt` | `text`, `segments`, `words`, `lang` |
-| `tts` | `audio`, `duration` |
 | `detect_clips` | `count`, `timestamps`, + channel |
 | `cut` | `clips` / `clip` |
 | `captions` | `clips` / `srt` |
@@ -565,10 +551,9 @@ Durations (`min_duration`, …) and timecodes (`start`, `end`) accept:
 fetched on first use and cached:
 
 - **STT** (`faster-whisper`) — cached by the library (HuggingFace cache).
-- **TTS** (`kokoro-onnx`) — model + voices downloaded to `~/.reelflow/models/`
-  (override the base dir with the `REELFLOW_HOME` environment variable).
 - **Title fonts** (`export.title_font` presets) — downloaded to
-  `~/.reelflow/fonts/` and used by libass, so titles look the same everywhere.
+  `~/.reelflow/fonts/` (override the base dir with `REELFLOW_HOME`) and used by
+  libass, so titles look the same everywhere.
 
 FFmpeg is used for all media work: a system `ffmpeg` on `PATH` is preferred,
 otherwise the static binary bundled with `imageio-ffmpeg` is used.

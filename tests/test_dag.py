@@ -12,7 +12,7 @@ def order(steps):
 def test_listed_order_preserved_when_independent():
     steps = [
         {"id": "a", "stt": {}},
-        {"id": "b", "tts": {"text": "x"}},
+        {"id": "b", "export": {"format": "vertical"}},
     ]
     assert order(steps) == ["a", "b"]
 

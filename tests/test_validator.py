@@ -110,9 +110,16 @@ def test_reserved_detect_method_rejected():
 
 def test_cloud_provider_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
-    d["steps"] = [{"tts": {"text": "hi", "engine": "elevenlabs"}}]
+    d["steps"] = [{"stt": {"engine": "elevenlabs"}}]
     errors = validate_doc(d)
     assert any("reserved for a later phase" in e for e in errors)
+
+
+def test_reserved_tts_block_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [{"tts": {"text": "hi"}}]
+    errors = validate_doc(d)
+    assert any("reserved" in e and "tts" in e for e in errors)
 
 
 def test_unknown_channel_reference_rejected():

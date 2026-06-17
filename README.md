@@ -100,8 +100,13 @@ The more pipelines in the hub, the better AI models become at generating them �
 | Orchestration engine | Python |
 | Media processing | FFmpeg (system, or bundled via `imageio-ffmpeg`) |
 | STT | Whisper via `faster-whisper` (local) |
-| TTS | `kokoro-onnx` (local) |
+| TTS | _planned for v2_ — see below |
 | LLM | Ollama (local) |
+
+> **Text-to-speech is deferred to v2.** It will be added once the engine can mux
+> a voiceover onto video (faceless / narrated content). Planned stack, all local:
+> `kokoro-onnx` (synthesis) + `onnxruntime` (inference) + `soundfile` (write audio).
+> Removed from v1 to keep the install light (no `onnxruntime`).
 
 The entire pipeline runs on your machine. No API key, no internet connection, no usage cost.
 
@@ -131,12 +136,11 @@ src/reelflow/
     ├── ffmpeg.py       # FFmpeg wrapper (system or bundled binary)
     ├── timecode.py     # duration / timecode parsing
     ├── blocks/         # built-in steps
-    │   ├── stt.py  tts.py  detect_clips.py
-    │   └── cut.py  captions.py  export.py
+    │   ├── stt.py  detect_clips.py  cut.py
+    │   └── captions.py  export.py  concat.py
     └── providers/      # swappable adapters
-        ├── base.py     # STTProvider / TTSProvider interfaces
-        ├── whisper.py  # faster-whisper
-        └── kokoro.py   # kokoro-onnx
+        ├── base.py     # STTProvider interface
+        └── whisper.py  # faster-whisper
 ```
 
 ## Key design principles
@@ -189,8 +193,8 @@ reelflow run pipeline.yaml         # produce the clips into ./output/
 ```
 
 > `reelflow validate` works with the base install; `run` needs the `[engine]`
-> extra (FFmpeg, faster-whisper, kokoro-onnx). Models download on first use —
-> see [SPEC §13](docs/SPEC.md).
+> extra (FFmpeg via `imageio-ffmpeg`, `faster-whisper`). The Whisper model and
+> title fonts download on first use — see [SPEC §13](docs/SPEC.md).
 
 ### 3. Coming soon — install script
 

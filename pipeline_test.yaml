@@ -7,7 +7,7 @@ vars:
 
 input:
   type: video
-  source: ./video-example.mp4
+  source: ./video-example1.mp4
 
 steps:
   # Transcription FR (sert aux sous-titres)

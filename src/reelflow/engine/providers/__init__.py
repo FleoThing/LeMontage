@@ -1,15 +1,15 @@
-"""Pluggable speech providers (STT/TTS).
+"""Pluggable speech providers.
 
-v1 ships local-only providers: ``faster-whisper`` for transcription and
-``kokoro-onnx`` for synthesis. The base classes define the contract so cloud
-providers can be added later without touching the blocks.
+v1 ships a local-only STT provider: ``faster-whisper`` for transcription. The
+base class defines the contract so cloud providers can be added later without
+touching the blocks. (Text-to-speech is deferred to v2 — see TODO.)
 """
 
 from __future__ import annotations
 
-from .base import STTProvider, Segment, Transcript, TTSProvider, TTSResult, Word
+from .base import Segment, STTProvider, Transcript, Word
 
-__all__ = ["STTProvider", "TTSProvider", "Segment", "Transcript", "TTSResult", "Word"]
+__all__ = ["STTProvider", "Segment", "Transcript", "Word"]
 
 
 def default_stt(model: str = "base") -> STTProvider:
@@ -17,10 +17,3 @@ def default_stt(model: str = "base") -> STTProvider:
     from .whisper import WhisperSTT
 
     return WhisperSTT(model=model)
-
-
-def default_tts() -> TTSProvider:
-    """Return the default local TTS provider (kokoro-onnx)."""
-    from .kokoro import KokoroTTS
-
-    return KokoroTTS()

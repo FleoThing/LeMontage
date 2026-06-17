@@ -9,8 +9,7 @@
 # Pipeline parsing / validation (always required)
 pyyaml==6.0.3
 
-# Execution engine: FFmpeg, speech-to-text, text-to-speech
+# Execution engine: FFmpeg + speech-to-text
 imageio-ffmpeg==0.6.0     # bundled FFmpeg binary (no system install needed)
 faster-whisper==1.2.1     # speech-to-text (Whisper)
-kokoro-onnx==0.5.0        # text-to-speech
-soundfile==0.14.0         # write synthesized audio
+# text-to-speech is deferred to v2 (kokoro-onnx, soundfile, onnxruntime)

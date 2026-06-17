@@ -1,7 +1,7 @@
 """Tests for the native blocks.
 
-Heavy backends (FFmpeg, Whisper, kokoro) are mocked; these tests pin the block
-logic — output shapes, path naming, SRT generation, clip windowing.
+Heavy backends (FFmpeg, Whisper) are mocked; these tests pin the block logic —
+output shapes, path naming, caption generation, clip windowing.
 """
 
 from pathlib import Path
@@ -24,9 +24,8 @@ from reelflow.engine.blocks.export import (
     _title_ass,
 )
 from reelflow.engine.blocks.stt import SttBlock
-from reelflow.engine.blocks.tts import TtsBlock
 from reelflow.engine.context import RunContext
-from reelflow.engine.providers.base import Segment, Transcript, TTSResult, Word
+from reelflow.engine.providers.base import Segment, Transcript, Word
 
 
 def ctx(tmp_path, **kw):
@@ -72,26 +71,6 @@ def test_stt_requires_media(tmp_path, monkeypatch):
     monkeypatch.setattr(providers, "default_stt", lambda model="base": None)
     with pytest.raises(ValueError):
         SttBlock().execute({}, ctx(tmp_path, input={}), "t")
-
-
-# --- tts -------------------------------------------------------------------
-
-
-def test_tts_writes_audio_output(tmp_path, monkeypatch):
-    class FakeTTS:
-        def synthesize(self, text, out_path, voice="default", speed=1.0):
-            Path(out_path).write_bytes(b"x")
-            return TTSResult(audio=Path(out_path), duration=1.23)
-
-    monkeypatch.setattr(providers, "default_tts", lambda: FakeTTS())
-    out = TtsBlock().execute({"text": "hi"}, ctx(tmp_path), "voice").outputs
-    assert out["duration"] == 1.23
-    assert out["audio"].endswith("voice.wav")
-
-
-def test_tts_requires_text(tmp_path):
-    with pytest.raises(ValueError):
-        TtsBlock().execute({}, ctx(tmp_path), "voice")
 
 
 # --- detect_clips windowing ------------------------------------------------
