@@ -458,7 +458,7 @@ output:
 | Field | Default | Description |
 |---|---|---|
 | `dir` | `./output` | Base directory for all produced files. |
-| `cleanup` | `false` | When `true`, delete `output/.reelflow/` (intermediate clips, `.srt`/`.ass`, cache) after a successful run — handy when a `concat` step has already assembled the final reel. The CLI `--clean` flag forces this regardless of the setting. |
+| `cleanup` | `false` | When `true`, after a successful run delete `output/.reelflow/` (work files + cache) **and** the per-clip files a `concat` already merged — keeping only the final reel. The CLI `--clean` flag forces this regardless of the setting. |
 
 ---
 
@@ -545,9 +545,9 @@ reelflow run pipeline.yaml --var lang=en   # override a vars entry (repeatable)
 reelflow run pipeline.yaml --clean         # delete temp files after a successful run
 ```
 
-`--clean` removes `output/.reelflow/` (intermediate clips, `.srt`/`.ass`, and the
-checkpoint cache) once the run succeeds, leaving only the final media. Omit it to
-keep the cache so a re-run can resume from checkpoints.
+`--clean` removes `output/.reelflow/` (work files + checkpoint cache) once the run
+succeeds, plus any per-clip files a `concat` merged (keeping the final reel). Omit
+it to keep the cache so a re-run can resume from checkpoints.
 
 ### 13.1 Time values
 

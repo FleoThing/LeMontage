@@ -64,8 +64,8 @@ takes precedence over values declared in the file.
 .TP
 .B \-\-clean
 (\fBrun\fR only) After a successful run, delete the temp directory
-\fB<output>/.reelflow\fR (intermediate clips, subtitle files and the checkpoint
-cache), keeping only the final media.
+\fB<output>/.reelflow\fR (work files + checkpoint cache) and any per-clip files a
+\fBconcat\fR merged, keeping only the final media.
 .TP
 .B \-\-force
 (\fBinit\fR only) Overwrite the target file if it already exists.

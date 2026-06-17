@@ -93,7 +93,7 @@ def run_pipeline(
         result.cells.append(cell_result)
 
     if result.ok and _should_clean(doc, clean):
-        _remove_temp(doc, report)
+        _cleanup(doc, result, report)
 
     return result
 
@@ -104,14 +104,38 @@ def _should_clean(doc: dict[str, Any], clean: bool | None) -> bool:
     return bool((doc.get("output") or {}).get("cleanup", False))
 
 
-def _remove_temp(doc: dict[str, Any], report: Reporter) -> None:
+def _cleanup(doc: dict[str, Any], result: RunResult, report: Reporter) -> None:
+    """Remove the temp dir, plus per-clip files that a concat already merged."""
     import shutil
 
     output_dir = Path((doc.get("output") or {}).get("dir", "./output"))
     temp = output_dir / ".reelflow"
     if temp.exists():
         shutil.rmtree(temp, ignore_errors=True)
-        report(f"🧹 cleaned temp files in {temp}")
+
+    removed = _remove_merged_parts(result, output_dir)
+    extra = f" + {removed} intermediate clip(s)" if removed else ""
+    report(f"🧹 cleaned temp files in {temp}{extra}")
+
+
+def _remove_merged_parts(result: RunResult, output_dir: Path) -> int:
+    """Delete export clips consumed by a concat (kept: the final reel)."""
+    base = output_dir.resolve()
+    removed = 0
+    for cell in result.cells:
+        for outputs in cell.outputs.values():
+            # A concat step exposes the merged 'file' and the source 'parts'.
+            if not (isinstance(outputs, dict) and outputs.get("file") and "parts" in outputs):
+                continue
+            reel = str(outputs["file"])
+            for part in outputs.get("parts") or []:
+                path = Path(part)
+                if str(part) == reel or not path.exists():
+                    continue
+                if base in path.resolve().parents:  # safety: only under output dir
+                    path.unlink()
+                    removed += 1
+    return removed
 
 
 def _run_cell(

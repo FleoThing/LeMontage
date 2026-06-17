@@ -132,6 +132,36 @@ def test_run_without_clean_keeps_temp_dir(tmp_path, monkeypatch):
     assert (tmp_path / ".reelflow").exists()  # cache/checkpoints kept for resume
 
 
+def test_clean_removes_concat_parts_keeps_reel(tmp_path, monkeypatch):
+    """--clean also deletes per-clip files a concat merged, keeping the reel."""
+    from reelflow.engine import executor
+    from reelflow.engine.blocks.base import Block, BlockResult
+
+    parts = [tmp_path / "p0.mp4", tmp_path / "p1.mp4"]
+    reel = tmp_path / "reel.mp4"
+    for f in (*parts, reel):
+        f.write_bytes(b"v")
+
+    class FakeConcat(Block):
+        name = "concat"
+
+        def execute(self, params, ctx, step_id):
+            return BlockResult(outputs={"file": str(reel), "parts": [str(p) for p in parts]})
+
+    monkeypatch.setattr(executor, "REGISTRY", {"concat": FakeConcat()})
+    pipeline = (
+        'reelflow: "1.0"\nname: t\n'
+        "input:\n  type: video\n  source: ./x.mp4\n"
+        "steps:\n  - id: reel\n    concat: {}\n"
+        f"output:\n  dir: {tmp_path}\n"
+    )
+    target = tmp_path / "p.yaml"
+    target.write_text(pipeline, encoding="utf-8")
+    assert main(["run", str(target), "--clean"]) == 0
+    assert not parts[0].exists() and not parts[1].exists()  # parts removed
+    assert reel.exists()  # final reel kept
+
+
 def test_output_cleanup_flag_in_yaml_removes_temp(tmp_path, monkeypatch):
     """`output.cleanup: true` triggers cleanup without the CLI flag."""
     from reelflow.engine import executor
