@@ -49,7 +49,7 @@ steps:
       fps: 30
       title: "UFC Maison Blanche\n#{{ part }} / 3"
       title_font: font3       # Bangers (téléchargée en local)
-      title_size: 56
+      title_size: 72
       title_margin: 300
       output: "./output/{{ name }}-{{ index }}.mp4"
 
