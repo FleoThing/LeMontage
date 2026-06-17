@@ -73,8 +73,14 @@ def run_pipeline(
     *,
     var_overrides: dict[str, Any] | None = None,
     reporter: Reporter | None = None,
+    clean: bool | None = None,
 ) -> RunResult:
-    """Run a validated pipeline document and return per-cell results."""
+    """Run a validated pipeline document and return per-cell results.
+
+    ``clean`` removes the temp dir (``output/.reelflow``) after a successful run.
+    ``None`` defers to the pipeline's ``output.cleanup`` flag; ``True``/``False``
+    override it (e.g. the CLI ``--clean``).
+    """
     report = reporter or _default_reporter
     cells = _matrix_cells(doc.get("matrix"))
     nodes = build_dag(doc["steps"])
@@ -86,7 +92,26 @@ def run_pipeline(
         cell_result = _run_cell(doc, nodes, cell, var_overrides or {}, report)
         result.cells.append(cell_result)
 
+    if result.ok and _should_clean(doc, clean):
+        _remove_temp(doc, report)
+
     return result
+
+
+def _should_clean(doc: dict[str, Any], clean: bool | None) -> bool:
+    if clean is not None:
+        return clean
+    return bool((doc.get("output") or {}).get("cleanup", False))
+
+
+def _remove_temp(doc: dict[str, Any], report: Reporter) -> None:
+    import shutil
+
+    output_dir = Path((doc.get("output") or {}).get("dir", "./output"))
+    temp = output_dir / ".reelflow"
+    if temp.exists():
+        shutil.rmtree(temp, ignore_errors=True)
+        report(f"🧹 cleaned temp files in {temp}")
 
 
 def _run_cell(

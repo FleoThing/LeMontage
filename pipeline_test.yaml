@@ -60,3 +60,4 @@ steps:
 
 output:
   dir: ./output
+  cleanup: true   # on a le reel final + les 3 parties -> on supprime les intermédiaires

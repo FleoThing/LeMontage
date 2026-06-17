@@ -61,6 +61,11 @@ def main(argv: list[str] | None = None) -> int:
         metavar="KEY=VALUE",
         help="override a value from the 'vars' block (repeatable)",
     )
+    p_run.add_argument(
+        "--clean",
+        action="store_true",
+        help="delete intermediate/temp files (output/.reelflow) after a successful run",
+    )
 
     p_validate = sub.add_parser("validate", help="validate a pipeline without running it")
     p_validate.add_argument("file", help="pipeline YAML file")
@@ -76,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "init":
         return _cmd_init(args.file, args.force)
     if args.command == "run":
-        return _cmd_run(args.file, args.var)
+        return _cmd_run(args.file, args.var, args.clean)
     parser.print_help()
     return 1
 
@@ -102,7 +107,7 @@ def _cmd_init(file: str, force: bool) -> int:
     return 0
 
 
-def _cmd_run(file: str, var_args: list[str]) -> int:
+def _cmd_run(file: str, var_args: list[str], clean: bool = False) -> int:
     import yaml
 
     from .engine import run_pipeline
@@ -122,8 +127,10 @@ def _cmd_run(file: str, var_args: list[str]) -> int:
 
     doc = yaml.safe_load(Path(file).read_text(encoding="utf-8"))
     print(f"▶ running {doc.get('name', file)}", file=sys.stderr)
+    # --clean forces cleanup; otherwise defer to the pipeline's output.cleanup.
+    clean_override = True if clean else None
     try:
-        result = run_pipeline(doc, var_overrides=overrides)
+        result = run_pipeline(doc, var_overrides=overrides, clean=clean_override)
     except Exception as exc:  # noqa: BLE001 - surface engine errors to the user
         print(f"✗ {exc}", file=sys.stderr)
         return 1

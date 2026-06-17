@@ -90,3 +90,68 @@ def test_run_executes_pipeline(tmp_path, monkeypatch):
     target = tmp_path / "p.yaml"
     target.write_text(pipeline, encoding="utf-8")
     assert main(["run", str(target), "--var", "k=v"]) == 0
+
+
+def _noop_pipeline(tmp_path):
+    """A valid pipeline with one stubbed step writing under tmp_path."""
+    from reelflow.engine.blocks.base import Block, BlockResult
+
+    class NoopBlock(Block):
+        def __init__(self, name):
+            self.name = name
+
+        def execute(self, params, ctx, step_id):
+            return BlockResult(outputs={})
+
+    pipeline = (
+        'reelflow: "1.0"\nname: t\n'
+        "input:\n  type: video\n  source: ./x.mp4\n"
+        "steps:\n  - id: a\n    stt: {}\n"
+        "output:\n  dir: " + str(tmp_path) + "\n"
+    )
+    target = tmp_path / "p.yaml"
+    target.write_text(pipeline, encoding="utf-8")
+    return target, NoopBlock
+
+
+def test_run_clean_removes_temp_dir(tmp_path, monkeypatch):
+    from reelflow.engine import executor
+
+    target, NoopBlock = _noop_pipeline(tmp_path)
+    monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
+    assert main(["run", str(target), "--clean"]) == 0
+    assert not (tmp_path / ".reelflow").exists()
+
+
+def test_run_without_clean_keeps_temp_dir(tmp_path, monkeypatch):
+    from reelflow.engine import executor
+
+    target, NoopBlock = _noop_pipeline(tmp_path)
+    monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
+    assert main(["run", str(target)]) == 0
+    assert (tmp_path / ".reelflow").exists()  # cache/checkpoints kept for resume
+
+
+def test_output_cleanup_flag_in_yaml_removes_temp(tmp_path, monkeypatch):
+    """`output.cleanup: true` triggers cleanup without the CLI flag."""
+    from reelflow.engine import executor
+    from reelflow.engine.blocks.base import Block, BlockResult
+
+    class NoopBlock(Block):
+        def __init__(self, name):
+            self.name = name
+
+        def execute(self, params, ctx, step_id):
+            return BlockResult(outputs={})
+
+    pipeline = (
+        'reelflow: "1.0"\nname: t\n'
+        "input:\n  type: video\n  source: ./x.mp4\n"
+        "steps:\n  - id: a\n    stt: {}\n"
+        f"output:\n  dir: {tmp_path}\n  cleanup: true\n"
+    )
+    target = tmp_path / "p.yaml"
+    target.write_text(pipeline, encoding="utf-8")
+    monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
+    assert main(["run", str(target)]) == 0  # no --clean flag
+    assert not (tmp_path / ".reelflow").exists()

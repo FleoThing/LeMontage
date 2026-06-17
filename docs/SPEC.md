@@ -443,11 +443,13 @@ Global output settings. Individual `export` steps can override `output` per file
 ```yaml
 output:
   dir: ./output          # default: ./output
+  cleanup: true          # delete temp files after a successful run
 ```
 
 | Field | Default | Description |
 |---|---|---|
 | `dir` | `./output` | Base directory for all produced files. |
+| `cleanup` | `false` | When `true`, delete `output/.reelflow/` (intermediate clips, `.srt`/`.ass`, cache) after a successful run — handy when a `concat` step has already assembled the final reel. The CLI `--clean` flag forces this regardless of the setting. |
 
 ---
 
@@ -531,7 +533,12 @@ output:
 
 ```bash
 reelflow run pipeline.yaml --var lang=en   # override a vars entry (repeatable)
+reelflow run pipeline.yaml --clean         # delete temp files after a successful run
 ```
+
+`--clean` removes `output/.reelflow/` (intermediate clips, `.srt`/`.ass`, and the
+checkpoint cache) once the run succeeds, leaving only the final media. Omit it to
+keep the cache so a re-run can resume from checkpoints.
 
 ### 13.1 Time values
 
