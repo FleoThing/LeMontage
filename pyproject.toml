@@ -18,7 +18,6 @@ dependencies = [
 # Everything the execution engine needs to actually produce media. Kept optional
 # so `reelflow validate` stays dependency-light; `reelflow run` requires these.
 engine = [
-    "numpy>=1.24",
     "soundfile>=0.12",
     "imageio-ffmpeg>=0.4",
     "faster-whisper>=1.0",
