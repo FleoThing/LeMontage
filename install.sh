@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Reelflow — installation sur Lubuntu / Ubuntu / Debian.
+# Reelflow — installation sur distributions Linux basées Debian (apt) :
+# Debian, Ubuntu, Lubuntu, Linux Mint, Pop!_OS, etc.
 # À lancer depuis la racine du dépôt :  ./install.sh
 #
 # Installe les prérequis système, crée un venv et installe Reelflow + son moteur.
@@ -8,7 +9,7 @@
 
 set -euo pipefail
 
-echo "▶ Reelflow — installation (Lubuntu/Ubuntu/Debian)"
+echo "▶ Reelflow — installation (distributions Debian/apt)"
 
 # --- 1. Dépendances système ------------------------------------------------
 # python3 + venv + pip : pour l'environnement et l'installation
