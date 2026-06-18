@@ -165,7 +165,30 @@ src/reelflow/
 
 ## Installation
 
-### 1. Docker (recommended to get started)
+### 1. pipx — run it anywhere (recommended)
+
+Installs `reelflow` in its own isolated environment and puts the command on your
+`PATH` — no venv to activate, runnable from any folder (like `nextflow`). Needs
+Python 3.10+ and [pipx](https://pipx.pypa.io).
+
+```bash
+pipx install "reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
+reelflow --version
+```
+
+Prerequisites per OS:
+
+```bash
+# Debian/Ubuntu/Lubuntu/Mint…   sudo apt install pipx git fontconfig && pipx ensurepath
+# macOS                          brew install pipx && pipx ensurepath
+# Windows (PowerShell)           py -m pip install --user pipx; py -m pipx ensurepath
+```
+
+> Not on PyPI yet, so we install straight from GitHub (`@dev` branch). Once
+> published this becomes `pipx install "reelflow[engine]"`. Drop `[engine]` for a
+> light, validate-only install.
+
+### 2. Docker (zero local setup)
 
 No dependencies to manage. Everything is pre-installed.
 
@@ -180,7 +203,7 @@ docker run -v $(pwd):/workspace ghcr.io/reelflow/reelflow validate pipeline.yaml
 docker run -v $(pwd):/workspace ghcr.io/reelflow/reelflow init
 ```
 
-### 2. From source (local, engine included)
+### 3. From source (developer setup)
 
 ```bash
 git clone https://github.com/reelflow/reelflow && cd reelflow
@@ -213,7 +236,7 @@ needed to *run* pipelines — `imageio-ffmpeg` (bundled FFmpeg) and `faster-whis
 > pipx install "reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
 > ```
 
-### 3. Debian-based Linux (apt) — `install.sh`
+### 4. Debian-based Linux (apt) — `install.sh`
 
 For any `apt`-based distribution (Debian, Ubuntu, Lubuntu, Linux Mint, Pop!_OS,
 …). Installs the system prerequisites, creates a venv and installs Reelflow:
@@ -226,7 +249,7 @@ git clone https://github.com/reelflow/reelflow && cd reelflow
 (A hosted `curl -fsSL https://install.reelflow.dev | sh` one-liner will come once
 published.)
 
-### 4. Coming soon — pip / uv
+### 5. Coming soon — PyPI (`pip install reelflow`)
 
 ```bash
 # pip
