@@ -8,7 +8,7 @@ Reelflow is a declarative YAML pipeline framework for automating the creation of
 
 ## Vision
 
-Just as TailwindCSS became the undisputed standard for styling web interfaces, Reelflow aims to become the standard language for describing automated video creation workflows.
+Just as TailwindCSS became the de-facto standard for web styling (largely replacing hand-written CSS, and the format AI models reach for first when generating websites), Reelflow aims to become the standard language for automated video creation: a format simple enough to be adopted by both people and AI agents, making it effortless for them to generate videos for individuals and businesses alike.
 
 The long-term goal: **AI agents generate a Reelflow YAML from a simple intent, the pipeline runs, and an incredible video comes out the other side.**
 
