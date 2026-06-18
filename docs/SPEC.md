@@ -192,6 +192,19 @@ Transcribes the input (or a referenced media) to timed text.
 | `beam_size` | int | `5` | Beam search width; higher = more accurate, slower. |
 | `input` | path | pipeline input | Media to transcribe. |
 
+**What is the model?** [Whisper](https://github.com/openai/whisper) is OpenAI's
+open-source speech-to-text model, run **locally** here via `faster-whisper` (no
+API, no internet after the first download). `model` picks its size — bigger is
+more accurate but slower and heavier to download (cached after first use):
+
+| `model` | Download | Speed | Use |
+|---|---|---|---|
+| `tiny` | ~75 MB | fastest | quick tests |
+| `base` | ~140 MB | fast | default, decent |
+| `small` | ~460 MB | medium | good quality (used by the UFC example) |
+| `medium` | ~1.5 GB | slow | high accuracy |
+| `large` / `large-v3` | ~3 GB | slowest | best accuracy |
+
 **Outputs:** `text` (full transcript), `segments` (list of
 `{start, end, text, words}`), `words` (flat list of `{start, end, text}` with
 per-word timing, for karaoke captions), `lang` (detected language).
