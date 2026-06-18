@@ -108,6 +108,11 @@ The more pipelines in the hub, the better AI models become at generating them - 
 | TTS | _planned for v2_ - see below |
 | LLM | Ollama (local) |
 
+> *STT uses [Whisper](https://github.com/openai/whisper), OpenAI's open-source
+> speech-to-text model, run locally via `faster-whisper` (no API, offline after
+> the first download). Pick the model size (`tiny` → `large`) to trade speed for
+> accuracy and download size - see [SPEC §6.1](docs/SPEC.md).*
+
 > **Text-to-speech is deferred to v2.** It will be added once the engine can mux
 > a voiceover onto video (faceless / narrated content). Planned stack, all local:
 > `kokoro-onnx` (synthesis) + `onnxruntime` (inference) + `soundfile` (write audio).
