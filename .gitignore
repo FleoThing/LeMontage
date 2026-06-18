@@ -22,9 +22,12 @@ models/
 !examples/**
 
 # Local-only (internal — not for the public repo)
-CLAUDE.md            # AI-assistant working instructions
-TODO.md              # internal roadmap / launch plan
-/pipeline*.yaml      # working pipelines at the root (examples/ holds the public ones)
+# AI-assistant working instructions
+CLAUDE.md
+# internal roadmap / launch plan
+TODO.md
+# working pipelines at the root (examples/ holds the public ones)
+/pipeline*.yaml
 
 # OS / editor
 .DS_Store
