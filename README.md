@@ -192,9 +192,26 @@ reelflow validate pipeline.yaml    # check it against the spec
 reelflow run pipeline.yaml         # produce the clips into ./output/
 ```
 
-> `reelflow validate` works with the base install; `run` needs the `[engine]`
-> extra (FFmpeg via `imageio-ffmpeg`, `faster-whisper`). The Whisper model and
-> title fonts download on first use — see [SPEC §13](docs/SPEC.md).
+**What is `".[engine]"`?** `.` is the project in the current folder (its
+`pyproject.toml`); `[engine]` is the optional **extra** that pulls the libraries
+needed to *run* pipelines — `imageio-ffmpeg` (bundled FFmpeg) and `faster-whisper`
+(speech-to-text). So:
+
+| Command | Installs | Lets you |
+|---|---|---|
+| `pip install .` | core only (`pyyaml`) | `init`, `validate` |
+| `pip install ".[engine]"` | core **+ engine** | `init`, `validate`, **`run`** |
+| `pip install -e ".[engine]"` | same, **editable** (source-linked) | develop on Reelflow |
+
+> The Whisper model and title fonts download on first use — see
+> [SPEC §13](docs/SPEC.md).
+>
+> ℹ️ This (clone + venv) is the **developer** setup — `reelflow` only works inside
+> the activated venv. To use it **anywhere like a normal CLI** (no venv to
+> activate), install with `pipx` instead:
+> ```bash
+> pipx install "reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
+> ```
 
 ### 3. Debian-based Linux (apt) — `install.sh`
 
