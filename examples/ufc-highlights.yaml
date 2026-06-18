@@ -1,16 +1,16 @@
 reelflow: "1.0"
 name: ufc-highlights
-description: "Extraits verticaux d'un combat UFC, avec titre permanent et sous-titres"
+description: "Vertical highlights from a UFC fight, with a persistent title and captions"
 
 vars:
-  lang: fr          # commentaires en français (piste audio 'fra')
+  lang: fr          # commentary is in French (audio track 'fra')
 
 input:
   type: video
   source: ./video-example.mp4
 
 steps:
-  # 1. Transcrire les commentaires (VAD coupe le bruit de foule)
+  # 1. Transcribe the commentary (VAD removes crowd noise)
   - id: transcript
     stt:
       model: small
@@ -21,9 +21,9 @@ steps:
     on_failure: retry
     retries: 2
 
-  # 2. Le moment le plus viral = la zone sonore la plus forte (foule + commentateur).
-  #    Les bornes du clip sont trouvées automatiquement autour du pic ; min/max
-  #    bornent juste la durée. max_clips: 1 -> on ne garde QUE le KO / la finition.
+  # 2. The most viral moment = the loudest audio window (crowd + commentator).
+  #    Clip boundaries are found automatically around the peak; min/max only
+  #    bound the length. max_clips: 1 -> keep ONLY the KO / the finish.
   - id: moments
     detect_clips:
       method: loudness
@@ -32,11 +32,11 @@ steps:
       max_clips: 1
       emit: highlights
 
-  # 3. Découper chaque extrait, en parallèle
+  # 3. Cut each highlight, in parallel
   - cut:
       from: highlights
 
-  # 4. Sous-titres karaoké mot-à-mot (style TikTok/CapCut), en bas
+  # 4. Word-by-word karaoke captions (TikTok/CapCut style), at the bottom
   - captions:
       from: highlights
       words: "{{ steps.transcript.words }}"
@@ -45,14 +45,14 @@ steps:
       max_chars: 32
     requires: transcript.success
 
-  # 5. Export vertical 1080x1920 + titre permanent en haut, tout le long du clip
+  # 5. Vertical 1080x1920 export + persistent title at the top, for the whole clip
   - export:
       from: highlights
       format: vertical
       resolution: 1080x1920
       fps: 30
       title: "UFC Maison Blanche\nCyril Gane vs Pereira"
-      title_font: font2      # font1..font5 (réseaux) ou un nom de police installé
+      title_font: font2      # font1..font5 (social presets) or an installed font name
       title_size: 62
       title_margin: 330
       output: "./output/{{ name }}-{{ index }}.mp4"
