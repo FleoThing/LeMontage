@@ -195,18 +195,25 @@ Prerequisites per OS:
 
 ### 2. Docker (zero local setup)
 
-No dependencies to manage. Everything is pre-installed.
+No Python or system deps to manage. Build the image from source, then run
+pipelines against your current folder (mounted as the working dir):
 
 ```bash
-# Run a pipeline
-docker run -v $(pwd):/workspace ghcr.io/reelflow/reelflow run pipeline.yaml
+git clone https://github.com/ffillouxdev/reelflow && cd reelflow
+docker build -t reelflow .
 
-# Validate a pipeline without running it
-docker run -v $(pwd):/workspace ghcr.io/reelflow/reelflow validate pipeline.yaml
+docker run --rm -v "$PWD":/work reelflow run pipeline.yaml
+docker run --rm -v "$PWD":/work reelflow validate pipeline.yaml
+docker run --rm -v "$PWD":/work reelflow init
 
-# Generate a starter pipeline
-docker run -v $(pwd):/workspace ghcr.io/reelflow/reelflow init
+# Keep the Whisper model + fonts between runs (avoid re-downloading):
+docker run --rm -v "$PWD":/work \
+  -v reelflow-cache:/root/.reelflow -v hf-cache:/root/.cache/huggingface \
+  reelflow run pipeline.yaml
 ```
+
+> A prebuilt `ghcr.io/ffillouxdev/reelflow` image will be published by the release
+> CI later, so you can skip the build step.
 
 ### 3. From source (developer setup)
 
