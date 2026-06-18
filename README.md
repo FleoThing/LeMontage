@@ -26,7 +26,7 @@ The long-term goal: **AI agents generate a Reelflow YAML from a simple intent, t
 
 Reelflow lets you define a video production workflow as a YAML file - a series of composable steps (transcription, clip detection, captions, export) that execute as a DAG (Directed Acyclic Graph), with automatic parallelism and resumability.
 
-> 🎬 **Coming soon:** animated transitions between clips (fades, cuts) for ready-to-post montages.
+> 🎬 **Coming soon:** animated transitions between clips (fades, cuts, filters) for ready-to-post montages.
 
 > **Scope v1:** MP4 input only. Output saved to `./output/` by default (overridable in YAML). Automatic publishing to social platforms is out of scope for v1.
 
