@@ -1,44 +1,44 @@
-# Reelflow
+# LeMontage
 
 > The TailwindCSS of automated video creation for social media.
 
-[![CI](https://github.com/ffillouxdev/reelflow/actions/workflows/ci.yml/badge.svg)](https://github.com/ffillouxdev/reelflow/actions/workflows/ci.yml)
+[![CI](https://github.com/ffillouxdev/LeMontage/actions/workflows/ci.yml/badge.svg)](https://github.com/ffillouxdev/LeMontage/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/github/license/ffillouxdev/reelflow)
+![License](https://img.shields.io/github/license/ffillouxdev/LeMontage)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 
-Reelflow is a declarative YAML pipeline framework for automating the creation of viral videos - Shorts, Reels, TikToks and more - without writing the same boilerplate code for every new trend.
+LeMontage is a declarative YAML pipeline framework for automating the creation of viral videos - Shorts, Reels, TikToks and more - without writing the same boilerplate code for every new trend.
 
-![Reelflow install & usage workflow](docs/workflow-example.svg)
+![LeMontage install & usage workflow](docs/workflow-example.svg)
 
 ## Vision
 
-Just as TailwindCSS became a de-facto standard for web styling (largely replacing hand-written CSS), Reelflow aims to be the standard language for automated video creation - for people and autonomous agents alike.
+Just as TailwindCSS became a de-facto standard for web styling (largely replacing hand-written CSS), LeMontage aims to be the standard language for automated video creation - for people and autonomous agents alike.
 
-There is **nothing AI-specific** inside Reelflow. It's a plain, declarative YAML format with a clear, self-contained spec ([SPEC.md](docs/SPEC.md), `man reelflow`) - simple enough that anyone, or any coding agent (Claude Code, OpenClaw, …), can read it and write a valid pipeline **with no SDK or special integration**. The intelligence stays in the human or the agent; Reelflow just runs the result, locally and reliably.
+There is **nothing AI-specific** inside LeMontage. It's a plain, declarative YAML format with a clear, self-contained spec ([SPEC.md](docs/SPEC.md), `man lemontage`) - simple enough that anyone, or any coding agent (Claude Code, OpenClaw, …), can read it and write a valid pipeline **with no SDK or special integration**. The intelligence stays in the human or the agent; LeMontage just runs the result, locally and reliably.
 
-So the end-to-end story becomes: an agent turns a one-line intent into a valid pipeline, and Reelflow executes it.
+So the end-to-end story becomes: an agent turns a one-line intent into a valid pipeline, and LeMontage executes it.
 
 ```
 "Make me a viral short about the DeepSeek trend, energetic, 60s"
         ↓
    AI generates YAML
         ↓
-  Reelflow executes
+  LeMontage executes
         ↓
      🎬 Video
 ```
 
 ## What it does
 
-Reelflow lets you define a video production workflow as a YAML file - a series of composable steps (transcription, clip detection, captions, export) that execute as a DAG (Directed Acyclic Graph), with automatic parallelism and resumability.
+LeMontage lets you define a video production workflow as a YAML file - a series of composable steps (transcription, clip detection, captions, export) that execute as a DAG (Directed Acyclic Graph), with automatic parallelism and resumability.
 
 > 🎬 **Coming soon:** animated transitions between clips (fades, cuts, filters) for ready-to-post montages.
 
 > **Scope v1:** MP4 input only. Output saved to `./output/` by default (overridable in YAML). Automatic publishing to social platforms is out of scope for v1.
 
 ```yaml
-reelflow: "1.0"
+lemontage: "1.0"
 name: highlights
 
 input:
@@ -80,7 +80,7 @@ Inside a run, a single YAML file becomes a DAG: one source video fans out into N
 captioned, titled vertical clips - processed in parallel - and optionally merged
 into one reel.
 
-![Reelflow pipeline DAG](docs/pipeline-dag.svg)
+![LeMontage pipeline DAG](docs/pipeline-dag.svg)
 
 > Full pipelines: [`examples/podcast-to-clips.yaml`](examples/podcast-to-clips.yaml)
 > · [`examples/ufc-highlights.yaml`](examples/ufc-highlights.yaml)
@@ -100,7 +100,7 @@ raw video
     └──► audio extraction ──► rhythm analysis
 ```
 
-Today, every creator rewrites this plumbing from scratch. Reelflow makes it **define once, reuse everywhere**, and lets the community share recipes for every trend and format.
+Today, every creator rewrites this plumbing from scratch. LeMontage makes it **define once, reuse everywhere**, and lets the community share recipes for every trend and format.
 
 ## Community Hub
 
@@ -150,7 +150,7 @@ Switching provider = one line change in your YAML. The pipeline logic stays the 
 ## Architecture
 
 ```
-src/reelflow/
+src/lemontage/
 ├── validator.py        # validate a pipeline against the v1 spec
 ├── spec.py             # single source of truth for the spec constants
 ├── cli.py              # run / validate / init
@@ -179,7 +179,7 @@ src/reelflow/
 
 ## Comparison
 
-| | Reelflow | MoviePy | n8n | Remotion |
+| | LeMontage | MoviePy | n8n | Remotion |
 |---|---|---|---|---|
 | Declarative YAML | ✅ | ❌ | ✅ | ❌ |
 | Content-focused blocks | ✅ | ❌ | ❌ | ❌ |
@@ -192,19 +192,19 @@ src/reelflow/
 
 ### 1. One-liner (recommended)
 
-Linux/macOS - installs pipx if needed, then Reelflow as a global CLI you can run
+Linux/macOS - installs pipx if needed, then LeMontage as a global CLI you can run
 from anywhere (like `nextflow`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ffillouxdev/reelflow/dev/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ffillouxdev/LeMontage/dev/get.sh | bash
 ```
 
 Or do the pipx step yourself (any OS, needs Python 3.10+ and
 [pipx](https://pipx.pypa.io)):
 
 ```bash
-pipx install "reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
-reelflow --version
+pipx install "lemontage[engine] @ git+https://github.com/ffillouxdev/LeMontage@dev"
+lemontage --version
 ```
 
 Prerequisites per OS:
@@ -216,7 +216,7 @@ Prerequisites per OS:
 ```
 
 > Not on PyPI yet, so we install straight from GitHub (`@dev` branch). Once
-> published this becomes `pipx install "reelflow[engine]"`. Drop `[engine]` for a
+> published this becomes `pipx install "lemontage[engine]"`. Drop `[engine]` for a
 > light, validate-only install.
 
 ### 2. Docker (zero local setup)
@@ -225,32 +225,32 @@ No Python or system deps to manage. Build the image from source, then run
 pipelines against your current folder (mounted as the working dir):
 
 ```bash
-git clone https://github.com/ffillouxdev/reelflow && cd reelflow
-docker build -t reelflow .
+git clone https://github.com/ffillouxdev/LeMontage && cd lemontage
+docker build -t lemontage .
 
-docker run --rm -v "$PWD":/work reelflow run pipeline.yaml
-docker run --rm -v "$PWD":/work reelflow validate pipeline.yaml
-docker run --rm -v "$PWD":/work reelflow init
+docker run --rm -v "$PWD":/work lemontage run pipeline.yaml
+docker run --rm -v "$PWD":/work lemontage validate pipeline.yaml
+docker run --rm -v "$PWD":/work lemontage init
 
 # Keep the Whisper model + fonts between runs (avoid re-downloading):
 docker run --rm -v "$PWD":/work \
-  -v reelflow-cache:/root/.reelflow -v hf-cache:/root/.cache/huggingface \
-  reelflow run pipeline.yaml
+  -v lemontage-cache:/root/.lemontage -v hf-cache:/root/.cache/huggingface \
+  lemontage run pipeline.yaml
 ```
 
-> A prebuilt `ghcr.io/ffillouxdev/reelflow` image will be published by the release
+> A prebuilt `ghcr.io/ffillouxdev/LeMontage` image will be published by the release
 > CI later, so you can skip the build step.
 
 ### 3. From source (developer setup)
 
 ```bash
-git clone https://github.com/reelflow/reelflow && cd reelflow
+git clone https://github.com/lemontage/lemontage && cd lemontage
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[engine]"        # add the media/model dependencies
 
-reelflow init pipeline.yaml        # write a starter pipeline
-reelflow validate pipeline.yaml    # check it against the spec
-reelflow run pipeline.yaml         # produce the clips into ./output/
+lemontage init pipeline.yaml        # write a starter pipeline
+lemontage validate pipeline.yaml    # check it against the spec
+lemontage run pipeline.yaml         # produce the clips into ./output/
 ```
 
 **What is `".[engine]"`?** `.` is the project in the current folder (its
@@ -262,24 +262,24 @@ needed to *run* pipelines - `imageio-ffmpeg` (bundled FFmpeg) and `faster-whispe
 |---|---|---|
 | `pip install .` | core only (`pyyaml`) | `init`, `validate` |
 | `pip install ".[engine]"` | core **+ engine** | `init`, `validate`, **`run`** |
-| `pip install -e ".[engine]"` | same, **editable** (source-linked) | develop on Reelflow |
+| `pip install -e ".[engine]"` | same, **editable** (source-linked) | develop on LeMontage |
 
 > The Whisper model and title fonts download on first use - see
 > [SPEC §13](docs/SPEC.md).
 >
-> ℹ️ This (clone + venv) is the **developer** setup - `reelflow` only works inside
+> ℹ️ This (clone + venv) is the **developer** setup - `lemontage` only works inside
 > the activated venv. To use it **anywhere like a normal CLI** (no venv to
 > activate), install with `pipx` instead:
 > ```bash
-> pipx install "reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
+> pipx install "lemontage[engine] @ git+https://github.com/ffillouxdev/LeMontage@dev"
 > ```
 
 ### 4. Install scripts (from source)
 
-Install the system prerequisites, create a venv and install Reelflow in one step.
+Install the system prerequisites, create a venv and install LeMontage in one step.
 
 ```bash
-git clone https://github.com/ffillouxdev/reelflow && cd reelflow
+git clone https://github.com/ffillouxdev/LeMontage && cd lemontage
 
 # Linux (apt: Debian/Ubuntu/Lubuntu/Mint/Pop!_OS…) or macOS (Homebrew)
 ./install.sh
@@ -288,18 +288,18 @@ git clone https://github.com/ffillouxdev/reelflow && cd reelflow
 ./install.ps1
 ```
 
-`install.sh` also installs the man page (`man reelflow`). For a no-clone install,
+`install.sh` also installs the man page (`man lemontage`). For a no-clone install,
 use the [one-liner](#1-one-liner-recommended) above; a hosted
-`install.reelflow.dev` shortcut will come later.
+`install.lemontage.dev` shortcut will come later.
 
-### 5. Coming soon - PyPI (`pip install reelflow`)
+### 5. Coming soon - PyPI (`pip install lemontage`)
 
 ```bash
 # pip
-pip install reelflow
+pip install lemontage
 
 # uv
-uv tool install reelflow
+uv tool install lemontage
 ```
 
 Native installation with optional extras for STT, TTS, and LLM blocks will be available once the core is stable.
@@ -307,7 +307,7 @@ Native installation with optional extras for STT, TTS, and LLM blocks will be av
 ## Documentation
 
 - [YAML Specification](docs/SPEC.md) - the authoritative reference for the pipeline file format and all built-in blocks.
-- [`man` page](docs/reelflow.1) - CLI reference. View with `man -l docs/reelflow.1`, or install with `cp docs/reelflow.1 ~/.local/share/man/man1/ && mandb` then `man reelflow`.
+- [`man` page](docs/lemontage.1) - CLI reference. View with `man -l docs/lemontage.1`, or install with `cp docs/lemontage.1 ~/.local/share/man/man1/ && mandb` then `man lemontage`.
 
 ## License
 

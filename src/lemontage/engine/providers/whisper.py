@@ -2,7 +2,7 @@
 
 The model is downloaded and cached by ``faster-whisper`` itself (under
 ``~/.cache/huggingface``) on first use. The heavy import is deferred to
-construction time so importing Reelflow stays cheap.
+construction time so importing LeMontage stays cheap.
 """
 
 from __future__ import annotations

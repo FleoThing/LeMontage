@@ -1,6 +1,6 @@
 """Tests for title-font resolution (no network — only the pure parts)."""
 
-from reelflow.engine import fonts
+from lemontage.engine import fonts
 
 
 def test_family_default_is_a_preset():
@@ -17,8 +17,8 @@ def test_family_literal_passes_through():
     assert fonts.family("Helvetica Neue") == "Helvetica Neue"
 
 
-def test_fonts_dir_honours_reelflow_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("REELFLOW_HOME", str(tmp_path))
+def test_fonts_dir_honours_lemontage_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("LEMONTAGE_HOME", str(tmp_path))
     assert fonts.fonts_dir() == tmp_path / "fonts"
     assert fonts.fonts_dir().is_dir()
 

@@ -2,7 +2,7 @@
 
 Presets ``font1``…``font5`` render identically on any machine — no system font
 install — because the (OFL-licensed) font is downloaded once to
-``~/.reelflow/fonts/`` and libass is pointed at that directory. Users can also
+``~/.lemontage/fonts/`` and libass is pointed at that directory. Users can also
 drop their own ``.ttf`` there and reference it by family name.
 
 ``family()`` is pure (alias → family name); ``ensure()`` does the network fetch
@@ -30,9 +30,9 @@ _DEFAULT_ALIAS = "font1"
 
 
 def fonts_dir() -> Path:
-    """Local title-font directory, honouring ``REELFLOW_HOME``."""
-    home = os.environ.get("REELFLOW_HOME")
-    base = Path(home) if home else Path.home() / ".reelflow"
+    """Local title-font directory, honouring ``LEMONTAGE_HOME``."""
+    home = os.environ.get("LEMONTAGE_HOME")
+    base = Path(home) if home else Path.home() / ".lemontage"
     path = base / "fonts"
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -98,4 +98,4 @@ def _available(fam: str) -> bool:
 
 
 def _warn(message: str) -> None:
-    print(f"⚠ reelflow: {message}", file=sys.stderr)
+    print(f"⚠ lemontage: {message}", file=sys.stderr)

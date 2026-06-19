@@ -1,18 +1,18 @@
-"""Constants describing the Reelflow v1 YAML specification.
+"""Constants describing the LeMontage v1 YAML specification.
 
 Single source of truth for what the validator accepts. Keep this aligned with
 docs/SPEC.md.
 """
 
-# Spec versions the engine understands (the `reelflow:` key).
+# Spec versions the engine understands (the `lemontage:` key).
 SUPPORTED_VERSIONS = frozenset({"1.0"})
 
 # Required top-level keys.
-REQUIRED_TOP_LEVEL = ("reelflow", "name", "input", "steps")
+REQUIRED_TOP_LEVEL = ("lemontage", "name", "input", "steps")
 
 # All accepted top-level keys.
 KNOWN_TOP_LEVEL = frozenset(
-    {"reelflow", "name", "description", "vars", "input", "matrix", "steps", "output"}
+    {"lemontage", "name", "description", "vars", "input", "matrix", "steps", "output"}
 )
 
 # Built-in blocks shipped in v1. (tts is deferred to v2 — see TODO.)

@@ -1,9 +1,9 @@
-"""Tests for the Reelflow CLI."""
+"""Tests for the LeMontage CLI."""
 
 import yaml
 
-from reelflow.cli import STARTER_PIPELINE, main
-from reelflow.validator import validate_doc
+from lemontage.cli import STARTER_PIPELINE, main
+from lemontage.validator import validate_doc
 
 
 def test_starter_pipeline_is_valid():
@@ -28,7 +28,7 @@ def test_init_force_overwrites(tmp_path):
     target = tmp_path / "pipeline.yaml"
     target.write_text("existing", encoding="utf-8")
     assert main(["init", str(target), "--force"]) == 0
-    assert "reelflow" in target.read_text()
+    assert "lemontage" in target.read_text()
 
 
 def test_validate_ok(tmp_path):
@@ -54,7 +54,7 @@ def test_run_surfaces_engine_errors(tmp_path):
     """A valid pipeline whose input media is missing fails cleanly (exit 1)."""
     missing = tmp_path / "does-not-exist.mp4"
     pipeline = (
-        'reelflow: "1.0"\n'
+        'lemontage: "1.0"\n'
         "name: t\n"
         f"input:\n  type: video\n  source: {missing}\n"
         "steps:\n  - id: clips\n    detect_clips:\n      emit: ch\n"
@@ -67,8 +67,8 @@ def test_run_surfaces_engine_errors(tmp_path):
 
 def test_run_executes_pipeline(tmp_path, monkeypatch):
     """A valid pipeline with stubbed blocks runs to success (exit 0)."""
-    from reelflow.engine import executor
-    from reelflow.engine.blocks.base import Block, BlockResult
+    from lemontage.engine import executor
+    from lemontage.engine.blocks.base import Block, BlockResult
 
     class NoopBlock(Block):
         def __init__(self, name):
@@ -81,7 +81,7 @@ def test_run_executes_pipeline(tmp_path, monkeypatch):
     monkeypatch.setattr(executor, "REGISTRY", registry)
 
     pipeline = (
-        'reelflow: "1.0"\n'
+        'lemontage: "1.0"\n'
         "name: t\n"
         "input:\n  type: video\n  source: ./x.mp4\n"
         "steps:\n  - id: a\n    stt: {}\n"
@@ -94,7 +94,7 @@ def test_run_executes_pipeline(tmp_path, monkeypatch):
 
 def _noop_pipeline(tmp_path):
     """A valid pipeline with one stubbed step writing under tmp_path."""
-    from reelflow.engine.blocks.base import Block, BlockResult
+    from lemontage.engine.blocks.base import Block, BlockResult
 
     class NoopBlock(Block):
         def __init__(self, name):
@@ -104,7 +104,7 @@ def _noop_pipeline(tmp_path):
             return BlockResult(outputs={})
 
     pipeline = (
-        'reelflow: "1.0"\nname: t\n'
+        'lemontage: "1.0"\nname: t\n'
         "input:\n  type: video\n  source: ./x.mp4\n"
         "steps:\n  - id: a\n    stt: {}\n"
         "output:\n  dir: " + str(tmp_path) + "\n"
@@ -115,27 +115,27 @@ def _noop_pipeline(tmp_path):
 
 
 def test_run_clean_removes_temp_dir(tmp_path, monkeypatch):
-    from reelflow.engine import executor
+    from lemontage.engine import executor
 
     target, NoopBlock = _noop_pipeline(tmp_path)
     monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
     assert main(["run", str(target), "--clean"]) == 0
-    assert not (tmp_path / ".reelflow").exists()
+    assert not (tmp_path / ".lemontage").exists()
 
 
 def test_run_without_clean_keeps_temp_dir(tmp_path, monkeypatch):
-    from reelflow.engine import executor
+    from lemontage.engine import executor
 
     target, NoopBlock = _noop_pipeline(tmp_path)
     monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
     assert main(["run", str(target)]) == 0
-    assert (tmp_path / ".reelflow").exists()  # cache/checkpoints kept for resume
+    assert (tmp_path / ".lemontage").exists()  # cache/checkpoints kept for resume
 
 
 def test_clean_removes_concat_parts_keeps_reel(tmp_path, monkeypatch):
     """--clean also deletes per-clip files a concat merged, keeping the reel."""
-    from reelflow.engine import executor
-    from reelflow.engine.blocks.base import Block, BlockResult
+    from lemontage.engine import executor
+    from lemontage.engine.blocks.base import Block, BlockResult
 
     parts = [tmp_path / "p0.mp4", tmp_path / "p1.mp4"]
     reel = tmp_path / "reel.mp4"
@@ -150,7 +150,7 @@ def test_clean_removes_concat_parts_keeps_reel(tmp_path, monkeypatch):
 
     monkeypatch.setattr(executor, "REGISTRY", {"concat": FakeConcat()})
     pipeline = (
-        'reelflow: "1.0"\nname: t\n'
+        'lemontage: "1.0"\nname: t\n'
         "input:\n  type: video\n  source: ./x.mp4\n"
         "steps:\n  - id: reel\n    concat: {}\n"
         f"output:\n  dir: {tmp_path}\n"
@@ -164,8 +164,8 @@ def test_clean_removes_concat_parts_keeps_reel(tmp_path, monkeypatch):
 
 def test_output_cleanup_flag_in_yaml_removes_temp(tmp_path, monkeypatch):
     """`output.cleanup: true` triggers cleanup without the CLI flag."""
-    from reelflow.engine import executor
-    from reelflow.engine.blocks.base import Block, BlockResult
+    from lemontage.engine import executor
+    from lemontage.engine.blocks.base import Block, BlockResult
 
     class NoopBlock(Block):
         def __init__(self, name):
@@ -175,7 +175,7 @@ def test_output_cleanup_flag_in_yaml_removes_temp(tmp_path, monkeypatch):
             return BlockResult(outputs={})
 
     pipeline = (
-        'reelflow: "1.0"\nname: t\n'
+        'lemontage: "1.0"\nname: t\n'
         "input:\n  type: video\n  source: ./x.mp4\n"
         "steps:\n  - id: a\n    stt: {}\n"
         f"output:\n  dir: {tmp_path}\n  cleanup: true\n"
@@ -184,4 +184,4 @@ def test_output_cleanup_flag_in_yaml_removes_temp(tmp_path, monkeypatch):
     target.write_text(pipeline, encoding="utf-8")
     monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
     assert main(["run", str(target)]) == 0  # no --clean flag
-    assert not (tmp_path / ".reelflow").exists()
+    assert not (tmp_path / ".lemontage").exists()

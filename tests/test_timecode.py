@@ -2,7 +2,7 @@
 
 import pytest
 
-from reelflow.engine.timecode import parse_seconds, to_timecode
+from lemontage.engine.timecode import parse_seconds, to_timecode
 
 
 @pytest.mark.parametrize(

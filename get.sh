@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# Reelflow one-line installer (no clone needed):
-#   curl -fsSL https://raw.githubusercontent.com/ffillouxdev/reelflow/dev/get.sh | bash
+# LeMontage one-line installer (no clone needed):
+#   curl -fsSL https://raw.githubusercontent.com/ffillouxdev/LeMontage/dev/get.sh | bash
 #
-# Installs pipx if needed, then installs Reelflow (with its media engine) as a
+# Installs pipx if needed, then installs LeMontage (with its media engine) as a
 # global CLI you can run from anywhere. Works on Linux and macOS.
 
 set -euo pipefail
 
-SPEC="reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
+SPEC="lemontage[engine] @ git+https://github.com/ffillouxdev/LeMontage@dev"
 
-echo "▶ Installing Reelflow…"
+echo "▶ Installing LeMontage…"
 
 # 1. Python 3.10+
 if ! command -v python3 >/dev/null 2>&1; then
@@ -32,12 +32,12 @@ if ! command -v pipx >/dev/null 2>&1; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# 3. Install Reelflow
+# 3. Install LeMontage
 pipx install "$SPEC"
 
 echo
-echo "✓ Reelflow installed."
+echo "✓ LeMontage installed."
 echo "  Open a new terminal (so the PATH update takes effect), then:"
-echo "    reelflow init pipeline.yaml && reelflow run pipeline.yaml"
+echo "    lemontage init pipeline.yaml && lemontage run pipeline.yaml"
 echo
 echo "ℹ On first run the Whisper model (~140 MB) and fonts download, then cache."

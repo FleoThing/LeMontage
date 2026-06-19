@@ -1,4 +1,4 @@
-"""Reelflow command-line interface: ``run``, ``validate`` and ``init``."""
+"""LeMontage command-line interface: ``run``, ``validate`` and ``init``."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from . import __version__
 from .validator import validate_doc, validate_file
 
 STARTER_PIPELINE = """\
-reelflow: "1.0"
+lemontage: "1.0"
 name: my-pipeline
-description: "A starter Reelflow pipeline"
+description: "A starter LeMontage pipeline"
 
 input:
   type: video
@@ -48,8 +48,8 @@ output:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="reelflow", description=__doc__)
-    parser.add_argument("--version", action="version", version=f"reelflow {__version__}")
+    parser = argparse.ArgumentParser(prog="lemontage", description=__doc__)
+    parser.add_argument("--version", action="version", version=f"lemontage {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_run = sub.add_parser("run", help="run a pipeline")
@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument(
         "--clean",
         action="store_true",
-        help="delete intermediate/temp files (output/.reelflow) after a successful run",
+        help="delete intermediate/temp files (output/.lemontage) after a successful run",
     )
 
     p_validate = sub.add_parser("validate", help="validate a pipeline without running it")

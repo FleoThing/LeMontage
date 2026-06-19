@@ -1,4 +1,4 @@
-# Runtime dependencies for Reelflow (pinned).
+# Runtime dependencies for LeMontage (pinned).
 # Mirrors pyproject.toml; transitive deps (ctranslate2, onnxruntime, numpy, av,
 # huggingface-hub, ...) are resolved automatically by pip.
 #

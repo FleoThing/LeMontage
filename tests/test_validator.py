@@ -1,13 +1,13 @@
-"""Tests for the Reelflow v1 pipeline validator."""
+"""Tests for the LeMontage v1 pipeline validator."""
 
 import copy
 
 import pytest
 
-from reelflow.validator import validate_doc, validate_file
+from lemontage.validator import validate_doc, validate_file
 
 VALID_PIPELINE = {
-    "reelflow": "1.0",
+    "lemontage": "1.0",
     "name": "podcast-to-clips",
     "input": {"type": "video", "source": "./video-example.mp4"},
     "steps": [
@@ -35,7 +35,7 @@ def test_top_level_must_be_mapping():
     assert validate_doc(["not", "a", "mapping"])
 
 
-@pytest.mark.parametrize("key", ["reelflow", "name", "input", "steps"])
+@pytest.mark.parametrize("key", ["lemontage", "name", "input", "steps"])
 def test_missing_required_key(key):
     d = copy.deepcopy(VALID_PIPELINE)
     del d[key]
@@ -44,12 +44,12 @@ def test_missing_required_key(key):
 
 
 def test_unsupported_version():
-    errors = validate_doc(doc_without(reelflow="2.0"))
+    errors = validate_doc(doc_without(lemontage="2.0"))
     assert any("unsupported spec version" in e for e in errors)
 
 
 def test_version_must_be_string():
-    errors = validate_doc(doc_without(reelflow=1.0))
+    errors = validate_doc(doc_without(lemontage=1.0))
     assert any("must be a string" in e for e in errors)
 
 

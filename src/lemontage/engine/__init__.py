@@ -1,4 +1,4 @@
-"""The Reelflow execution engine.
+"""The LeMontage execution engine.
 
 Turns a validated pipeline document into produced media files. The public entry
 point is :func:`run_pipeline`, which builds the DAG, then executes it.

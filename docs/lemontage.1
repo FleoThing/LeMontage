@@ -1,25 +1,25 @@
-.TH REELFLOW 1 "2026-06-17" "reelflow 0.1.0" "Reelflow Manual"
+.TH LEMONTAGE 1 "2026-06-17" "lemontage 0.1.0" "LeMontage Manual"
 .SH NAME
-reelflow \- declarative YAML pipelines for automated social video creation
+lemontage \- declarative YAML pipelines for automated social video creation
 .SH SYNOPSIS
-.B reelflow
+.B lemontage
 .RB [ \-\-version ]
 .RB [ \-h ]
 .I command
 .RI [ args ]
 .br
-.B reelflow run
+.B lemontage run
 .RI [ \-\-var\ KEY=VALUE ]
 .I pipeline.yaml
 .br
-.B reelflow validate
+.B lemontage validate
 .I pipeline.yaml
 .br
-.B reelflow init
+.B lemontage init
 .RB [ \-\-force ]
 .RI [ file ]
 .SH DESCRIPTION
-.B Reelflow
+.B LeMontage
 turns a single declarative YAML file into produced media. A pipeline describes
 an ordered list of steps \(em transcription, clip detection, cutting, captions,
 export \(em that the engine compiles into a DAG and runs, with channel fan\-out,
@@ -38,7 +38,7 @@ in the specification (see
 .B run \fIpipeline.yaml\fR
 Validate, then execute the pipeline. Final media is written under the output
 directory (\fB./output\fR by default); intermediates go under
-\fB<output>/.reelflow/\fR. Exit status is 0 on success, 1 on a validation or
+\fB<output>/.lemontage/\fR. Exit status is 0 on success, 1 on a validation or
 execution failure.
 .TP
 .B validate \fIpipeline.yaml\fR
@@ -62,7 +62,7 @@ takes precedence over values declared in the file.
 .TP
 .B \-\-clean
 (\fBrun\fR only) After a successful run, delete the temp directory
-\fB<output>/.reelflow\fR (work files + checkpoint cache) and any per-clip files a
+\fB<output>/.lemontage\fR (work files + checkpoint cache) and any per-clip files a
 \fBconcat\fR merged, keeping only the final media.
 .TP
 .B \-\-force
@@ -70,7 +70,7 @@ takes precedence over values declared in the file.
 .SH PIPELINE FORMAT
 A pipeline is a YAML mapping with these top\-level keys:
 .TP
-.B reelflow
+.B lemontage
 Spec version string, e.g. \fB"1.0"\fR (required).
 .TP
 .B name
@@ -110,28 +110,28 @@ Durations and timecodes accept bare seconds (\fB90\fR), compact durations
 .B ./output/
 Default directory for produced media (overridable via \fBoutput.dir\fR).
 .TP
-.B ./output/.reelflow/work/
+.B ./output/.lemontage/work/
 Intermediate artifacts (cut clips, SRT files, captioned clips).
 .TP
-.B ./output/.reelflow/cache/
+.B ./output/.lemontage/cache/
 Per\-step checkpoints used to skip work whose output already exists.
 .TP
-.B ~/.reelflow/fonts/
+.B ~/.lemontage/fonts/
 Cached title fonts (the \fBexport.title_font\fR presets). Drop your own
 \fB.ttf\fR here to use it by family name.
 .SH ENVIRONMENT
 .TP
-.B REELFLOW_HOME
-Base directory for cached models. Defaults to \fB~/.reelflow\fR.
+.B LEMONTAGE_HOME
+Base directory for cached models. Defaults to \fB~/.lemontage\fR.
 .SH EXAMPLES
 .PP
 Generate, validate and run a starter pipeline:
 .PP
 .RS 4
 .nf
-reelflow init pipeline.yaml
-reelflow validate pipeline.yaml
-reelflow run pipeline.yaml
+lemontage init pipeline.yaml
+lemontage validate pipeline.yaml
+lemontage run pipeline.yaml
 .fi
 .RE
 .PP
@@ -139,7 +139,7 @@ Run with a variable override:
 .PP
 .RS 4
 .nf
-reelflow run pipeline.yaml \-\-var lang=en
+lemontage run pipeline.yaml \-\-var lang=en
 .fi
 .RE
 .SH EXIT STATUS
@@ -153,7 +153,7 @@ Validation failed, or the pipeline finished with failures.
 The full specification and block reference:
 .IR docs/SPEC.md .
 Project homepage:
-.UR https://github.com/reelflow/reelflow
+.UR https://github.com/lemontage/lemontage
 .UE
 .SH AUTHOR
 Florian Filloux.

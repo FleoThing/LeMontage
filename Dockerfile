@@ -1,10 +1,10 @@
-# Reelflow — slim image, built from source (no PyPI required).
-# Build:  docker build -t reelflow .
-# Run:    docker run --rm -v "$PWD":/work reelflow run pipeline.yaml
+# LeMontage — slim image, built from source (no PyPI required).
+# Build:  docker build -t lemontage .
+# Run:    docker run --rm -v "$PWD":/work lemontage run pipeline.yaml
 #
 # Models (Whisper) and title fonts download on first run. Mount cache volumes to
 # keep them between runs:
-#   -v reelflow-cache:/root/.reelflow -v hf-cache:/root/.cache/huggingface
+#   -v lemontage-cache:/root/.lemontage -v hf-cache:/root/.cache/huggingface
 FROM python:3.12-slim
 
 # fontconfig lets libass resolve fonts for titles/captions.
@@ -19,5 +19,5 @@ RUN pip install --no-cache-dir ".[engine]"
 
 # Pipelines resolve relative paths (input, ./output) against the mounted CWD.
 WORKDIR /work
-ENTRYPOINT ["reelflow"]
+ENTRYPOINT ["lemontage"]
 CMD ["--help"]

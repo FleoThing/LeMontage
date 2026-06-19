@@ -2,7 +2,7 @@
 
 import pytest
 
-from reelflow.engine.dag import DagError, build_dag
+from lemontage.engine.dag import DagError, build_dag
 
 
 def order(steps):

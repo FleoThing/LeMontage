@@ -77,7 +77,7 @@ def run_pipeline(
 ) -> RunResult:
     """Run a validated pipeline document and return per-cell results.
 
-    ``clean`` removes the temp dir (``output/.reelflow``) after a successful run.
+    ``clean`` removes the temp dir (``output/.lemontage``) after a successful run.
     ``None`` defers to the pipeline's ``output.cleanup`` flag; ``True``/``False``
     override it (e.g. the CLI ``--clean``).
     """
@@ -109,7 +109,7 @@ def _cleanup(doc: dict[str, Any], result: RunResult, report: Reporter) -> None:
     import shutil
 
     output_dir = Path((doc.get("output") or {}).get("dir", "./output"))
-    temp = output_dir / ".reelflow"
+    temp = output_dir / ".lemontage"
     if temp.exists():
         shutil.rmtree(temp, ignore_errors=True)
 
@@ -282,10 +282,10 @@ def _default_reporter(message: str) -> None:
 
 
 class _Cache:
-    """Per-cell checkpoint store under ``<output>/.reelflow/cache/``."""
+    """Per-cell checkpoint store under ``<output>/.lemontage/cache/``."""
 
     def __init__(self, output_dir: Path, matrix: dict[str, Any]) -> None:
-        self._dir = output_dir / ".reelflow" / "cache"
+        self._dir = output_dir / ".lemontage" / "cache"
         self._cell_key = _signature_str(matrix) if matrix else "default"
 
     def _path(self, node: Node) -> Path:

@@ -1,7 +1,7 @@
 """Thin wrapper around the FFmpeg binary.
 
 Prefers a system ``ffmpeg`` on ``PATH``; falls back to the static binary shipped
-by ``imageio-ffmpeg`` so Reelflow works out of the box without a system install.
+by ``imageio-ffmpeg`` so LeMontage works out of the box without a system install.
 """
 
 from __future__ import annotations

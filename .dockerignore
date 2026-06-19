@@ -10,7 +10,7 @@ build/
 
 # Runtime artifacts
 output/
-.reelflow/
+.lemontage/
 models/
 
 # Heavy media / local working files
