@@ -1,0 +1,26 @@
+# Keep the build context small (and out of the image).
+.git/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Runtime artifacts
+output/
+.reelflow/
+models/
+
+# Heavy media / local working files
+*.mp4
+*.mov
+*.mkv
+*.mp3
+*.wav
+/pipeline*.yaml
+
+# Local-only
+CLAUDE.md
+TODO.md

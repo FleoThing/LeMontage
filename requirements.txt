@@ -1,0 +1,15 @@
+# Runtime dependencies for Reelflow (pinned).
+# Mirrors pyproject.toml; transitive deps (ctranslate2, onnxruntime, numpy, av,
+# huggingface-hub, ...) are resolved automatically by pip.
+#
+#   pip install -r requirements.txt
+#
+# Only what the code imports directly is listed here.
+
+# Pipeline parsing / validation (always required)
+pyyaml==6.0.3
+
+# Execution engine: FFmpeg + speech-to-text
+imageio-ffmpeg==0.6.0     # bundled FFmpeg binary (no system install needed)
+faster-whisper==1.2.1     # speech-to-text (Whisper)
+# text-to-speech is deferred to v2 (kokoro-onnx, soundfile, onnxruntime)

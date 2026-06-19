@@ -1,0 +1,159 @@
+.TH REELFLOW 1 "2026-06-17" "reelflow 0.1.0" "Reelflow Manual"
+.SH NAME
+reelflow \- declarative YAML pipelines for automated social video creation
+.SH SYNOPSIS
+.B reelflow
+.RB [ \-\-version ]
+.RB [ \-h ]
+.I command
+.RI [ args ]
+.br
+.B reelflow run
+.RI [ \-\-var\ KEY=VALUE ]
+.I pipeline.yaml
+.br
+.B reelflow validate
+.I pipeline.yaml
+.br
+.B reelflow init
+.RB [ \-\-force ]
+.RI [ file ]
+.SH DESCRIPTION
+.B Reelflow
+turns a single declarative YAML file into produced media. A pipeline describes
+an ordered list of steps \(em transcription, clip detection, cutting, captions,
+export \(em that the engine compiles into a DAG and runs, with channel fan\-out,
+matrix runs, checkpoints and per\-step failure handling.
+.PP
+Everything runs locally: FFmpeg for media work and
+.B faster\-whisper
+for speech\-to\-text. No API key or network is required once the model is cached.
+(Text\-to\-speech is planned for v2.)
+.PP
+The authoritative description of the YAML format and every built\-in block lives
+in the specification (see
+.BR SEE\ ALSO ).
+.SH COMMANDS
+.TP
+.B run \fIpipeline.yaml\fR
+Validate, then execute the pipeline. Final media is written under the output
+directory (\fB./output\fR by default); intermediates go under
+\fB<output>/.reelflow/\fR. Exit status is 0 on success, 1 on a validation or
+execution failure.
+.TP
+.B validate \fIpipeline.yaml\fR
+Check the pipeline against the v1 spec without running it. Prints each error and
+exits non\-zero if any are found. Dependency\-light: needs no models or FFmpeg.
+.TP
+.B init \fR[\fIfile\fR]
+Write a starter pipeline to \fIfile\fR (default \fBpipeline.yaml\fR). Refuses to
+overwrite an existing file unless \fB\-\-force\fR is given.
+.SH OPTIONS
+.TP
+.B \-\-version
+Print the program version and exit.
+.TP
+.B \-h, \-\-help
+Show help for the program or a sub\-command and exit.
+.TP
+.BI \-\-var \ KEY=VALUE
+(\fBrun\fR only) Override an entry of the pipeline's \fBvars\fR block. Repeatable;
+takes precedence over values declared in the file.
+.TP
+.B \-\-clean
+(\fBrun\fR only) After a successful run, delete the temp directory
+\fB<output>/.reelflow\fR (work files + checkpoint cache) and any per-clip files a
+\fBconcat\fR merged, keeping only the final media.
+.TP
+.B \-\-force
+(\fBinit\fR only) Overwrite the target file if it already exists.
+.SH PIPELINE FORMAT
+A pipeline is a YAML mapping with these top\-level keys:
+.TP
+.B reelflow
+Spec version string, e.g. \fB"1.0"\fR (required).
+.TP
+.B name
+Pipeline identifier, used for logs and output naming (required).
+.TP
+.B input
+Source media: \fBtype: video\fR and a \fB.mp4\fR \fBsource\fR (required; v1
+supports local MP4 only).
+.TP
+.B steps
+Ordered list of steps; each is a single\-key map \fIblock\fR: \fIparams\fR
+(required).
+.TP
+.B vars
+Reusable values, referenced with \fB{{ vars.x }}\fR (optional).
+.TP
+.B matrix
+Fan the whole pipeline out over every combination of the listed values
+(optional).
+.TP
+.B output
+Global output settings, e.g. \fBdir: ./output\fR (optional).
+.PP
+Built\-in blocks: \fBstt\fR, \fBdetect_clips\fR, \fBcut\fR,
+\fBcaptions\fR, \fBexport\fR, \fBconcat\fR. Common per\-step fields: \fBid\fR, \fBcache\fR,
+\fBon_failure\fR (\fBabort\fR|\fBskip\fR|\fBretry\fR), \fBretries\fR,
+\fBrequires\fR.
+.SS Templating
+Values may reference \fB{{ vars.* }}\fR, \fB{{ input.* }}\fR,
+\fB{{ steps.<id>.* }}\fR and \fB{{ matrix.* }}\fR. References resolve lazily,
+when a step runs.
+.SS Time values
+Durations and timecodes accept bare seconds (\fB90\fR), compact durations
+(\fB30s\fR, \fB1m30s\fR) and timecodes (\fB00:01:30\fR).
+.SH FILES
+.TP
+.B ./output/
+Default directory for produced media (overridable via \fBoutput.dir\fR).
+.TP
+.B ./output/.reelflow/work/
+Intermediate artifacts (cut clips, SRT files, captioned clips).
+.TP
+.B ./output/.reelflow/cache/
+Per\-step checkpoints used to skip work whose output already exists.
+.TP
+.B ~/.reelflow/fonts/
+Cached title fonts (the \fBexport.title_font\fR presets). Drop your own
+\fB.ttf\fR here to use it by family name.
+.SH ENVIRONMENT
+.TP
+.B REELFLOW_HOME
+Base directory for cached models. Defaults to \fB~/.reelflow\fR.
+.SH EXAMPLES
+.PP
+Generate, validate and run a starter pipeline:
+.PP
+.RS 4
+.nf
+reelflow init pipeline.yaml
+reelflow validate pipeline.yaml
+reelflow run pipeline.yaml
+.fi
+.RE
+.PP
+Run with a variable override:
+.PP
+.RS 4
+.nf
+reelflow run pipeline.yaml \-\-var lang=en
+.fi
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Validation failed, or the pipeline finished with failures.
+.SH SEE ALSO
+The full specification and block reference:
+.IR docs/SPEC.md .
+Project homepage:
+.UR https://github.com/reelflow/reelflow
+.UE
+.SH AUTHOR
+Florian Filloux.

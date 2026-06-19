@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Reelflow runtime
+output/
+.reelflow/
+models/
+
+# Media artifacts (don't commit heavy media)
+*.mp4
+*.mov
+*.mkv
+*.mp3
+*.wav
+!docs/**
+!examples/**
+
+# Local-only (internal — not for the public repo)
+# AI-assistant working instructions
+CLAUDE.md
+# internal roadmap / launch plan
+TODO.md
+# working pipelines at the root (examples/ holds the public ones)
+/pipeline*.yaml
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
