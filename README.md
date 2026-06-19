@@ -183,11 +183,17 @@ src/reelflow/
 
 ## Installation
 
-### 1. pipx - run it anywhere (recommended)
+### 1. One-liner (recommended)
 
-Installs `reelflow` in its own isolated environment and puts the command on your
-`PATH` - no venv to activate, runnable from any folder (like `nextflow`). Needs
-Python 3.10+ and [pipx](https://pipx.pypa.io).
+Linux/macOS - installs pipx if needed, then Reelflow as a global CLI you can run
+from anywhere (like `nextflow`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ffillouxdev/reelflow/dev/get.sh | bash
+```
+
+Or do the pipx step yourself (any OS, needs Python 3.10+ and
+[pipx](https://pipx.pypa.io)):
 
 ```bash
 pipx install "reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
@@ -275,8 +281,9 @@ git clone https://github.com/ffillouxdev/reelflow && cd reelflow
 ./install.ps1
 ```
 
-`install.sh` also installs the man page (`man reelflow`). A hosted
-`curl -fsSL https://install.reelflow.dev | sh` one-liner will come once published.
+`install.sh` also installs the man page (`man reelflow`). For a no-clone install,
+use the [one-liner](#1-one-liner-recommended) above; a hosted
+`install.reelflow.dev` shortcut will come later.
 
 ### 5. Coming soon - PyPI (`pip install reelflow`)
 
