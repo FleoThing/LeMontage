@@ -2,15 +2,22 @@
 
 > The TailwindCSS of automated video creation for social media.
 
+[![CI](https://github.com/ffillouxdev/reelflow/actions/workflows/ci.yml/badge.svg)](https://github.com/ffillouxdev/reelflow/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/github/license/ffillouxdev/reelflow)
+![Status](https://img.shields.io/badge/status-alpha-orange)
+
 Reelflow is a declarative YAML pipeline framework for automating the creation of viral videos - Shorts, Reels, TikToks and more - without writing the same boilerplate code for every new trend.
 
 ![Reelflow install & usage workflow](docs/workflow-example.svg)
 
 ## Vision
 
-Just as TailwindCSS became the de-facto standard for web styling (largely replacing hand-written CSS, and the format AI models reach for first when generating websites), Reelflow aims to become the standard language for automated video creation: a format simple enough to be adopted by both people and AI agents, making it effortless for them to generate videos for individuals and businesses alike.
+Just as TailwindCSS became a de-facto standard for web styling (largely replacing hand-written CSS), Reelflow aims to be the standard language for automated video creation - for people and autonomous agents alike.
 
-The long-term goal: **AI agents generate a Reelflow YAML from a simple intent, the pipeline runs, and an incredible video comes out the other side.**
+There is **nothing AI-specific** inside Reelflow. It's a plain, declarative YAML format with a clear, self-contained spec ([SPEC.md](docs/SPEC.md), `man reelflow`) - simple enough that anyone, or any coding agent (Claude Code, OpenClaw, …), can read it and write a valid pipeline **with no SDK or special integration**. The intelligence stays in the human or the agent; Reelflow just runs the result, locally and reliably.
+
+So the end-to-end story becomes: an agent turns a one-line intent into a valid pipeline, and Reelflow executes it.
 
 ```
 "Make me a viral short about the DeepSeek trend, energetic, 60s"
