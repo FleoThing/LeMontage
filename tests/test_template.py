@@ -2,8 +2,8 @@
 
 import pytest
 
-from reelflow.engine import template
-from reelflow.engine.context import RunContext
+from lemontage.engine import template
+from lemontage.engine.context import RunContext
 
 
 def make_ctx(**kw):

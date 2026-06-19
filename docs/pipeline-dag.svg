@@ -12,14 +12,14 @@
   <rect x="0" y="0" width="1500" height="820" fill="#f6f8fa"/>
 
   <!-- titles -->
-  <text x="24" y="44" font-size="22" font-weight="700" fill="#1f2328">Reelflow</text>
+  <text x="24" y="44" font-size="22" font-weight="700" fill="#1f2328">LeMontage</text>
   <text x="120" y="44" font-size="18" fill="#57606a">— from a YAML file to a running workflow</text>
 
   <!-- ============ LEFT: YAML PANEL ============ -->
   <rect x="24" y="68" width="470" height="724" rx="10" fill="#0d1117"/>
   <text x="44" y="96" font-size="13" font-weight="700" fill="#8b949e" letter-spacing="1">podcast-to-clips.yaml</text>
   <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">
-    <text x="44" y="128" fill="#e6edf3">reelflow: "1.0"</text>
+    <text x="44" y="128" fill="#e6edf3">lemontage: "1.0"</text>
     <text x="44" y="147" fill="#e6edf3">name: podcast-to-clips</text>
     <text x="44" y="185" fill="#e6edf3">input:</text>
     <text x="44" y="204" fill="#e6edf3">  type: video</text>
@@ -50,7 +50,7 @@
   <!-- run arrow between panels -->
   <line x1="504" y1="120" x2="876" y2="120" stroke="#2da44e" stroke-width="2.5" marker-end="url(#arrow)"/>
   <rect x="600" y="96" width="148" height="24" rx="12" fill="#dafbe1" stroke="#2da44e"/>
-  <text x="674" y="113" font-size="13" font-weight="700" fill="#04391b" text-anchor="middle">reelflow run</text>
+  <text x="674" y="113" font-size="13" font-weight="700" fill="#04391b" text-anchor="middle">lemontage run</text>
 
   <!-- ============ RIGHT: DAG ============ -->
 

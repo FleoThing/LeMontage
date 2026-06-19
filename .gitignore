@@ -7,9 +7,9 @@ venv/
 dist/
 build/
 
-# Reelflow runtime
+# LeMontage runtime
 output/
-.reelflow/
+.lemontage/
 models/
 
 # Media artifacts (don't commit heavy media)

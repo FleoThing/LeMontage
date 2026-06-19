@@ -102,7 +102,7 @@ def _walk(root: Any, path: list[str], expr: str) -> Any:
 class Resolvable:
     """Minimal view of the run context the resolver needs.
 
-    The executor's :class:`~reelflow.engine.context.RunContext` satisfies this
+    The executor's :class:`~lemontage.engine.context.RunContext` satisfies this
     duck-typed contract; keeping it explicit makes the resolver unit-testable.
     """
 

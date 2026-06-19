@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reelflow"
+name = "lemontage"
 version = "0.1.0"
 description = "A pipeline-first framework for content creators: clips, reels, TikToks, shorts and podcasts."
 readme = "README.md"
@@ -16,7 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Everything the execution engine needs to actually produce media. Kept optional
-# so `reelflow validate` stays dependency-light; `reelflow run` requires these.
+# so `lemontage validate` stays dependency-light; `lemontage run` requires these.
 engine = [
     "imageio-ffmpeg>=0.4",
     "faster-whisper>=1.0",
@@ -27,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]
-reelflow = "reelflow.cli:main"
+lemontage = "lemontage.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

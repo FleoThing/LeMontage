@@ -6,8 +6,8 @@ without FFmpeg or any model.
 
 import pytest
 
-from reelflow.engine import executor
-from reelflow.engine.blocks.base import Block, BlockResult, ItemResult
+from lemontage.engine import executor
+from lemontage.engine.blocks.base import Block, BlockResult, ItemResult
 
 
 class RecordingBlock(Block):
@@ -63,7 +63,7 @@ def run(doc, **kw):
 
 
 def base_doc(steps, **kw):
-    doc = {"reelflow": "1.0", "name": "t", "input": {"source": "x.mp4"}, "steps": steps}
+    doc = {"lemontage": "1.0", "name": "t", "input": {"source": "x.mp4"}, "steps": steps}
     doc.update(kw)
     return doc
 

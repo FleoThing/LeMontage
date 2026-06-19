@@ -8,24 +8,24 @@ from pathlib import Path
 
 import pytest
 
-from reelflow.engine import ffmpeg, providers
-from reelflow.engine.blocks.captions import (
+from lemontage.engine import ffmpeg, providers
+from lemontage.engine.blocks.captions import (
     CaptionsBlock,
     _ass_time,
     _build_lines,
     _dialogue,
     _lines_from_words,
 )
-from reelflow.engine.blocks.detect_clips import _select_loud_clips, _windowed_clips
-from reelflow.engine.blocks.export import (
+from lemontage.engine.blocks.detect_clips import _select_loud_clips, _windowed_clips
+from lemontage.engine.blocks.export import (
     ExportBlock,
     _output_path,
     _target_size,
     _title_ass,
 )
-from reelflow.engine.blocks.stt import SttBlock
-from reelflow.engine.context import RunContext
-from reelflow.engine.providers.base import Segment, Transcript, Word
+from lemontage.engine.blocks.stt import SttBlock
+from lemontage.engine.context import RunContext
+from lemontage.engine.providers.base import Segment, Transcript, Word
 
 
 def ctx(tmp_path, **kw):
@@ -293,8 +293,8 @@ def test_title_name_and_index_tokens(tmp_path):
 
 
 def test_concat_joins_channel_files_in_order(tmp_path, monkeypatch):
-    from reelflow.engine import ffmpeg as ff
-    from reelflow.engine.blocks.concat import ConcatBlock
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import ConcatBlock
 
     calls = {}
 
@@ -317,7 +317,7 @@ def test_concat_joins_channel_files_in_order(tmp_path, monkeypatch):
 
 
 def test_concat_single_mode_requires_channel(tmp_path):
-    from reelflow.engine.blocks.concat import ConcatBlock
+    from lemontage.engine.blocks.concat import ConcatBlock
 
     with pytest.raises(ValueError):
         ConcatBlock().execute({}, ctx(tmp_path), "concat")

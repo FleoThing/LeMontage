@@ -1,4 +1,4 @@
-"""Allow ``python -m reelflow``."""
+"""Allow ``python -m lemontage``."""
 
 import sys
 

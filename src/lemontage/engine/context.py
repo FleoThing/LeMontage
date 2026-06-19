@@ -26,6 +26,6 @@ class RunContext:
 
     def work_dir(self) -> Path:
         """Directory for intermediate artifacts (created on demand)."""
-        wd = self.output_dir / ".reelflow" / "work"
+        wd = self.output_dir / ".lemontage" / "work"
         wd.mkdir(parents=True, exist_ok=True)
         return wd

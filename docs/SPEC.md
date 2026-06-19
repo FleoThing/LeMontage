@@ -1,21 +1,21 @@
-# Reelflow YAML Specification — v1
+# LeMontage YAML Specification — v1
 
-This document is the authoritative reference for the Reelflow pipeline file
+This document is the authoritative reference for the LeMontage pipeline file
 format (`*.yaml`). It doubles as the manual: every top-level key, every built-in
 block, and every shared field is described here.
 
 > **Status:** v1 draft. The format follows semantic versioning via the
-> `reelflow:` key — a pipeline declaring `reelflow: "1.0"` will keep running on
+> `lemontage:` key — a pipeline declaring `lemontage: "1.0"` will keep running on
 > any `1.x` engine.
 
 ---
 
 ## 1. File anatomy
 
-A Reelflow pipeline is a single YAML file with the following top-level keys:
+A LeMontage pipeline is a single YAML file with the following top-level keys:
 
 ```yaml
-reelflow: "1.0"          # required — spec version
+lemontage: "1.0"          # required — spec version
 name: my-pipeline        # required — pipeline identifier
 description: "..."        # optional — human-readable summary
 
@@ -39,7 +39,7 @@ output:                  # optional — global output settings
 
 | Key | Required | Description |
 |---|---|---|
-| `reelflow` | ✅ | Spec version string (`"1.0"`). |
+| `lemontage` | ✅ | Spec version string (`"1.0"`). |
 | `name` | ✅ | Pipeline name. Used for logs and output naming. |
 | `description` | ❌ | Free text. |
 | `vars` | ❌ | Key/value map of reusable values (see §3). |
@@ -52,14 +52,14 @@ output:                  # optional — global output settings
 
 ## 2. Versioning
 
-The `reelflow` key pins the spec version the pipeline was written against.
+The `lemontage` key pins the spec version the pipeline was written against.
 
 ```yaml
-reelflow: "1.0"
+lemontage: "1.0"
 ```
 
 - The engine refuses to run a pipeline whose major version it does not support.
-- Unknown keys under a known version are a **validation error** (`reelflow
+- Unknown keys under a known version are a **validation error** (`lemontage
   validate` fails) — this keeps shared pipelines portable.
 
 ---
@@ -346,12 +346,12 @@ Renders the final video(s) to disk.
 (pipeline name).
 
 **Title fonts.** The presets are bundled-by-download: on first use the (OFL)
-font is fetched to `~/.reelflow/fonts/` and given to libass via `fontsdir`, so
+font is fetched to `~/.lemontage/fonts/` and given to libass via `fontsdir`, so
 they render **identically on every machine, no system install**:
 `font1`=Anton, `font2`=Bebas Neue, `font3`=Bangers, `font4`=Archivo Black,
 `font5`=Fjalla One. You can also pass any installed family name directly, or drop
-your own `.ttf` in `~/.reelflow/fonts/` and reference it by family. A custom name
-that can't be found is substituted by libass — Reelflow prints a warning when
+your own `.ttf` in `~/.lemontage/fonts/` and reference it by family. A custom name
+that can't be found is substituted by libass — LeMontage prints a warning when
 that happens.
 
 **Outputs:** `files` (list of written paths).
@@ -457,7 +457,7 @@ output:
 | Field | Default | Description |
 |---|---|---|
 | `dir` | `./output` | Base directory for all produced files. |
-| `cleanup` | `false` | When `true`, after a successful run delete `output/.reelflow/` (work files + cache) **and** the per-clip files a `concat` already merged — keeping only the final reel. The CLI `--clean` flag forces this regardless of the setting. |
+| `cleanup` | `false` | When `true`, after a successful run delete `output/.lemontage/` (work files + cache) **and** the per-clip files a `concat` already merged — keeping only the final reel. The CLI `--clean` flag forces this regardless of the setting. |
 
 ---
 
@@ -481,7 +481,7 @@ not implemented in v1 — using them is a validation error:
 A complete, valid v1 pipeline: long podcast → 5 captioned vertical clips.
 
 ```yaml
-reelflow: "1.0"
+lemontage: "1.0"
 name: podcast-to-clips
 description: "Turn a long podcast into short captioned clips"
 
@@ -529,7 +529,7 @@ output:
 
 ## 13. Running pipelines
 
-`reelflow run pipeline.yaml` validates the file, then executes it. The engine:
+`lemontage run pipeline.yaml` validates the file, then executes it. The engine:
 
 - builds a **DAG** from the steps (channel wiring + `{{ steps.* }}` references
   define the edges) and runs it in dependency order;
@@ -537,14 +537,14 @@ output:
   cells (§8, §9);
 - honours **states**, `cache` checkpoints, and `on_failure` / `retries` (§5);
 - writes produced files under `output.dir` and intermediates under
-  `output.dir/.reelflow/`.
+  `output.dir/.lemontage/`.
 
 ```bash
-reelflow run pipeline.yaml --var lang=en   # override a vars entry (repeatable)
-reelflow run pipeline.yaml --clean         # delete temp files after a successful run
+lemontage run pipeline.yaml --var lang=en   # override a vars entry (repeatable)
+lemontage run pipeline.yaml --clean         # delete temp files after a successful run
 ```
 
-`--clean` removes `output/.reelflow/` (work files + checkpoint cache) once the run
+`--clean` removes `output/.lemontage/` (work files + checkpoint cache) once the run
 succeeds, plus any per-clip files a `concat` merged (keeping the final reel). Omit
 it to keep the cache so a re-run can resume from checkpoints.
 
@@ -560,12 +560,12 @@ Durations (`min_duration`, …) and timecodes (`start`, `end`) accept:
 
 ### 13.2 Local models
 
-`run` needs the engine extra (`pip install "reelflow[engine]"`). Models are
+`run` needs the engine extra (`pip install "lemontage[engine]"`). Models are
 fetched on first use and cached:
 
 - **STT** (`faster-whisper`) — cached by the library (HuggingFace cache).
 - **Title fonts** (`export.title_font` presets) — downloaded to
-  `~/.reelflow/fonts/` (override the base dir with `REELFLOW_HOME`) and used by
+  `~/.lemontage/fonts/` (override the base dir with `LEMONTAGE_HOME`) and used by
   libass, so titles look the same everywhere.
 
 FFmpeg is used for all media work: a system `ffmpeg` on `PATH` is preferred,

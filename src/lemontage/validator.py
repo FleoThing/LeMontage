@@ -1,4 +1,4 @@
-"""Validate a Reelflow pipeline document against the v1 spec.
+"""Validate a LeMontage pipeline document against the v1 spec.
 
 The public entry points are :func:`validate_doc` (validate an already-parsed
 mapping) and :func:`validate_file` (load a YAML file and validate it). Both
@@ -57,11 +57,11 @@ def _check_top_level_keys(doc: dict, errors: list[str]) -> None:
 
 
 def _check_version(doc: dict, errors: list[str]) -> None:
-    if "reelflow" not in doc:
+    if "lemontage" not in doc:
         return
-    version = doc["reelflow"]
+    version = doc["lemontage"]
     if not isinstance(version, str):
-        errors.append("'reelflow' version must be a string, e.g. \"1.0\"")
+        errors.append("'lemontage' version must be a string, e.g. \"1.0\"")
     elif version not in spec.SUPPORTED_VERSIONS:
         supported = ", ".join(sorted(spec.SUPPORTED_VERSIONS))
         errors.append(f"unsupported spec version '{version}' (supported: {supported})")
