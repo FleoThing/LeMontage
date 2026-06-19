@@ -261,18 +261,22 @@ needed to *run* pipelines - `imageio-ffmpeg` (bundled FFmpeg) and `faster-whispe
 > pipx install "reelflow[engine] @ git+https://github.com/ffillouxdev/reelflow@dev"
 > ```
 
-### 4. Debian-based Linux (apt) - `install.sh`
+### 4. Install scripts (from source)
 
-For any `apt`-based distribution (Debian, Ubuntu, Lubuntu, Linux Mint, Pop!_OS,
-…). Installs the system prerequisites, creates a venv and installs Reelflow:
+Install the system prerequisites, create a venv and install Reelflow in one step.
 
 ```bash
-git clone https://github.com/reelflow/reelflow && cd reelflow
+git clone https://github.com/ffillouxdev/reelflow && cd reelflow
+
+# Linux (apt: Debian/Ubuntu/Lubuntu/Mint/Pop!_OS…) or macOS (Homebrew)
 ./install.sh
+
+# Windows (PowerShell)
+./install.ps1
 ```
 
-(A hosted `curl -fsSL https://install.reelflow.dev | sh` one-liner will come once
-published.)
+`install.sh` also installs the man page (`man reelflow`). A hosted
+`curl -fsSL https://install.reelflow.dev | sh` one-liner will come once published.
 
 ### 5. Coming soon - PyPI (`pip install reelflow`)
 
