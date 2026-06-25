@@ -34,7 +34,7 @@ jobs:
             echo "Skipping release: ${tag} is not a SemVer tag."
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.semver.outputs.is_semver == 'true'
 
       - name: Set up Docker Buildx
