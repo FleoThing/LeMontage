@@ -1,26 +1,15 @@
-# Keep the build context small (and out of the image).
-.git/
-.venv/
-venv/
-__pycache__/
+.git
+.github
+.pytest_cache
+.ruff_cache
+.mypy_cache
+__pycache__
 *.py[cod]
-*.egg-info/
-dist/
-build/
-
-# Runtime artifacts
-output/
-.lemontage/
-models/
-
-# Heavy media / local working files
-*.mp4
-*.mov
-*.mkv
-*.mp3
-*.wav
-/pipeline*.yaml
-
-# Local-only
-CLAUDE.md
-TODO.md
+*.egg-info
+.venv
+dist
+build
+coverage*
+node_modules
+.DS_Store
+*.swp
