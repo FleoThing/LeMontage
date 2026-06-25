@@ -32,7 +32,8 @@ _LINE_GAP = 1.2  # start a new line after a silence longer than this (seconds)
 _HIGHLIGHT = "&H0000FFFF"
 _BASE = "&H00FFFFFF"
 
-_KARAOKE_ASS = """\
+_KARAOKE_ASS = (
+    """\
 [Script Info]
 ScriptType: v4.00+
 PlayResX: {w}
@@ -44,12 +45,16 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, \
 Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, \
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{font},{size},{hi},{base},&H00000000,&H64000000,{bold},0,0,0,100,100,0,0,1,{outline},1,{align},80,80,{marginv},1
+"""
+    "Style: Cap,{font},{size},{hi},{base},&H00000000,&H64000000,{bold},0,0,0,"
+    "100,100,0,0,1,{outline},1,{align},80,80,{marginv},1\n"
+    """\
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 {events}
 """
+)
 
 
 class CaptionsBlock(Block):
@@ -162,8 +167,17 @@ def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
     events = "\n".join(_dialogue(line) for line in lines)
     path.write_text(
         _KARAOKE_ASS.format(
-            w=width, h=height, font=font, size=size, hi=hi, base=_BASE,
-            bold=bold, outline=outline, align=align, marginv=marginv, events=events,
+            w=width,
+            h=height,
+            font=font,
+            size=size,
+            hi=hi,
+            base=_BASE,
+            bold=bold,
+            outline=outline,
+            align=align,
+            marginv=marginv,
+            events=events,
         ),
         encoding="utf-8",
     )
@@ -211,4 +225,6 @@ def _burn(media: str, ass: Path, params: dict[str, Any], out: Path) -> None:
     fonts.ensure(params.get("font"))
     esc_ass = str(ass).replace("\\", "\\\\").replace(":", "\\:")
     esc_dir = str(fonts.fonts_dir()).replace("\\", "\\\\").replace(":", "\\:")
-    ffmpeg.run(["-i", str(media), "-vf", f"ass='{esc_ass}':fontsdir='{esc_dir}'", "-c:a", "copy", str(out)])
+    ffmpeg.run(
+        ["-i", str(media), "-vf", f"ass='{esc_ass}':fontsdir='{esc_dir}'", "-c:a", "copy", str(out)]
+    )

@@ -22,6 +22,7 @@ engine = [
     "faster-whisper>=1.0",
 ]
 dev = [
+    "pre-commit>=4.0",
     "pytest>=8.0",
     "ruff>=0.5",
 ]
@@ -35,6 +36,10 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

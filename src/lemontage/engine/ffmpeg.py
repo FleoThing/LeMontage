@@ -26,9 +26,7 @@ def ffmpeg_bin() -> str:
     try:
         import imageio_ffmpeg
     except ImportError as exc:  # pragma: no cover - exercised only without deps
-        raise FFmpegError(
-            "ffmpeg not found on PATH and imageio-ffmpeg is not installed"
-        ) from exc
+        raise FFmpegError("ffmpeg not found on PATH and imageio-ffmpeg is not installed") from exc
     return imageio_ffmpeg.get_ffmpeg_exe()
 
 
@@ -72,9 +70,7 @@ def probe_duration(path: str | Path) -> float:
         if proc.returncode == 0 and proc.stdout.strip():
             return float(proc.stdout.strip())
     # Fallback: parse ffmpeg's stderr (no ffprobe in imageio-ffmpeg).
-    proc = subprocess.run(
-        [ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True
-    )
+    proc = subprocess.run([ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True)
     return _parse_duration(proc.stderr)
 
 

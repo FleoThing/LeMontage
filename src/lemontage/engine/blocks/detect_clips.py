@@ -88,7 +88,7 @@ def _speech_spans_from_silence(media: str, total: float) -> list[tuple[float, fl
     # Speech = the gaps between silences, bounded by [0, total].
     spans: list[tuple[float, float]] = []
     cursor = 0.0
-    for s_start, s_end in zip(starts, ends):
+    for s_start, s_end in zip(starts, ends, strict=False):
         if s_start > cursor:
             spans.append((cursor, s_start))
         cursor = s_end
@@ -111,7 +111,7 @@ def _spans_from_scene_cuts(media: str, total: float) -> list[tuple[float, float]
     )
     cuts = sorted({float(m) for m in _SCENE_PTS.findall(stderr)})
     boundaries = [0.0, *cuts, total]
-    return [(a, b) for a, b in zip(boundaries, boundaries[1:]) if b > a]
+    return [(a, b) for a, b in zip(boundaries, boundaries[1:], strict=False) if b > a]
 
 
 def _windowed_clips(

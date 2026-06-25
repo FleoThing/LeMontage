@@ -26,7 +26,8 @@ _DEFAULT_TITLE_MARGIN = 120  # distance from the top edge (into the letterbox ba
 
 # Alignment 8 = top-centre. PlayResX/Y match the export size so FontSize is in
 # real pixels; ScaledBorderAndShadow keeps the outline proportional.
-_ASS_TEMPLATE = """\
+_ASS_TEMPLATE = (
+    """\
 [Script Info]
 ScriptType: v4.00+
 PlayResX: {w}
@@ -38,12 +39,16 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, \
 Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, \
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Title,{font},{size},&H00FFFFFF,&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,2,1,8,40,40,{margin},1
+"""
+    "Style: Title,{font},{size},&H00FFFFFF,&H000000FF,&H00000000,&H64000000,"
+    "-1,0,0,0,100,100,0,0,1,2,1,8,40,40,{margin},1\n"
+    """\
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 Dialogue: 0,0:00:00.00,9:59:59.99,Title,,0,0,0,,{text}
 """
+)
 
 
 class ExportBlock(Block):
@@ -97,9 +102,7 @@ def _output_path(params: dict[str, Any], ctx: RunContext, index: int) -> Path:
     return out
 
 
-def _title_ass(
-    params: dict[str, Any], ctx: RunContext, name: str, index: int = 0
-) -> Path | None:
+def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 0) -> Path | None:
     """Write an ASS file for the title, if requested.
 
     PlayResX/Y are set to the export resolution so ``title_size`` is in real

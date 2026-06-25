@@ -27,7 +27,7 @@ class TemplateError(ValueError):
     """Raised when a template reference cannot be resolved."""
 
 
-def resolve(value: Any, ctx: "Resolvable") -> Any:
+def resolve(value: Any, ctx: Resolvable) -> Any:
     """Recursively resolve every template reference inside ``value``."""
     if isinstance(value, str):
         return _resolve_str(value, ctx)
@@ -38,7 +38,7 @@ def resolve(value: Any, ctx: "Resolvable") -> Any:
     return value
 
 
-def _resolve_str(text: str, ctx: "Resolvable") -> Any:
+def _resolve_str(text: str, ctx: Resolvable) -> Any:
     whole = _REF.fullmatch(text.strip())
     if whole:
         return _lookup(whole.group(1), ctx)
@@ -55,7 +55,7 @@ def _stringify(value: Any) -> str:
     return str(value)
 
 
-def _lookup(expr: str, ctx: "Resolvable") -> Any:
+def _lookup(expr: str, ctx: Resolvable) -> Any:
     # Export-only placeholders (SPEC §6.6): `name` is the pipeline name; `index`
     # (0-based) and `part` (1-based) are the per-item position, only known when
     # export maps a channel — leave them verbatim for export to substitute later.

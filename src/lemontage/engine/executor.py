@@ -16,10 +16,11 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from . import template
 from .blocks import REGISTRY
@@ -170,7 +171,7 @@ def _run_cell(
     return cell
 
 
-def _run_node(node: Node, ctx: RunContext, cache: "_Cache", report: Reporter) -> None:
+def _run_node(node: Node, ctx: RunContext, cache: _Cache, report: Reporter) -> None:
     if not _requires_met(node, ctx):
         ctx.state[node.step_id] = SKIPPED
         report(f"  ⊘ {node.step_id} ({node.block}) — skipped, requires unmet")
@@ -268,7 +269,7 @@ def _matrix_cells(matrix: dict[str, Any] | None) -> list[dict[str, Any]]:
         return [{}]
     keys = list(matrix)
     value_lists = [matrix[k] if isinstance(matrix[k], list) else [matrix[k]] for k in keys]
-    return [dict(zip(keys, combo)) for combo in itertools.product(*value_lists)]
+    return [dict(zip(keys, combo, strict=True)) for combo in itertools.product(*value_lists)]
 
 
 def _cell_label(cell: dict[str, Any]) -> str:

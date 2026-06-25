@@ -82,9 +82,7 @@ def _add_template_edges(nodes: list[Node], by_id: dict[str, Node]) -> None:
         for ref_id in _referenced_step_ids(node.params) | _referenced_step_ids(node.common):
             target = by_id.get(ref_id)
             if target is None:
-                raise DagError(
-                    f"step '{node.step_id}' references unknown step '{ref_id}'"
-                )
+                raise DagError(f"step '{node.step_id}' references unknown step '{ref_id}'")
             if target.index != node.index:
                 node.deps.add(target.index)
 
@@ -95,9 +93,7 @@ def _add_channel_edges(nodes: list[Node], emitters: dict[str, Node]) -> None:
         if node.consumes:
             producer = emitters.get(node.consumes)
             if producer is None:
-                raise DagError(
-                    f"step '{node.step_id}' consumes unknown channel '{node.consumes}'"
-                )
+                raise DagError(f"step '{node.step_id}' consumes unknown channel '{node.consumes}'")
             node.deps.add(producer.index)
 
     # ...and consumers of the same channel keep their listed order.
@@ -106,7 +102,7 @@ def _add_channel_edges(nodes: list[Node], emitters: dict[str, Node]) -> None:
         if node.consumes:
             consumers.setdefault(node.consumes, []).append(node)
     for chain in consumers.values():
-        for prev, curr in zip(chain, chain[1:]):
+        for prev, curr in zip(chain, chain[1:], strict=False):
             curr.deps.add(prev.index)
 
 

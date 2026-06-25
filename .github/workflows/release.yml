@@ -1,9 +1,9 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ['Build image']
-    types: [completed]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -12,22 +12,37 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: >
-      ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
-        startsWith(github.event.workflow_run.head_branch, 'v')
-      }}
 
     steps:
+      - name: Validate SemVer tag
+        id: semver
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          semver='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+          if [[ "${tag}" =~ ${semver} ]]; then
+            image="ghcr.io/${GITHUB_REPOSITORY,,}"
+            image_tag="${tag//+/-}"
+            echo "is_semver=true" >> "${GITHUB_OUTPUT}"
+            echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+            echo "image_tag=${image_tag}" >> "${GITHUB_OUTPUT}"
+            echo "image=${image}" >> "${GITHUB_OUTPUT}"
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_OUTPUT}"
+          else
+            echo "is_semver=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping release: ${tag} is not a SemVer tag."
+          fi
+
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+        if: steps.semver.outputs.is_semver == 'true'
 
       - name: Set up Docker Buildx
+        if: steps.semver.outputs.is_semver == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: steps.semver.outputs.is_semver == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -35,21 +50,23 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push release image
+        if: steps.semver.outputs.is_semver == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.event.workflow_run.head_branch }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ steps.semver.outputs.image }}:${{ steps.semver.outputs.image_tag }}
+            ${{ steps.semver.outputs.image }}:latest
           build-args: |
-            BUILD_DATE=${{ github.event.workflow_run.created_at }}
-            VCS_REF=${{ github.event.workflow_run.head_sha }}
+            BUILD_DATE=${{ steps.semver.outputs.created }}
+            VCS_REF=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Create GitHub release
+        if: steps.semver.outputs.is_semver == 'true'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
