@@ -70,9 +70,7 @@ def base_doc(steps, **kw):
 
 def test_simple_success(patch_registry, tmp_path):
     patch_registry["stt"] = RecordingBlock("stt")
-    doc = base_doc(
-        [{"id": "a", "stt": {"value": 7}}], output={"dir": str(tmp_path)}
-    )
+    doc = base_doc([{"id": "a", "stt": {"value": 7}}], output={"dir": str(tmp_path)})
     result = run(doc, reporter=lambda m: None)
     assert result.ok
     cell = result.cells[0]

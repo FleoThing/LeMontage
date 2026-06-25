@@ -106,7 +106,7 @@ def _timeline(loud_ranges, total=200, baseline=-30.0, loud=-8.0):
 def test_select_loud_clips_anchors_before_onset_and_fills_forward():
     # Loud from 40s..50s: clip starts ~3s before the onset and runs for max_dur,
     # so the (visually interesting) aftermath is kept.
-    (start, end), = _select_loud_clips(
+    ((start, end),) = _select_loud_clips(
         _timeline([(40, 50)]), total=200.0, min_dur=8, max_dur=30, max_clips=1
     )
     assert round(start) == 37  # onset 40 - 3s lead-in
@@ -116,7 +116,7 @@ def test_select_loud_clips_anchors_before_onset_and_fills_forward():
 
 def test_select_loud_clips_pads_to_min_duration_near_end():
     # Near the end of the media the forward window is short -> padded to min_dur.
-    (start, end), = _select_loud_clips(
+    ((start, end),) = _select_loud_clips(
         _timeline([(195, 196)]), total=200.0, min_dur=15, max_dur=40, max_clips=1
     )
     assert round(end - start) == 15
@@ -329,8 +329,10 @@ def test_export_renders_and_lists_file(tmp_path, monkeypatch):
         Path(args[-1]).write_bytes(b"v")
 
     monkeypatch.setattr(ffmpeg, "run", fake_run)
-    out = ExportBlock().execute(
-        {"format": "vertical", "output": str(tmp_path / "o.mp4")}, ctx(tmp_path), "exp"
-    ).outputs
+    out = (
+        ExportBlock()
+        .execute({"format": "vertical", "output": str(tmp_path / "o.mp4")}, ctx(tmp_path), "exp")
+        .outputs
+    )
     assert out["files"] == [str(tmp_path / "o.mp4")]
     assert (tmp_path / "o.mp4").exists()

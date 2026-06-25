@@ -26,7 +26,7 @@ class Segment:
     start: float
     end: float
     text: str
-    words: list["Word"] = field(default_factory=list)
+    words: list[Word] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, object]:
         return {

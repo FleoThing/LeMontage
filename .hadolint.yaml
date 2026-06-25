@@ -1,0 +1,8 @@
+failure-threshold: warning
+ignored:
+  # Debian package versions are intentionally left to the base image repository.
+  - DL3008
+  # The Dockerfile installs the local package, which Hadolint cannot pin.
+  - DL3013
+  # BuildKit mounts /root/.cache/pip explicitly to speed up repeated CI builds.
+  - DL3042
