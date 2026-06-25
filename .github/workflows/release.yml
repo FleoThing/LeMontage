@@ -43,7 +43,7 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.semver.outputs.is_semver == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
