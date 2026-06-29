@@ -30,12 +30,30 @@ _DEFAULT_ALIAS = "font1"
 
 
 def fonts_dir() -> Path:
-    """Local title-font directory, honouring ``LEMONTAGE_HOME``."""
+    """Local title-font directory (absolute), honouring ``LEMONTAGE_HOME``."""
     home = os.environ.get("LEMONTAGE_HOME")
     base = Path(home) if home else Path.home() / ".lemontage"
-    path = base / "fonts"
+    path = (base / "fonts").resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _escape_filter_path(path: Path) -> str:
+    """Absolutise and escape a path for use inside an FFmpeg filtergraph.
+
+    libass resolves ``ass=`` and ``fontsdir=`` relative to FFmpeg's working
+    directory, so a relative path silently fails when the process is launched
+    elsewhere — we resolve to an absolute path first. The backslash/colon
+    escaping is what the filtergraph parser needs on Windows (``C:\\…``); on
+    POSIX paths it is a harmless no-op.
+    """
+    text = str(path.resolve())
+    return text.replace("\\", "\\\\").replace(":", "\\:")
+
+
+def libass_filter(ass: Path) -> str:
+    """Build an ``ass=…:fontsdir=…`` video filter with absolute, escaped paths."""
+    return f"ass='{_escape_filter_path(ass)}':fontsdir='{_escape_filter_path(fonts_dir())}'"
 
 
 def family(title_font: object) -> str:
@@ -62,16 +80,29 @@ def ensure(title_font: object) -> None:
         )
 
 
+# A real font file starts with one of these signatures. Guards against an
+# error page (HTML/JSON) being silently saved with a .ttf name and "installed".
+_FONT_MAGIC = (b"\x00\x01\x00\x00", b"OTTO", b"true", b"typ1", b"ttcf", b"wOFF", b"wOF2")
+
+
 def _download(url: str) -> bool:
     target = fonts_dir() / url.rsplit("/", 1)[-1]
     if target.exists() and target.stat().st_size > 0:
         return True
+    tmp = target.with_suffix(target.suffix + ".part")
     try:
-        tmp = target.with_suffix(target.suffix + ".part")
-        urllib.request.urlretrieve(url, tmp)  # noqa: S310 - trusted Google Fonts URL
+        # A User-Agent avoids GitHub's 403 for header-less clients; the timeout
+        # keeps a hung connection from blocking the whole render.
+        req = urllib.request.Request(url, headers={"User-Agent": "lemontage"})
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - trusted Google Fonts URL
+            data = resp.read()
+        if not data.startswith(_FONT_MAGIC):
+            raise OSError("server did not return a font file")
+        tmp.write_bytes(data)
         tmp.replace(target)
         return True
     except OSError as exc:
+        tmp.unlink(missing_ok=True)
         _warn(f"téléchargement de la police {target.name} échoué ({exc}) — substituée")
         return False
 
