@@ -142,15 +142,6 @@ def _fill_title_tokens(text: str, index: int, name: str) -> str:
     return text
 
 
-def _escape(path: Path) -> str:
-    return str(path).replace("\\", "\\\\").replace(":", "\\:")
-
-
-def _title_filter(ass: Path) -> str:
-    # Point libass at the local font directory so preset/custom .ttf are found.
-    return f"ass='{_escape(ass)}':fontsdir='{_escape(fonts.fonts_dir())}'"
-
-
 def _render(media: str, params: dict[str, Any], out: Path, title: Path | None = None) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
@@ -161,7 +152,7 @@ def _render(media: str, params: dict[str, Any], out: Path, title: Path | None = 
     ]
     if title is not None:
         fonts.ensure(params.get("title_font"))  # download preset / warn on missing
-        chain.append(_title_filter(title))
+        chain.append(fonts.libass_filter(title))
     ffmpeg.run(
         [
             "-i",

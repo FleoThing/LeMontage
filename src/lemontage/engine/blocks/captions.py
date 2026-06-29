@@ -223,8 +223,4 @@ def _srt_ts(seconds: float) -> str:
 
 def _burn(media: str, ass: Path, params: dict[str, Any], out: Path) -> None:
     fonts.ensure(params.get("font"))
-    esc_ass = str(ass).replace("\\", "\\\\").replace(":", "\\:")
-    esc_dir = str(fonts.fonts_dir()).replace("\\", "\\\\").replace(":", "\\:")
-    ffmpeg.run(
-        ["-i", str(media), "-vf", f"ass='{esc_ass}':fontsdir='{esc_dir}'", "-c:a", "copy", str(out)]
-    )
+    ffmpeg.run(["-i", str(media), "-vf", fonts.libass_filter(ass), "-c:a", "copy", str(out)])
