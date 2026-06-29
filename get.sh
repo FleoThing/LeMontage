@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
 # LeMontage one-line installer (no clone needed):
-#   curl -fsSL https://raw.githubusercontent.com/ffillouxdev/LeMontage/dev/get.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/get.sh | bash
 #
 # Installs pipx if needed, then installs LeMontage (with its media engine) as a
 # global CLI you can run from anywhere. Works on Linux and macOS.
 
 set -euo pipefail
 
-SPEC="lemontage[engine] @ git+https://github.com/ffillouxdev/LeMontage@dev"
+SPEC="lemontage[engine] @ git+https://github.com/FleoThing/LeMontage@main"
 
 echo "▶ Installing LeMontage…"
 
@@ -34,6 +34,21 @@ fi
 
 # 3. Install LeMontage
 pipx install "$SPEC"
+
+# 4. Install the man page so `man lemontage` works (best-effort, never fatal).
+#    pipx installs into an isolated venv that is not on any MANPATH, so we drop
+#    the page into the user manpath and refresh the index when man-db is present.
+MAN_DIR="$HOME/.local/share/man/man1"
+MAN_URL="https://raw.githubusercontent.com/FleoThing/LeMontage/main/docs/lemontage.1"
+if command -v curl >/dev/null 2>&1; then
+  mkdir -p "$MAN_DIR"
+  if curl -fsSL "$MAN_URL" -o "$MAN_DIR/lemontage.1"; then
+    if command -v mandb >/dev/null 2>&1; then
+      mandb -q "$HOME/.local/share/man" >/dev/null 2>&1 || true
+    fi
+    echo "  · Installed man page → run 'man lemontage'"
+  fi
+fi
 
 echo
 echo "✓ LeMontage installed."
