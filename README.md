@@ -2,9 +2,9 @@
 
 > The TailwindCSS of automated video creation for social media.
 
-[![CI](https://github.com/ffillouxdev/LeMontage/actions/workflows/ci.yml/badge.svg)](https://github.com/ffillouxdev/LeMontage/actions/workflows/ci.yml)
+[![CI](https://github.com/FleoThing/LeMontage/actions/workflows/ci.yml/badge.svg)](https://github.com/FleoThing/LeMontage/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/github/license/ffillouxdev/LeMontage)
+![License](https://img.shields.io/github/license/FleoThing/LeMontage)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 
 LeMontage is a declarative YAML pipeline framework for automating the creation of viral videos - Shorts, Reels, TikToks and more - without writing the same boilerplate code for every new trend.
@@ -196,14 +196,14 @@ Linux/macOS - installs pipx if needed, then LeMontage as a global CLI you can ru
 from anywhere (like `nextflow`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ffillouxdev/LeMontage/dev/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/get.sh | bash
 ```
 
 Or do the pipx step yourself (any OS, needs Python 3.10+ and
 [pipx](https://pipx.pypa.io)):
 
 ```bash
-pipx install "lemontage[engine] @ git+https://github.com/ffillouxdev/LeMontage@dev"
+pipx install "lemontage[engine] @ git+https://github.com/FleoThing/LeMontage@main"
 lemontage --version
 ```
 
@@ -215,7 +215,7 @@ Prerequisites per OS:
 # Windows (PowerShell)           py -m pip install --user pipx; py -m pipx ensurepath
 ```
 
-> Not on PyPI yet, so we install straight from GitHub (`@dev` branch). Once
+> Not on PyPI yet, so we install straight from GitHub (`main` branch). Once
 > published this becomes `pipx install "lemontage[engine]"`. Drop `[engine]` for a
 > light, validate-only install.
 
@@ -225,7 +225,7 @@ No Python or system deps to manage. Build the image from source, then run
 pipelines against your current folder (mounted as the working dir):
 
 ```bash
-git clone https://github.com/ffillouxdev/LeMontage && cd lemontage
+git clone https://github.com/FleoThing/LeMontage && cd LeMontage
 docker build -t lemontage .
 
 docker run --rm -v "$PWD":/work lemontage run pipeline.yaml
@@ -238,13 +238,13 @@ docker run --rm -v "$PWD":/work \
   lemontage run pipeline.yaml
 ```
 
-> A prebuilt `ghcr.io/ffillouxdev/LeMontage` image will be published by the release
+> A prebuilt `ghcr.io/FleoThing/LeMontage` image will be published by the release
 > CI later, so you can skip the build step.
 
 ### 3. From source (developer setup)
 
 ```bash
-git clone https://github.com/lemontage/lemontage && cd lemontage
+git clone https://github.com/FleoThing/LeMontage && cd LeMontage
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[engine]"        # add the media/model dependencies
 
@@ -271,7 +271,7 @@ needed to *run* pipelines - `imageio-ffmpeg` (bundled FFmpeg) and `faster-whispe
 > the activated venv. To use it **anywhere like a normal CLI** (no venv to
 > activate), install with `pipx` instead:
 > ```bash
-> pipx install "lemontage[engine] @ git+https://github.com/ffillouxdev/LeMontage@dev"
+> pipx install "lemontage[engine] @ git+https://github.com/FleoThing/LeMontage@main"
 > ```
 
 ### 4. Install scripts (from source)
@@ -279,7 +279,7 @@ needed to *run* pipelines - `imageio-ffmpeg` (bundled FFmpeg) and `faster-whispe
 Install the system prerequisites, create a venv and install LeMontage in one step.
 
 ```bash
-git clone https://github.com/ffillouxdev/LeMontage && cd lemontage
+git clone https://github.com/FleoThing/LeMontage && cd LeMontage
 
 # Linux (apt: Debian/Ubuntu/Lubuntu/Mint/Pop!_OS…) or macOS (Homebrew)
 ./install.sh

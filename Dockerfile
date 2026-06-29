@@ -8,7 +8,7 @@
 
 # Builder stage: install dependencies into an isolated virtualenv so the runtime
 # only has to copy one directory.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.14-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -43,8 +43,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 LABEL org.opencontainers.image.title="LeMontage" \
       org.opencontainers.image.description="Pipeline-first framework for content creators" \
-      org.opencontainers.image.source="https://github.com/ffillouxdev/LeMontage" \
-      org.opencontainers.image.url="https://github.com/ffillouxdev/LeMontage" \
+      org.opencontainers.image.source="https://github.com/FleoThing/LeMontage" \
+      org.opencontainers.image.url="https://github.com/FleoThing/LeMontage" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}"
