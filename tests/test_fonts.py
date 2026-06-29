@@ -64,8 +64,12 @@ def test_libass_filter_uses_absolute_ass_path(tmp_path, monkeypatch):
     monkeypatch.setenv("LEMONTAGE_HOME", str(tmp_path))
     flt = fonts.libass_filter(Path("relative/clip.ass"))
     inner = flt.split("ass='", 1)[1].split("'", 1)[0]
-    assert Path(inner).is_absolute()
-    assert inner.endswith("clip.ass")
+    # libass_filter escapes the path for the filtergraph (\\ and \:); undo that
+    # before checking, otherwise a Windows drive path "C:\..." -> "C\:\\..." is no
+    # longer recognised as absolute. On POSIX the un-escaping is a no-op.
+    unescaped = inner.replace("\\:", ":").replace("\\\\", "\\")
+    assert unescaped == str(Path("relative/clip.ass").resolve())
+    assert Path(unescaped).is_absolute()
     assert "fontsdir='" in flt
 
 
