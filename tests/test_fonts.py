@@ -1,5 +1,6 @@
 """Tests for title-font resolution (no network — only the pure parts)."""
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from lemontage.engine import fonts
@@ -93,3 +94,24 @@ def test_download_accepts_real_font(tmp_path, monkeypatch):
     assert fonts._download("https://example.test/Anton-Regular.ttf") is True
     saved = fonts.fonts_dir() / "Anton-Regular.ttf"
     assert saved.read_bytes().startswith(b"\x00\x01\x00\x00")
+
+
+def test_download_is_concurrency_safe(tmp_path, monkeypatch, capsys):
+    # `export` maps over clips in parallel, so several threads fetch the same
+    # font at once. They must not race on a shared temp path — a shared
+    # "<name>.part" made all-but-one rename fail with ENOENT and emit a spurious
+    # "téléchargement échoué" warning.
+    monkeypatch.setenv("LEMONTAGE_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        fonts.urllib.request, "urlopen", lambda *_a, **_k: _FakeResp(b"\x00\x01\x00\x00FONTDATA")
+    )
+    url = "https://example.test/Bangers-Regular.ttf"
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda _i: fonts._download(url), range(16)))
+
+    assert all(results)  # every concurrent caller succeeds
+    assert capsys.readouterr().err == ""  # no spurious failure warning
+    saved = fonts.fonts_dir() / "Bangers-Regular.ttf"
+    assert saved.read_bytes().startswith(b"\x00\x01\x00\x00")
+    # No stray temp files left behind.
+    assert not list(fonts.fonts_dir().glob("*.part"))
