@@ -1,4 +1,4 @@
-.TH LEMONTAGE 1 "2026-06-17" "lemontage 0.1.0" "LeMontage Manual"
+.TH LEMONTAGE 1 "2026-06-30" "lemontage 0.1.2" "LeMontage Manual"
 .SH NAME
 lemontage \- declarative YAML pipelines for automated social video creation
 .SH SYNOPSIS
@@ -76,6 +76,9 @@ Spec version string, e.g. \fB"1.0"\fR (required).
 .B name
 Pipeline identifier, used for logs and output naming (required).
 .TP
+.B description
+Free\-text human\-readable summary (optional).
+.TP
 .B input
 Source media: \fBtype: video\fR and a \fB.mp4\fR \fBsource\fR (required; v1
 supports local MP4 only).
@@ -122,7 +125,8 @@ Cached title fonts (the \fBexport.title_font\fR presets). Drop your own
 .SH ENVIRONMENT
 .TP
 .B LEMONTAGE_HOME
-Base directory for cached models. Defaults to \fB~/.lemontage\fR.
+Base directory for LeMontage's cached assets (e.g. title fonts under
+\fBfonts/\fR). Defaults to \fB~/.lemontage\fR.
 .SH EXAMPLES
 .PP
 Generate, validate and run a starter pipeline:
