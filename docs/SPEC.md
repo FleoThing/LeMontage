@@ -339,7 +339,7 @@ Renders the final video(s) to disk.
 | `title_size` | int | `34` | Title font size, in pixels of the export resolution. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
-| `output` | path | `output.dir` | Output path; supports `{{ index }}` and `{{ name }}` when mapping a channel. |
+| `output` | path | `output.dir` | Output path; supports `{{ part }}`, `{{ index }}` and `{{ name }}` when mapping a channel. |
 
 **Title tokens.** Inside `title`, `output` and overlays you can use `{{ part }}`
 (1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and `{{ name }}`
