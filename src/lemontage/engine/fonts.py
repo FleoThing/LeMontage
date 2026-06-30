@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -89,7 +90,6 @@ def _download(url: str) -> bool:
     target = fonts_dir() / url.rsplit("/", 1)[-1]
     if target.exists() and target.stat().st_size > 0:
         return True
-    tmp = target.with_suffix(target.suffix + ".part")
     try:
         # A User-Agent avoids GitHub's 403 for header-less clients; the timeout
         # keeps a hung connection from blocking the whole render.
@@ -98,11 +98,23 @@ def _download(url: str) -> bool:
             data = resp.read()
         if not data.startswith(_FONT_MAGIC):
             raise OSError("server did not return a font file")
-        tmp.write_bytes(data)
-        tmp.replace(target)
+        # `export` maps over clips in parallel, so several threads can fetch the
+        # same font at once. Write to a UNIQUE temp file (not a shared
+        # "<name>.part") and atomically replace, so the writers never race on
+        # one path — a shared .part made all-but-one rename fail with ENOENT.
+        fd, tmp_name = tempfile.mkstemp(dir=fonts_dir(), suffix=".part")
+        tmp = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(data)
+            os.replace(tmp, target)  # atomic; last writer wins, no ENOENT
+        finally:
+            tmp.unlink(missing_ok=True)  # no-op once renamed away
         return True
     except OSError as exc:
-        tmp.unlink(missing_ok=True)
+        # A peer thread may have just installed it — that's success, not failure.
+        if target.exists() and target.stat().st_size > 0:
+            return True
         _warn(f"téléchargement de la police {target.name} échoué ({exc}) — substituée")
         return False
 
