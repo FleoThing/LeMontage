@@ -8,6 +8,7 @@ from .concat import ConcatBlock
 from .cut import CutBlock
 from .detect_clips import DetectClipsBlock
 from .export import ExportBlock
+from .reverse import ReverseBlock
 from .stt import SttBlock
 
 # Maps a block name to its implementation. The executor looks blocks up here.
@@ -20,6 +21,7 @@ REGISTRY: dict[str, Block] = {
         CaptionsBlock(),
         ExportBlock(),
         ConcatBlock(),
+        ReverseBlock(),
     )
 }
 

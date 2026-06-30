@@ -74,6 +74,20 @@ output:
   dir: ./output
 ```
 
+## Built-in blocks
+
+| Block | What it does |
+|---|---|
+| `stt` | Speech-to-text — timed transcript (word + segment timings), local via faster-whisper |
+| `detect_clips` | Find the strong moments and emit them as a channel of clips |
+| `cut` | Extract each detected clip as its own video |
+| `captions` | Burn word-by-word (karaoke) subtitles onto the video |
+| `export` | Final render — vertical / horizontal / square, optional title |
+| `concat` | Stitch clips into a single video |
+| `reverse` | Play a clip backwards (video + audio) |
+
+See the [YAML Specification](docs/SPEC.md) for each block's parameters.
+
 ## Example workflow
 
 Inside a run, a single YAML file becomes a DAG: one source video fans out into N
@@ -162,7 +176,7 @@ src/lemontage/
     ├── timecode.py     # duration / timecode parsing
     ├── blocks/         # built-in steps
     │   ├── stt.py  detect_clips.py  cut.py
-    │   └── captions.py  export.py  concat.py
+    │   └── captions.py  export.py  concat.py  reverse.py
     └── providers/      # swappable adapters
         ├── base.py     # STTProvider interface
         └── whisper.py  # faster-whisper
@@ -315,7 +329,7 @@ MIT - free to use, modify, and distribute.
 
 ## Status
 
-> v1 engine implemented: the six built-in blocks run end to end (STT, clip
-> detection, cutting, captions, export) with channels, matrix, caching and
+> v1 engine implemented: the seven built-in blocks run end to end (STT, clip
+> detection, cutting, captions, export, reverse) with channels, matrix, caching and
 > `on_failure` handling. Distribution (Docker, install script, pip) and the
 > community hub are next. Contributors welcome.
