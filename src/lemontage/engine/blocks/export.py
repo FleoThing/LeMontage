@@ -88,14 +88,11 @@ def _target_size(params: dict[str, Any]) -> tuple[int, int]:
 def _output_path(params: dict[str, Any], ctx: RunContext, index: int) -> Path:
     template = params.get("output")
     if template:
-        rendered = (
-            str(template)
-            .replace("{{ index }}", str(index))
-            .replace("{{index}}", str(index))
-            .replace("{{ name }}", ctx.pipeline_name)
-            .replace("{{name}}", ctx.pipeline_name)
-        )
-        out = Path(rendered)
+        # Same tokens as the title ({{ part }} / {{ index }} / {{ name }}). Without
+        # {{ part }} support, a `{{ name }}-{{ part }}.mp4` template left the literal
+        # braces in the path, so every mapped clip wrote to the SAME file in
+        # parallel and corrupted it (then concat failed reading it).
+        out = Path(_fill_title_tokens(str(template), index, ctx.pipeline_name))
     else:
         out = ctx.output_dir / f"{ctx.pipeline_name}-{index}.mp4"
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -234,6 +234,23 @@ def test_output_path_template_substitution(tmp_path):
     assert p.parent == tmp_path / "out"
 
 
+def test_output_path_supports_part_token(tmp_path):
+    # {{ part }} is 1-based (index + 1), like the title — and must be substituted
+    # in the path, else mapped clips collide on one literal "{{ part }}" file.
+    c = ctx(tmp_path)
+    template = str(tmp_path / "out" / "{{ name }}-{{ part }}.mp4")
+    assert _output_path({"output": template}, c, index=0).name == "demo-1.mp4"
+    assert _output_path({"output": template}, c, index=2).name == "demo-3.mp4"
+
+
+def test_output_path_distinct_per_clip_for_part_template(tmp_path):
+    # Regression: each mapped clip must resolve to a UNIQUE path (no collision).
+    c = ctx(tmp_path)
+    template = str(tmp_path / "{{ name }}-{{ part }}.mp4")
+    paths = {_output_path({"output": template}, c, index=i) for i in range(5)}
+    assert len(paths) == 5
+
+
 def test_output_path_default(tmp_path):
     p = _output_path({}, ctx(tmp_path), index=1)
     assert p == tmp_path / "demo-1.mp4"
