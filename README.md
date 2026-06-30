@@ -191,17 +191,6 @@ src/lemontage/
 
 *By design (for the future):* the format is intentionally constrained and validatable, so AI agents can reliably generate it, and providers (STT/TTS/LLM) can be swapped in later - see [Vision](#vision).
 
-## Comparison
-
-| | LeMontage | MoviePy | n8n | Remotion |
-|---|---|---|---|---|
-| Declarative YAML | ✅ | ❌ | ✅ | ❌ |
-| Content-focused blocks | ✅ | ❌ | ❌ | ❌ |
-| Local AI models | ✅ | ❌ | ❌ | ❌ |
-| Community pipeline hub | ✅ | ❌ | ✅ | ❌ |
-| AI-generatable format | ✅ | ❌ | ❌ | ❌ |
-| Developer-friendly | ✅ | ✅ | ❌ | ✅ |
-
 ## Installation
 
 ### 1. One-liner (recommended)
