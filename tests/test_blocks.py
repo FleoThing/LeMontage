@@ -351,6 +351,17 @@ def test_title_window_rejects_end_before_start():
         _title_window({"title_start": "3s", "title_end": "1s"})
 
 
+def test_title_fade_injects_ass_fad_tag(tmp_path):
+    content = _title_ass({"title": "hi", "title_fade": "0.3s"}, ctx(tmp_path), "t").read_text()
+    dialogue = next(ln for ln in content.splitlines() if ln.startswith("Dialogue"))
+    assert r"{\fad(300,300)}" in dialogue
+
+
+def test_title_without_fade_has_no_fad_tag(tmp_path):
+    content = _title_ass({"title": "hi"}, ctx(tmp_path), "t").read_text()
+    assert r"\fad" not in content
+
+
 def test_title_clips_restricts_to_listed_clips(tmp_path):
     params = {"title": "hi", "title_clips": [0]}
     assert _title_ass(params, ctx(tmp_path), "t0", index=0) is not None  # first clip: title
