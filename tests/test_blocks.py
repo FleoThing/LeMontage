@@ -340,6 +340,111 @@ def test_concat_single_mode_requires_channel(tmp_path):
         ConcatBlock().execute({}, ctx(tmp_path), "concat")
 
 
+# --- concat transitions -----------------------------------------------------
+
+
+def test_resolve_transitions_string_fills_every_gap():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    assert _resolve_transitions({"transitions": "fade"}, 4) == ["fade", "fade", "fade"]
+
+
+def test_resolve_transitions_list_is_per_gap():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    assert _resolve_transitions({"transitions": ["fade", "wipeleft"]}, 3) == ["fade", "wipeleft"]
+
+
+def test_resolve_transitions_none_everywhere_falls_back_to_plain():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    assert _resolve_transitions({}, 3) is None
+    assert _resolve_transitions({"transitions": ["none", "none"]}, 3) is None
+
+
+def test_resolve_transitions_wrong_length_raises():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    with pytest.raises(ValueError, match="one per gap"):
+        _resolve_transitions({"transitions": ["fade"]}, 3)
+
+
+def test_resolve_transitions_unknown_name_raises():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    with pytest.raises(ValueError, match="unknown transition"):
+        _resolve_transitions({"transitions": "zoom"}, 2)
+
+
+def test_resolve_transitions_single_clip_raises():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    with pytest.raises(ValueError, match="only 1 clip"):
+        _resolve_transitions({"transitions": "fade"}, 1)
+
+
+def test_concat_with_transitions_builds_xfade_chain(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import _concat_with_transitions
+
+    monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    calls = {}
+    monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
+
+    files = [str(tmp_path / f"c{i}.mp4") for i in range(3)]
+    _concat_with_transitions(files, ["fade", "wipeleft"], 0.5, tmp_path / "reel.mp4")
+
+    graph = calls["args"][calls["args"].index("-filter_complex") + 1]
+    assert "xfade=transition=fade:duration=0.5:offset=2.500" in graph
+    assert "acrossfade=d=0.5" in graph
+    # second gap chains onto the first crossfade's output, offset by another gap
+    assert "xfade=transition=wipeleft:duration=0.5:offset=5.000" in graph
+    assert calls["args"].count("-i") == 3  # one input per clip
+
+
+def test_concat_with_transitions_none_gap_uses_hard_cut(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import _concat_with_transitions
+
+    monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    calls = {}
+    monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
+
+    files = [str(tmp_path / f"c{i}.mp4") for i in range(3)]
+    _concat_with_transitions(files, ["none", "fade"], 0.5, tmp_path / "reel.mp4")
+
+    graph = calls["args"][calls["args"].index("-filter_complex") + 1]
+    assert "concat=n=2:v=1:a=1" in graph  # the 'none' gap is a hard cut
+    assert "xfade=transition=fade" in graph  # the other gap still crossfades
+
+
+def test_concat_with_transitions_duration_too_long_raises(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import _concat_with_transitions
+
+    monkeypatch.setattr(ff, "probe_duration", lambda _f: 1.0)
+    monkeypatch.setattr(ff, "run", lambda args: None)
+
+    files = [str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")]
+    with pytest.raises(ValueError, match="shorter than both clips"):
+        _concat_with_transitions(files, ["fade"], 2.0, tmp_path / "reel.mp4")
+
+
+def test_concat_block_routes_to_transitions(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import ConcatBlock
+
+    monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    calls = {}
+    monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
+
+    items = [{"index": i, "file": str(tmp_path / f"c{i}.mp4")} for i in range(3)]
+    ConcatBlock().execute_channel(
+        {"transitions": "fade", "output": str(tmp_path / "reel.mp4")}, items, ctx(tmp_path), "concat"
+    )
+    assert "-filter_complex" in calls["args"]  # took the xfade path, not the demuxer
+
+
 def test_export_renders_and_lists_file(tmp_path, monkeypatch):
     def fake_run(args):
         # last arg is the output path; create it so the result is realistic.

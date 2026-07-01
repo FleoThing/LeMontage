@@ -18,6 +18,23 @@ KNOWN_TOP_LEVEL = frozenset(
 # Built-in blocks shipped in v1. (tts is deferred to v2 — see TODO.)
 BUILTIN_BLOCKS = frozenset({"stt", "detect_clips", "cut", "captions", "export", "concat"})
 
+# Transitions the `concat` block can play between clips (a curated subset of
+# FFmpeg's xfade set), plus "none" for an explicit hard cut at a single gap.
+CONCAT_TRANSITIONS = frozenset(
+    {
+        "none",
+        "fade",
+        "wipeleft",
+        "wiperight",
+        "wipeup",
+        "wipedown",
+        "slideleft",
+        "slideright",
+        "slideup",
+        "slidedown",
+    }
+)
+
 # Fields a step may carry alongside its single block key (see SPEC §5.1).
 COMMON_STEP_FIELDS = frozenset({"id", "cache", "on_failure", "retries", "requires"})
 

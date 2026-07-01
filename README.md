@@ -33,7 +33,7 @@ So the end-to-end story becomes: an agent turns a one-line intent into a valid p
 
 LeMontage lets you define a video production workflow as a YAML file - a series of composable steps (transcription, clip detection, captions, export) that execute as a DAG (Directed Acyclic Graph), with automatic parallelism and resumability.
 
-> 🎬 **Coming soon:** animated transitions between clips (fades, cuts, filters) for ready-to-post montages.
+> 🎬 **New:** animated transitions between clips (fade, wipe, slide) — set `transitions:` on the `concat` block for ready-to-post montages.
 
 > **Scope v1:** MP4 input only. Output saved to `./output/` by default (overridable in YAML). Automatic publishing to social platforms is out of scope for v1.
 
@@ -73,6 +73,19 @@ steps:
 output:
   dir: ./output
 ```
+
+## Built-in blocks
+
+| Block | What it does |
+|---|---|
+| `stt` | Speech-to-text — timed transcript (word + segment timings), local via faster-whisper |
+| `detect_clips` | Find the strong moments and emit them as a channel of clips |
+| `cut` | Extract each detected clip as its own video |
+| `captions` | Burn word-by-word (karaoke) subtitles onto the video |
+| `export` | Final render — vertical / horizontal / square, optional title |
+| `concat` | Stitch clips into a single video, with optional fade / wipe / slide transitions between clips |
+
+See the [YAML Specification](docs/SPEC.md) for each block's parameters.
 
 ## Example workflow
 
