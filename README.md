@@ -1,4 +1,6 @@
-# LeMontage
+<p align="center">
+  <img src="docs/assets/logo.png" alt="LeMontage" width="360">
+</p>
 
 > The TailwindCSS of automated video creation for social media.
 
@@ -9,7 +11,7 @@
 
 LeMontage is a declarative YAML pipeline framework for automating the creation of viral videos - Shorts, Reels, TikToks and more - without writing the same boilerplate code for every new trend.
 
-![LeMontage install & usage workflow](docs/workflow-example.svg)
+![LeMontage install & usage workflow](docs/assets/workflow-example.svg)
 
 ## Vision
 
@@ -80,7 +82,7 @@ Inside a run, a single YAML file becomes a DAG: one source video fans out into N
 captioned, titled vertical clips - processed in parallel - and optionally merged
 into one reel.
 
-![LeMontage pipeline DAG](docs/pipeline-dag.svg)
+![LeMontage pipeline DAG](docs/assets/pipeline-dag.svg)
 
 > Full pipelines: [`examples/podcast-to-clips.yaml`](examples/podcast-to-clips.yaml)
 > · [`examples/ufc-highlights.yaml`](examples/ufc-highlights.yaml)
@@ -196,7 +198,7 @@ Linux/macOS - installs pipx if needed, then LeMontage as a global CLI you can ru
 from anywhere (like `nextflow`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/infrastructure/script/get.sh | bash
 ```
 
 Or do the pipx step yourself (any OS, needs Python 3.10+ and
@@ -282,13 +284,13 @@ Install the system prerequisites, create a venv and install LeMontage in one ste
 git clone https://github.com/FleoThing/LeMontage && cd LeMontage
 
 # Linux (apt: Debian/Ubuntu/Lubuntu/Mint/Pop!_OS…) or macOS (Homebrew)
-./install.sh
+./infrastructure/script/install.sh
 
 # Windows (PowerShell)
-./install.ps1
+./infrastructure/script/install.ps1
 ```
 
-`install.sh` also installs the man page (`man lemontage`). For a no-clone install,
+`infrastructure/script/install.sh` also installs the man page (`man lemontage`). For a no-clone install,
 use the [one-liner](#1-one-liner-recommended) above; a hosted
 `install.lemontage.dev` shortcut will come later.
 
