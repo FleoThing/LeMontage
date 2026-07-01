@@ -348,7 +348,7 @@ Renders the final video(s) to disk.
 | `title_clips` | int \| list | all | Only draw the title on these clips (0-based indices; e.g. `[0]` = first clip only). |
 | `title_fade` | duration \| list | — | Fade the title in/out by this much (e.g. `0.3s`) so it never pops. A list fades per clip by position (`[0, 0, 0.4]` = fade only the 3rd clip). |
 | `title_size` | int | `92` | Title font size, in pixels of the export resolution. |
-| `title_color` | string | `white` | Title text colour: a `#RRGGBB` hex or a name (`white`, `yellow`, `red`, …). |
+| `title_color` | string \| list | `white` | Title text colour: a `#RRGGBB` hex or a name (`white`, `yellow`, `red`, …). A list sets it per clip by position (e.g. `[red, null, blue]`). |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
 | `output` | path | `output.dir` | Output path; supports `{{ part }}`, `{{ index }}` and `{{ name }}` when mapping a channel. |

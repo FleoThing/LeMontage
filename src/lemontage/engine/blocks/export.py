@@ -123,7 +123,10 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     start, end = _title_window(params)
 
     path = ctx.work_dir() / f"{name}.ass"
-    primary = _ass_color(params.get("title_color"))
+    color = params.get("title_color")
+    if isinstance(color, list):  # per-clip colour by position, like title_fade
+        color = color[index] if index < len(color) else None
+    primary = _ass_color(color)
     path.write_text(
         _ASS_TEMPLATE.format(
             w=width,

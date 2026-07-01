@@ -376,6 +376,18 @@ def test_title_color_sets_ass_primary(tmp_path):
     assert "&H0000CCFF" in style  # #FFCC00 -> ASS &H00BBGGRR
 
 
+def test_title_color_list_applies_per_clip(tmp_path):
+    params = {"title": "hi", "title_color": ["red", None, "blue"]}
+
+    def primary(index):
+        content = _title_ass(params, ctx(tmp_path), f"t{index}", index=index).read_text()
+        style = next(ln for ln in content.splitlines() if ln.startswith("Style: Title"))
+        return style.split(",")[3]
+
+    assert primary(0) == "&H000000FF"  # red
+    assert primary(2) == "&H00FF0000"  # blue
+
+
 def test_title_color_defaults_to_white(tmp_path):
     content = _title_ass({"title": "hi"}, ctx(tmp_path), "t").read_text()
     style = next(ln for ln in content.splitlines() if ln.startswith("Style: Title"))
