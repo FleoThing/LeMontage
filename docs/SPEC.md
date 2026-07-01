@@ -333,10 +333,13 @@ Renders the final video(s) to disk.
 |---|---|---|---|
 | `format` | enum | `vertical` | `vertical` (9:16) \| `horizontal` (16:9) \| `square` (1:1). |
 | `resolution` | string | per-format | e.g. `1080x1920`. |
+| `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars). |
+| `trim_bars` | bool | `true` | With `fit: cover`, auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source still fills the whole frame. Set `false` to keep them. |
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
+| `mute` | bool \| list | `false` | Silence the audio. `true` mutes every clip; a list of booleans mutes per clip by position (e.g. `[false, true]`). The (silent) audio track is kept so a later `concat` still works. |
 | `title` | string | — | Persistent title banner at the top of the frame, for the whole clip. `\n` splits lines. |
-| `title_size` | int | `34` | Title font size, in pixels of the export resolution. |
+| `title_size` | int | `92` | Title font size, in pixels of the export resolution. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
 | `output` | path | `output.dir` | Output path; supports `{{ part }}`, `{{ index }}` and `{{ name }}` when mapping a channel. |

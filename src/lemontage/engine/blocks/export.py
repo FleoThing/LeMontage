@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import ffmpeg, fonts
+from ...spec import EXPORT_FIT_MODES
 from ..context import RunContext
 from .base import Block, BlockResult, ItemResult
 
@@ -21,7 +22,7 @@ _RESOLUTIONS = {
     "square": (1080, 1080),
 }
 
-_DEFAULT_TITLE_SIZE = 34
+_DEFAULT_TITLE_SIZE = 92
 _DEFAULT_TITLE_MARGIN = 120  # distance from the top edge (into the letterbox band)
 
 # Alignment 8 = top-centre. PlayResX/Y match the export size so FontSize is in
@@ -60,7 +61,7 @@ class ExportBlock(Block):
             raise ValueError("export: no input media")
         out = _output_path(params, ctx, index=0)
         title = _title_ass(params, ctx, f"{step_id}-title", index=0)
-        _render(media, params, out, title)
+        _render(media, params, out, title, mute=_muted(params, 0))
         return BlockResult(outputs={"files": [str(out)]})
 
     def execute_item(
@@ -71,7 +72,7 @@ class ExportBlock(Block):
             raise ValueError("export: channel item has no 'clip' to export")
         out = _output_path(params, ctx, index=item["index"])
         title = _title_ass(params, ctx, f"{step_id}-{item['index']}-title", index=item["index"])
-        _render(clip, params, out, title)
+        _render(clip, params, out, title, mute=_muted(params, item["index"]))
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
 
 
@@ -139,29 +140,72 @@ def _fill_title_tokens(text: str, index: int, name: str) -> str:
     return text
 
 
-def _render(media: str, params: dict[str, Any], out: Path, title: Path | None = None) -> None:
+def _scale_chain(
+    params: dict[str, Any], width: int, height: int, source_crop: str | None = None
+) -> list[str]:
+    """Video filters that fit the source into width×height per the `fit` mode.
+
+    * ``contain`` (default) — scale to fit, then letterbox with black bars so the
+      whole frame is visible.
+    * ``cover`` — scale to fill, then centre-crop the overflow so there are no
+      bars (the source edges are cropped instead).
+
+    ``source_crop`` (a ``"w:h:x:y"`` spec) strips baked-in bars from the source
+    *before* fitting, so a letterboxed source still fills the whole frame.
+    """
+    fit = str(params.get("fit", "contain")).lower()
+    if fit not in EXPORT_FIT_MODES:
+        valid = ", ".join(sorted(EXPORT_FIT_MODES))
+        raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
+    chain = [f"crop={source_crop}"] if source_crop else []
+    if fit == "cover":
+        chain += [
+            f"scale={width}:{height}:force_original_aspect_ratio=increase",
+            f"crop={width}:{height}",
+        ]
+    else:  # contain
+        chain += [
+            f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+        ]
+    return chain
+
+
+def _muted(params: dict[str, Any], index: int) -> bool:
+    """Whether this clip's audio should be silenced.
+
+    ``mute: true`` silences every clip; a list silences per clip by position
+    (``mute: [false, true, ...]``), so a single clip can be muted.
+    """
+    mute = params.get("mute")
+    if isinstance(mute, list):
+        return bool(mute[index]) if index < len(mute) else False
+    return bool(mute)
+
+
+def _render(
+    media: str,
+    params: dict[str, Any],
+    out: Path,
+    title: Path | None = None,
+    mute: bool = False,
+) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
-    chain = [
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
-        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
-        f"fps={fps}",
-    ]
+    # For `cover`, strip the source's own letterbox bars first (default on) so a
+    # letterboxed source still fills the whole frame rather than carrying its bars
+    # into the crop. Detected with FFmpeg's cropdetect — no extra dependency.
+    source_crop = None
+    if str(params.get("fit", "contain")).lower() == "cover" and params.get("trim_bars", True):
+        source_crop = ffmpeg.detect_content_crop(media)
+    chain = [*_scale_chain(params, width, height, source_crop), f"fps={fps}"]
     if title is not None:
         fonts.ensure(params.get("title_font"))  # download preset / warn on missing
         chain.append(fonts.libass_filter(title))
-    ffmpeg.run(
-        [
-            "-i",
-            str(media),
-            "-vf",
-            ",".join(chain),
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-c:a",
-            "aac",
-            str(out),
-        ]
-    )
+    args = ["-i", str(media), "-vf", ",".join(chain)]
+    # Keep a (silent) audio stream rather than dropping it (-an), so a later
+    # concat / crossfade still finds audio on every clip.
+    if mute:
+        args += ["-af", "volume=0"]
+    args += ["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac", str(out)]
+    ffmpeg.run(args)

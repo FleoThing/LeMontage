@@ -19,7 +19,9 @@ from lemontage.engine.blocks.captions import (
 from lemontage.engine.blocks.detect_clips import _select_loud_clips, _windowed_clips
 from lemontage.engine.blocks.export import (
     ExportBlock,
+    _muted,
     _output_path,
+    _scale_chain,
     _target_size,
     _title_ass,
 )
@@ -338,6 +340,84 @@ def test_concat_single_mode_requires_channel(tmp_path):
 
     with pytest.raises(ValueError):
         ConcatBlock().execute({}, ctx(tmp_path), "concat")
+
+
+def test_scale_chain_contain_letterboxes(tmp_path):
+    chain = _scale_chain({}, 1080, 1920)  # default fit
+    assert any("force_original_aspect_ratio=decrease" in f for f in chain)
+    assert any(f.startswith("pad=") for f in chain)
+
+
+def test_scale_chain_cover_crops_without_bars(tmp_path):
+    chain = _scale_chain({"fit": "cover"}, 1080, 1920)
+    assert any("force_original_aspect_ratio=increase" in f for f in chain)
+    assert any(f.startswith("crop=1080:1920") for f in chain)
+    assert not any(f.startswith("pad=") for f in chain)  # no black bars
+
+
+def test_scale_chain_unknown_fit_raises():
+    with pytest.raises(ValueError, match="unknown fit"):
+        _scale_chain({"fit": "zoom"}, 1080, 1920)
+
+
+def test_muted_bool_applies_to_all():
+    assert _muted({"mute": True}, 0) is True
+    assert _muted({"mute": True}, 7) is True
+    assert _muted({}, 0) is False
+
+
+def test_muted_list_is_per_clip():
+    params = {"mute": [False, True, False]}
+    assert _muted(params, 0) is False
+    assert _muted(params, 1) is True
+    assert _muted(params, 5) is False  # out of range -> not muted
+
+
+def test_render_cover_and_mute_reach_ffmpeg(tmp_path, monkeypatch):
+    calls = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
+    monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: None)  # no source bars
+    ExportBlock().execute(
+        {"format": "vertical", "fit": "cover", "mute": True, "output": str(tmp_path / "o.mp4")},
+        ctx(tmp_path),
+        "exp",
+    )
+    vf = calls["args"][calls["args"].index("-vf") + 1]
+    assert "crop=1080:1920" in vf and "pad=" not in vf  # cover, no bars
+    assert "-af" in calls["args"] and "volume=0" in calls["args"]  # muted
+
+
+def test_cover_strips_source_letterbox_bars(tmp_path, monkeypatch):
+    calls = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
+    # Source has baked-in bars: real content is 1920x800 at y=140.
+    monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: "1920:800:0:140")
+    ExportBlock().execute(
+        {"format": "vertical", "fit": "cover", "output": str(tmp_path / "o.mp4")},
+        ctx(tmp_path),
+        "exp",
+    )
+    vf = calls["args"][calls["args"].index("-vf") + 1]
+    # the source crop is applied BEFORE the fill+crop, so the bars are gone
+    assert vf.startswith("crop=1920:800:0:140,")
+    assert "force_original_aspect_ratio=increase" in vf
+
+
+def test_cover_trim_bars_can_be_disabled(tmp_path, monkeypatch):
+    seen = {"detect": 0}
+
+    def fake_detect(_m):
+        seen["detect"] += 1
+        return "1920:800:0:140"
+
+    monkeypatch.setattr(ffmpeg, "run", lambda args: None)
+    monkeypatch.setattr(ffmpeg, "detect_content_crop", fake_detect)
+    ExportBlock().execute(
+        {"format": "vertical", "fit": "cover", "trim_bars": False, "output": str(tmp_path / "o.mp4")},
+        ctx(tmp_path),
+        "exp",
+    )
+    assert seen["detect"] == 0  # detection skipped when trim_bars: false
 
 
 def test_export_renders_and_lists_file(tmp_path, monkeypatch):
