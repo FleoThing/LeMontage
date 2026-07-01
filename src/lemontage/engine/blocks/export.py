@@ -353,11 +353,15 @@ def _render(
 ) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
-    # For `cover`, strip the source's own letterbox bars first (default on) so a
-    # letterboxed source still fills the whole frame rather than carrying its bars
-    # into the crop. Detected with FFmpeg's cropdetect — no extra dependency.
+    # Strip the source's own baked-in letterbox bars first (default on) so a
+    # letterboxed source fills the frame instead of carrying its bars into the
+    # result. Needed for `cover` (else bars leak into the crop) and for
+    # `bg: blur` (else the sharp foreground keeps its bars over the blur).
+    # Detected with FFmpeg's cropdetect — no extra dependency.
+    fit = str(params.get("fit", "contain")).lower()
+    wants_fill = fit == "cover" or str(params.get("bg", "")).lower() == "blur"
     source_crop = None
-    if str(params.get("fit", "contain")).lower() == "cover" and params.get("trim_bars", True):
+    if wants_fill and params.get("trim_bars", True):
         source_crop = ffmpeg.detect_content_crop(media)
     chain = [*_scale_chain(params, width, height, source_crop), f"fps={fps}"]
     if title is not None:
