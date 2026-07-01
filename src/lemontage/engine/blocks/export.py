@@ -11,9 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .. import ffmpeg, fonts
 from ...spec import EXPORT_FIT_MODES
+from .. import ffmpeg, fonts
 from ..context import RunContext
+from ..timecode import parse_seconds
 from .base import Block, BlockResult, ItemResult
 
 _RESOLUTIONS = {
@@ -47,7 +48,7 @@ Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,9:59:59.99,Title,,0,0,0,,{text}
+Dialogue: 0,{start},{end},Title,,0,0,0,,{text}
 """
 )
 
@@ -119,12 +120,47 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     # Accept both literal "\n" and real newlines; ASS uses "\N" for a line break.
     lines = [ln.strip() for ln in raw.replace("\\n", "\n").splitlines() if ln.strip()]
     text = r"\N".join(lines)
+    start, end = _title_window(params)
 
     path = ctx.work_dir() / f"{name}.ass"
     path.write_text(
-        _ASS_TEMPLATE.format(w=width, h=height, font=font, size=size, margin=margin, text=text)
+        _ASS_TEMPLATE.format(
+            w=width, h=height, font=font, size=size, margin=margin, text=text, start=start, end=end
+        )
     )
     return path
+
+
+# Shown for the whole clip unless a window is given (libass clamps to the clip).
+_TITLE_FOREVER = "9:59:59.99"
+
+
+def _title_window(params: dict[str, Any]) -> tuple[str, str]:
+    """Return the (start, end) ASS timestamps the title is visible for.
+
+    ``title_start`` sets when it appears (default 0); ``title_end`` sets when it
+    disappears, or ``title_duration`` gives that end as start + duration. With
+    neither, the title stays for the whole clip.
+    """
+    start = parse_seconds(params.get("title_start", 0))
+    if "title_end" in params:
+        end = parse_seconds(params["title_end"])
+    elif "title_duration" in params:
+        end = start + parse_seconds(params["title_duration"])
+    else:
+        return _ass_timestamp(start), _TITLE_FOREVER
+    if end <= start:
+        raise ValueError("export: title window end must be after title_start")
+    return _ass_timestamp(start), _ass_timestamp(end)
+
+
+def _ass_timestamp(seconds: float) -> str:
+    """Format seconds as an ASS timestamp ``H:MM:SS.cc`` (centiseconds)."""
+    cs = int(round(seconds * 100))
+    hours, cs = divmod(cs, 360000)
+    minutes, cs = divmod(cs, 6000)
+    secs, cs = divmod(cs, 100)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
 def _fill_title_tokens(text: str, index: int, name: str) -> str:

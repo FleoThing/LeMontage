@@ -28,6 +28,7 @@ from lemontage.engine.blocks.export import (
     _scale_chain,
     _target_size,
     _title_ass,
+    _title_window,
 )
 from lemontage.engine.blocks.stt import SttBlock
 from lemontage.engine.context import RunContext
@@ -333,6 +334,29 @@ def test_title_ass_accepts_literal_backslash_n(tmp_path):
     assert r"line one\Nline two" in path.read_text()
 
 
+def test_title_window_defaults_to_whole_clip():
+    assert _title_window({}) == ("0:00:00.00", "9:59:59.99")
+
+
+def test_title_window_duration_sets_end():
+    assert _title_window({"title_duration": "2s"}) == ("0:00:00.00", "0:00:02.00")
+
+
+def test_title_window_start_and_end():
+    assert _title_window({"title_start": "1s", "title_end": "3s"}) == ("0:00:01.00", "0:00:03.00")
+
+
+def test_title_window_rejects_end_before_start():
+    with pytest.raises(ValueError, match="end must be after"):
+        _title_window({"title_start": "3s", "title_end": "1s"})
+
+
+def test_title_ass_writes_the_window_into_the_dialogue(tmp_path):
+    content = _title_ass({"title": "hi", "title_duration": "2s"}, ctx(tmp_path), "t").read_text()
+    dialogue = next(ln for ln in content.splitlines() if ln.startswith("Dialogue"))
+    assert dialogue.split(",")[1:3] == ["0:00:00.00", "0:00:02.00"]
+
+
 def test_title_ass_default_font(tmp_path):
     content = _title_ass({"title": "Hi"}, ctx(tmp_path), "t").read_text()
     assert "Style: Title,Anton," in content  # default preset font1
@@ -464,11 +488,13 @@ def test_cover_trim_bars_can_be_disabled(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ffmpeg, "run", lambda args: None)
     monkeypatch.setattr(ffmpeg, "detect_content_crop", fake_detect)
-    ExportBlock().execute(
-        {"format": "vertical", "fit": "cover", "trim_bars": False, "output": str(tmp_path / "o.mp4")},
-        ctx(tmp_path),
-        "exp",
-    )
+    params = {
+        "format": "vertical",
+        "fit": "cover",
+        "trim_bars": False,
+        "output": str(tmp_path / "o.mp4"),
+    }
+    ExportBlock().execute(params, ctx(tmp_path), "exp")
     assert seen["detect"] == 0  # detection skipped when trim_bars: false
 
 

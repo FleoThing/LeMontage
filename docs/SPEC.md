@@ -341,7 +341,10 @@ Renders the final video(s) to disk.
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
 | `mute` | bool \| list | `false` | Silence the audio. `true` mutes every clip; a list of booleans mutes per clip by position (e.g. `[false, true]`). The (silent) audio track is kept so a later `concat` still works. |
-| `title` | string | — | Persistent title banner at the top of the frame, for the whole clip. `\n` splits lines. |
+| `title` | string | — | Title banner at the top of the frame. Shown for the whole clip unless a window is set below. `\n` splits lines. |
+| `title_start` | duration | `0` | When the title appears (relative to each clip). |
+| `title_end` | duration | clip end | When the title disappears. |
+| `title_duration` | duration | — | Shorthand for `title_end` = `title_start` + this (e.g. `title_duration: 2s`). |
 | `title_size` | int | `92` | Title font size, in pixels of the export resolution. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
