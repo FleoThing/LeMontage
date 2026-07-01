@@ -8,6 +8,7 @@ from .concat import ConcatBlock
 from .cut import CutBlock
 from .detect_clips import DetectClipsBlock
 from .export import ExportBlock
+from .reverse import ReverseBlock
 from .speed import SpeedBlock
 from .stt import SttBlock
 
@@ -22,6 +23,7 @@ REGISTRY: dict[str, Block] = {
         ExportBlock(),
         ConcatBlock(),
         SpeedBlock(),
+        ReverseBlock(),
     )
 }
 

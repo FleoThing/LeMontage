@@ -9,6 +9,7 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `reverse` built-in block: play a clip backwards (video + audio).
 - `speed` built-in block: slow-motion / fast-forward by a playback factor.
 - Project documentation split across README, contributing, support, security and docs files.
 - Docker Compose local deployment file under `infrastructure/local/compose.yaml`.

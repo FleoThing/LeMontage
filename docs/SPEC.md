@@ -405,6 +405,25 @@ over a channel of clips. Audio is retimed in step with the video.
 
 ---
 
+### 6.9 `reverse` — play backwards
+
+Reverses video and audio. Operates on the pipeline input, or maps over a
+channel of clips. Intended for short clips (it buffers the stream in memory).
+
+```yaml
+- reverse:
+    from: clip_channel
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel | — | Channel of clips to map over. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
