@@ -104,8 +104,13 @@ Full examples:
 Reference docs:
 
 - [YAML Specification](docs/SPEC.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Install and deployment guide](docs/INSTALL.md)
 - [`man` page](docs/lemontage.1)
 - [Contributing guide](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
 ## 2. Install And Deploy
 
