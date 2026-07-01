@@ -32,8 +32,9 @@ docker build -t lemontage:release-check .
 ```
 
 4. Verify install docs in `README.md` and `docs/INSTALL.md`.
-5. Commit the release changes.
-6. Create and push a SemVer tag.
+5. Check-up `man` docs and the windows docs
+6. Commit the release changes.
+7. Create and push a SemVer tag.
 
 ```bash
 git tag v0.1.4
