@@ -74,6 +74,19 @@ output:
   dir: ./output
 ```
 
+## Built-in blocks
+
+| Block | What it does |
+|---|---|
+| `stt` | Speech-to-text — timed transcript (word + segment timings), local via faster-whisper |
+| `detect_clips` | Find the strong moments and emit them as a channel of clips |
+| `cut` | Extract each detected clip as its own video |
+| `captions` | Burn word-by-word (karaoke) subtitles onto the video |
+| `export` | Final render — vertical / horizontal / square, optional title |
+| `concat` | Stitch clips into a single video |
+
+See the [YAML Specification](docs/SPEC.md) for each block's parameters.
+
 ## Example workflow
 
 Inside a run, a single YAML file becomes a DAG: one source video fans out into N
