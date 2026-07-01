@@ -17,7 +17,7 @@ KNOWN_TOP_LEVEL = frozenset(
 
 # Built-in blocks shipped in v1. (tts is deferred to v2 — see TODO.)
 BUILTIN_BLOCKS = frozenset(
-    {"stt", "detect_clips", "cut", "captions", "export", "concat", "reverse"}
+    {"stt", "detect_clips", "cut", "captions", "export", "concat", "speed", "reverse"}
 )
 
 # Fields a step may carry alongside its single block key (see SPEC §5.1).
