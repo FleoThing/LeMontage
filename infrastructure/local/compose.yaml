@@ -1,0 +1,16 @@
+services:
+  lemontage:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: lemontage:local
+    working_dir: /work
+    volumes:
+      - ../..:/work
+      - lemontage-cache:/root/.lemontage
+      - huggingface-cache:/root/.cache/huggingface
+    command: ["--help"]
+
+volumes:
+  lemontage-cache:
+  huggingface-cache:
