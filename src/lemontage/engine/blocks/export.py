@@ -42,8 +42,8 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, \
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 """
-    "Style: Title,{font},{size},{primary},&H000000FF,&H00000000,&H64000000,"
-    "-1,0,0,0,100,100,0,0,1,2,1,8,40,40,{margin},1\n"
+    "Style: Title,{font},{size},{primary},&H000000FF,{outline},&H64000000,"
+    "-1,0,0,0,100,100,0,0,{border},2,1,{align},40,40,{margin},1\n"
     """\
 
 [Events]
@@ -127,6 +127,7 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     if isinstance(color, list):  # per-clip colour by position, like title_fade
         color = color[index] if index < len(color) else None
     primary = _ass_color(color)
+    border, outline = _title_border(params)
     path.write_text(
         _ASS_TEMPLATE.format(
             w=width,
@@ -138,9 +139,40 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
             start=start,
             end=end,
             primary=primary,
+            align=_title_align(params),
+            border=border,
+            outline=outline,
         )
     )
     return path
+
+
+# ASS numpad alignment: centre column is 8 (top), 5 (middle), 2 (bottom).
+_TITLE_ALIGN = {"top": 8, "center": 5, "centre": 5, "middle": 5, "bottom": 2}
+
+
+def _title_align(params: dict[str, Any]) -> int:
+    """Map ``title_position`` (top/center/bottom) to an ASS alignment code."""
+    pos = str(params.get("title_position", "top")).lower()
+    if pos not in _TITLE_ALIGN:
+        valid = ", ".join(sorted(_TITLE_ALIGN))
+        raise ValueError(f"export: unknown title_position '{pos}' (choose from: {valid})")
+    return _TITLE_ALIGN[pos]
+
+
+def _title_border(params: dict[str, Any]) -> tuple[int, str]:
+    """Return (BorderStyle, OutlineColour) for the title.
+
+    ``title_box`` draws an opaque box behind the text (BorderStyle 3) for
+    legibility: ``true`` = semi-transparent black, or a colour name/hex. Without
+    it, the title keeps its plain outline (BorderStyle 1).
+    """
+    box = params.get("title_box")
+    if not box:
+        return 1, "&H00000000"  # outline style (current default)
+    if box is True or str(box).lower() == "true":
+        return 3, "&H80000000"  # semi-transparent black box
+    return 3, _ass_color(box)  # box in a named/hex colour
 
 
 # A few named colours; anything else must be a #RRGGBB hex.
@@ -256,8 +288,9 @@ def _scale_chain(
 ) -> list[str]:
     """Video filters that fit the source into width×height per the `fit` mode.
 
-    * ``contain`` (default) — scale to fit, then letterbox with black bars so the
-      whole frame is visible.
+    * ``contain`` (default) — scale to fit, then fill the sides. ``bg`` chooses the
+      fill: a colour (default black), or ``blur`` = the source itself scaled to
+      cover and blurred behind the sharp centred video (the classic vertical look).
     * ``cover`` — scale to fill, then centre-crop the overflow so there are no
       bars (the source edges are cropped instead).
 
@@ -270,16 +303,33 @@ def _scale_chain(
         raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
     chain = [f"crop={source_crop}"] if source_crop else []
     if fit == "cover":
-        chain += [
+        return chain + [
             f"scale={width}:{height}:force_original_aspect_ratio=increase",
             f"crop={width}:{height}",
         ]
-    else:  # contain
-        chain += [
-            f"scale={width}:{height}:force_original_aspect_ratio=decrease",
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+    # contain
+    if str(params.get("bg", "")).lower() == "blur":
+        # Blurred, zoomed copy of the source fills the frame; the fitted video is
+        # overlaid centred on top — no black bars. One split→overlay filtergraph.
+        return chain + [
+            f"split=2[b0][f0];"
+            f"[b0]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},gblur=sigma=20[bg];"
+            f"[f0]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
         ]
-    return chain
+    return chain + [
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color={_bg_pad_color(params.get('bg'))}",
+    ]
+
+
+def _bg_pad_color(bg: object) -> str:
+    """FFmpeg colour for the letterbox pad (default black); '#RRGGBB' -> '0xRRGGBB'."""
+    if not bg:
+        return "black"
+    text = str(bg)
+    return text.replace("#", "0x") if text.startswith("#") else text
 
 
 def _muted(params: dict[str, Any], index: int) -> bool:

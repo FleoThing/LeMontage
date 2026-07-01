@@ -27,7 +27,9 @@ from lemontage.engine.blocks.export import (
     _output_path,
     _scale_chain,
     _target_size,
+    _title_align,
     _title_ass,
+    _title_border,
     _title_window,
 )
 from lemontage.engine.blocks.stt import SttBlock
@@ -483,6 +485,47 @@ def test_scale_chain_cover_crops_without_bars(tmp_path):
 def test_scale_chain_unknown_fit_raises():
     with pytest.raises(ValueError, match="unknown fit"):
         _scale_chain({"fit": "zoom"}, 1080, 1920)
+
+
+def test_bg_color_sets_pad_colour():
+    pad = _scale_chain({"fit": "contain", "bg": "white"}, 1080, 1920)[-1]
+    assert pad.startswith("pad=") and "color=white" in pad
+    hexpad = _scale_chain({"fit": "contain", "bg": "#101010"}, 1080, 1920)[-1]
+    assert "color=0x101010" in hexpad  # # -> 0x for ffmpeg
+
+
+def test_bg_blur_builds_split_overlay():
+    chain = _scale_chain({"fit": "contain", "bg": "blur"}, 1080, 1920)
+    graph = chain[-1]
+    assert graph.startswith("split=2")
+    assert "gblur=" in graph  # blurred background
+    assert graph.rstrip().endswith("overlay=(W-w)/2:(H-h)/2")  # fitted video on top
+    assert "pad=" not in graph  # no black bars
+
+
+def test_title_position_maps_to_alignment():
+    assert _title_align({}) == 8  # top (default)
+    assert _title_align({"title_position": "center"}) == 5
+    assert _title_align({"title_position": "bottom"}) == 2
+
+
+def test_title_position_unknown_raises():
+    with pytest.raises(ValueError, match="unknown title_position"):
+        _title_align({"title_position": "sideways"})
+
+
+def test_title_box_uses_border_style_3(tmp_path):
+    assert _title_border({}) == (1, "&H00000000")  # plain outline by default
+    border, _ = _title_border({"title_box": True})
+    assert border == 3  # opaque box
+    style = next(
+        ln
+        for ln in _title_ass({"title": "hi", "title_box": True}, ctx(tmp_path), "t")
+        .read_text()
+        .splitlines()
+        if ln.startswith("Style: Title")
+    )
+    assert ",3,2,1," in style  # BorderStyle 3 in the style line
 
 
 def test_muted_bool_applies_to_all():

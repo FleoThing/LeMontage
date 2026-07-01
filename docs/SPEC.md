@@ -338,6 +338,7 @@ Renders the final video(s) to disk.
 | `resolution` | string | per-format | e.g. `1080x1920`. |
 | `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars). |
 | `trim_bars` | bool | `true` | With `fit: cover`, auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source still fills the whole frame. Set `false` to keep them. |
+| `bg` | string | `black` | Fill for the `contain` bars: a colour (`white`, `#101010`) or `blur` — a blurred, zoomed copy of the source behind the sharp centred video (the classic vertical look). |
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
 | `mute` | bool \| list | `false` | Silence the audio. `true` mutes every clip; a list of booleans mutes per clip by position (e.g. `[false, true]`). The (silent) audio track is kept so a later `concat` still works. |
@@ -349,6 +350,8 @@ Renders the final video(s) to disk.
 | `title_fade` | duration \| list | — | Fade the title in/out by this much (e.g. `0.3s`) so it never pops. A list fades per clip by position (`[0, 0, 0.4]` = fade only the 3rd clip). |
 | `title_size` | int | `92` | Title font size, in pixels of the export resolution. |
 | `title_color` | string \| list | `white` | Title text colour: a `#RRGGBB` hex or a name (`white`, `yellow`, `red`, …). A list sets it per clip by position (e.g. `[red, null, blue]`). |
+| `title_position` | enum | `top` | Vertical placement: `top` \| `center` \| `bottom`. |
+| `title_box` | bool \| string | — | Draw an opaque box behind the title for legibility: `true` (semi-transparent black) or a colour name/hex. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
 | `output` | path | `output.dir` | Output path; supports `{{ part }}`, `{{ index }}` and `{{ name }}` when mapping a channel. |
