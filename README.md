@@ -48,58 +48,24 @@ lemontage run pipeline.yaml
 | Docker CLI | CI or server builds | Good for reproducible image builds. Pin the source ref. |
 | Source install | Development | Most auditable path because you inspect the repo before running it. |
 
-### `pipx`
+Full install and deployment details are in [docs/INSTALL.md](docs/INSTALL.md).
 
-```bash
-python3 -m pip install --user pipx
-python3 -m pipx ensurepath
-pipx install "lemontage[engine] @ git+https://github.com/FleoThing/LeMontage@main"
-lemontage --version
-```
-
-### One-Line Installer
+Quick install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/infrastructure/script/get.sh | bash
 ```
 
-Safer variant:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/infrastructure/script/get.sh -o get.sh
-less get.sh
-bash get.sh
-```
-
-### Docker Compose
+Docker Compose:
 
 ```bash
 git clone https://github.com/FleoThing/LeMontage
 cd LeMontage
 docker compose -f infrastructure/local/compose.yaml build
-docker compose -f infrastructure/local/compose.yaml run --rm lemontage --help
 docker compose -f infrastructure/local/compose.yaml run --rm lemontage run pipeline.yaml
 ```
 
-### Docker CLI
-
-```bash
-git clone https://github.com/FleoThing/LeMontage
-cd LeMontage
-docker build -t lemontage .
-docker run --rm -v "$PWD":/work lemontage run pipeline.yaml
-```
-
-With persistent caches:
-
-```bash
-docker run --rm -v "$PWD":/work \
-  -v lemontage-cache:/root/.lemontage \
-  -v hf-cache:/root/.cache/huggingface \
-  lemontage run pipeline.yaml
-```
-
-### From Source
+Source setup:
 
 ```bash
 git clone https://github.com/FleoThing/LeMontage
@@ -110,15 +76,14 @@ python -m pip install -U pip
 pip install -e ".[engine,dev]"
 ```
 
-### Install Scripts
+## Documentation
 
-```bash
-git clone https://github.com/FleoThing/LeMontage
-cd LeMontage
-
-# Linux/macOS
-./infrastructure/script/install.sh
-
-# Windows PowerShell
-./infrastructure/script/install.ps1
-```
+- [YAML specification](docs/SPEC.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Install and deployment](docs/INSTALL.md)
+- [Release process](docs/RELEASE.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Contributing](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
