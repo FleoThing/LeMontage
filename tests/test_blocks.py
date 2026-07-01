@@ -164,6 +164,18 @@ def test_random_clips_count_lengths_and_no_overlap():
             assert start >= clips[i - 1][1]  # non-overlapping, chronological
 
 
+def test_random_clips_advance_through_the_video():
+    import random
+
+    # Each clip must start after the previous one ends (forward walk), so a
+    # passage is never picked twice.
+    clips = _random_clips(120.0, 2.0, 4.0, 6, random.Random(3))
+    starts = [s for s, _ in clips]
+    assert starts == sorted(starts)
+    for i in range(1, len(clips)):
+        assert clips[i][0] >= clips[i - 1][1]
+
+
 def test_random_clips_is_reproducible_with_seed():
     import random
 

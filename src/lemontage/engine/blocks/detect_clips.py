@@ -138,33 +138,24 @@ def _windowed_clips(
 def _random_clips(
     total: float, min_dur: float, max_dur: float, max_clips: int, rng: random.Random
 ) -> list[tuple[float, float]]:
-    """Pick up to ``max_clips`` random, non-overlapping segments in ``[0, total]``.
+    """Pick random moments, each one *further along* the video than the last.
 
-    Each clip's length is random in ``[min_dur, max_dur]``; the clips are placed
-    at random positions without overlapping and returned in chronological order.
-    The free space is scattered as random gaps between clips, so placement is
-    genuinely random (not evenly spaced). Pass a ``seed`` for reproducible runs.
+    The timeline is split into ``n`` successive equal segments and one random
+    clip (a random length within ``[min_dur, max_dur]``) is placed inside each,
+    at a random position. So every clip advances past the previous one and no
+    moment is ever picked twice — a forward walk with random spots. Pass a
+    ``seed`` for reproducible runs.
     """
     if total <= 0 or min_dur <= 0 or total < min_dur or max_clips <= 0:
         return []
-    hi = max(min_dur, min(max_dur, total))
     n = min(max_clips, int(total // min_dur))
-    lengths = [rng.uniform(min_dur, hi) for _ in range(n)]
-    span = sum(lengths)
-    if span > total:  # scale the lengths down to fit exactly (leaves no gaps)
-        lengths = [ln * total / span for ln in lengths]
-        span = total
-    free = total - span
-    # Split the leftover time into n+1 random gaps (before, between, after).
-    weights = [rng.random() for _ in range(n + 1)]
-    wsum = sum(weights) or 1.0
-    gaps = [free * w / wsum for w in weights]
+    slot = total / n  # each clip lives in its own forward slice of the timeline
 
     clips: list[tuple[float, float]] = []
-    cursor = gaps[0]
-    for i, length in enumerate(lengths):
-        clips.append((cursor, cursor + length))
-        cursor += length + gaps[i + 1]
+    for i in range(n):
+        length = rng.uniform(min_dur, min(max_dur, slot))
+        start = i * slot + rng.uniform(0.0, slot - length)
+        clips.append((start, start + length))
     return clips
 
 
