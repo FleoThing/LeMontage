@@ -379,6 +379,32 @@ unlike mapped consumers it receives the whole channel at once. Place it after
 
 ---
 
+### 6.8 `speed` — slow-motion / fast-forward
+
+Retimes a clip by a playback `factor`. Operates on the pipeline input, or maps
+over a channel of clips. Audio is retimed in step with the video.
+
+```yaml
+# half-speed slow-motion of every clip in a channel
+- speed:
+    from: clip_channel
+    factor: 0.5
+
+# 2x fast-forward of a single video
+- speed:
+    factor: 2
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `factor` | float | `1.0` | Playback multiplier: `>1` faster, `<1` slow-motion (must be `> 0`). |
+| `from` | channel | — | Channel of clips to map over. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
