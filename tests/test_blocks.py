@@ -370,6 +370,18 @@ def test_title_fade_list_applies_per_clip(tmp_path):
     assert r"{\fad(400,400)}" in _title_ass(params, ctx(tmp_path), "t2", index=2).read_text()
 
 
+def test_title_color_sets_ass_primary(tmp_path):
+    content = _title_ass({"title": "hi", "title_color": "#FFCC00"}, ctx(tmp_path), "t").read_text()
+    style = next(ln for ln in content.splitlines() if ln.startswith("Style: Title"))
+    assert "&H0000CCFF" in style  # #FFCC00 -> ASS &H00BBGGRR
+
+
+def test_title_color_defaults_to_white(tmp_path):
+    content = _title_ass({"title": "hi"}, ctx(tmp_path), "t").read_text()
+    style = next(ln for ln in content.splitlines() if ln.startswith("Style: Title"))
+    assert "&H00FFFFFF" in style
+
+
 def test_title_clips_restricts_to_listed_clips(tmp_path):
     params = {"title": "hi", "title_clips": [0]}
     assert _title_ass(params, ctx(tmp_path), "t0", index=0) is not None  # first clip: title

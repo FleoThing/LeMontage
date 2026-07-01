@@ -42,7 +42,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, \
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 """
-    "Style: Title,{font},{size},&H00FFFFFF,&H000000FF,&H00000000,&H64000000,"
+    "Style: Title,{font},{size},{primary},&H000000FF,&H00000000,&H64000000,"
     "-1,0,0,0,100,100,0,0,1,2,1,8,40,40,{margin},1\n"
     """\
 
@@ -123,12 +123,53 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     start, end = _title_window(params)
 
     path = ctx.work_dir() / f"{name}.ass"
+    primary = _ass_color(params.get("title_color"))
     path.write_text(
         _ASS_TEMPLATE.format(
-            w=width, h=height, font=font, size=size, margin=margin, text=text, start=start, end=end
+            w=width,
+            h=height,
+            font=font,
+            size=size,
+            margin=margin,
+            text=text,
+            start=start,
+            end=end,
+            primary=primary,
         )
     )
     return path
+
+
+# A few named colours; anything else must be a #RRGGBB hex.
+_NAMED_COLORS = {
+    "white": "ffffff",
+    "black": "000000",
+    "red": "ff0000",
+    "green": "00ff00",
+    "blue": "0000ff",
+    "yellow": "ffff00",
+    "cyan": "00ffff",
+    "magenta": "ff00ff",
+    "orange": "ffa500",
+    "pink": "ffc0cb",
+    "gray": "808080",
+    "grey": "808080",
+}
+
+
+def _ass_color(value: object) -> str:
+    """Convert a ``#RRGGBB`` hex or a colour name to an ASS ``&H00BBGGRR`` string.
+
+    ASS stores the primary colour as ``&HAABBGGRR`` (alpha, then blue/green/red),
+    so we reorder the RGB bytes. Defaults to white when unset.
+    """
+    if not value:
+        return "&H00FFFFFF"
+    text = _NAMED_COLORS.get(str(value).strip().lower(), str(value).strip().lstrip("#").lower())
+    if len(text) != 6 or any(c not in "0123456789abcdef" for c in text):
+        raise ValueError(f"export: invalid title_color '{value}' (use #RRGGBB or a colour name)")
+    rr, gg, bb = text[0:2], text[2:4], text[4:6]
+    return f"&H00{bb}{gg}{rr}".upper()
 
 
 def _fade_tag(params: dict[str, Any], index: int) -> str:
