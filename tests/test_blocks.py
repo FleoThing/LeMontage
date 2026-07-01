@@ -16,7 +16,11 @@ from lemontage.engine.blocks.captions import (
     _dialogue,
     _lines_from_words,
 )
-from lemontage.engine.blocks.detect_clips import _select_loud_clips, _windowed_clips
+from lemontage.engine.blocks.detect_clips import (
+    _random_clips,
+    _select_loud_clips,
+    _windowed_clips,
+)
 from lemontage.engine.blocks.export import (
     ExportBlock,
     _muted,
@@ -143,6 +147,42 @@ def test_select_loud_clips_only_loud_regions_qualify():
 
 def test_select_loud_clips_empty_timeline():
     assert _select_loud_clips([], total=100.0, min_dur=8, max_dur=20, max_clips=5) == []
+
+
+# --- detect_clips random ----------------------------------------------------
+
+
+def test_random_clips_count_lengths_and_no_overlap():
+    import random
+
+    clips = _random_clips(60.0, 1.3, 1.3, 8, random.Random(42))
+    assert len(clips) == 8
+    for i, (start, end) in enumerate(clips):
+        assert 0 <= start < end <= 60.0
+        assert abs((end - start) - 1.3) < 1e-6  # fixed length min==max
+        if i:
+            assert start >= clips[i - 1][1]  # non-overlapping, chronological
+
+
+def test_random_clips_is_reproducible_with_seed():
+    import random
+
+    a = _random_clips(60.0, 2.0, 5.0, 5, random.Random(7))
+    b = _random_clips(60.0, 2.0, 5.0, 5, random.Random(7))
+    assert a == b
+
+
+def test_random_clips_capped_by_available_space():
+    import random
+
+    # total 3s, min 1.3s -> at most 2 fit even though max_clips=8
+    assert len(_random_clips(3.0, 1.3, 1.3, 8, random.Random(0))) == 2
+
+
+def test_random_clips_empty_when_too_short():
+    import random
+
+    assert _random_clips(1.0, 1.3, 1.3, 8, random.Random(0)) == []
 
 
 # --- captions (word-level karaoke) -----------------------------------------

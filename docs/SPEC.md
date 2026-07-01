@@ -226,7 +226,7 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 ```yaml
 - id: clips
   detect_clips:
-    method: silence       # silence | scene_change | loudness
+    method: silence       # silence | scene_change | loudness | random
     min_duration: 30s
     max_duration: 60s
     max_clips: 5
@@ -235,10 +235,11 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random`. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
+| `seed` | int/string | — | (`random` only) Seed for reproducible picks; omit for a different set each run. |
 | `emit` | string | — | Channel name to emit clips into. |
 
 **Methods.** `silence` keeps the spoken spans (best for talking-head / podcast).
@@ -248,7 +249,9 @@ local proxy for action highlights (crowd roar, commentator excitement) in sports
 footage. For `loudness`, each clip's boundaries are found **automatically** by
 expanding around the peak while the level stays high, so the build-up and the
 sustained reaction are both captured; `min_duration`/`max_duration` only bound
-the resulting length (no manual offset).
+the resulting length (no manual offset). `random` picks `max_clips` random,
+non-overlapping moments (each of a random length in the min/max window) with no
+analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
 
 **Outputs:** `count`, `timestamps` (list of `{start, end}`), plus the named
 channel.
