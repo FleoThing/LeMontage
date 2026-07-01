@@ -119,7 +119,7 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     raw = _fill_title_tokens(str(title), index, ctx.pipeline_name)
     # Accept both literal "\n" and real newlines; ASS uses "\N" for a line break.
     lines = [ln.strip() for ln in raw.replace("\\n", "\n").splitlines() if ln.strip()]
-    text = _fade_tag(params) + r"\N".join(lines)
+    text = _fade_tag(params, index) + r"\N".join(lines)
     start, end = _title_window(params)
 
     path = ctx.work_dir() / f"{name}.ass"
@@ -131,13 +131,17 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     return path
 
 
-def _fade_tag(params: dict[str, Any]) -> str:
+def _fade_tag(params: dict[str, Any], index: int) -> str:
     """ASS ``\\fad`` override to fade the title in/out, or "" when not requested.
 
     ``title_fade`` (a duration) fades the title in at the start of its window and
-    out at the end by that much — so it never pops on/off.
+    out at the end by that much — so it never pops on/off. A list applies a fade
+    per clip by position (``[0, 0, 0.4]`` = fade only the 3rd clip), so titled
+    clips can differ.
     """
     fade = params.get("title_fade")
+    if isinstance(fade, list):
+        fade = fade[index] if index < len(fade) else 0
     if not fade:
         return ""
     ms = int(round(parse_seconds(fade) * 1000))

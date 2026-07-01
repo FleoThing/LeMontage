@@ -362,6 +362,14 @@ def test_title_without_fade_has_no_fad_tag(tmp_path):
     assert r"\fad" not in content
 
 
+def test_title_fade_list_applies_per_clip(tmp_path):
+    params = {"title": "hi", "title_fade": [0, 0, "0.4s"]}
+    # clip 0: no fade
+    assert r"\fad" not in _title_ass(params, ctx(tmp_path), "t0", index=0).read_text()
+    # clip 2: 0.4s fade
+    assert r"{\fad(400,400)}" in _title_ass(params, ctx(tmp_path), "t2", index=2).read_text()
+
+
 def test_title_clips_restricts_to_listed_clips(tmp_path):
     params = {"title": "hi", "title_clips": [0]}
     assert _title_ass(params, ctx(tmp_path), "t0", index=0) is not None  # first clip: title

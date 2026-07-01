@@ -346,7 +346,7 @@ Renders the final video(s) to disk.
 | `title_end` | duration | clip end | When the title disappears. |
 | `title_duration` | duration | — | Shorthand for `title_end` = `title_start` + this (e.g. `title_duration: 2s`). |
 | `title_clips` | int \| list | all | Only draw the title on these clips (0-based indices; e.g. `[0]` = first clip only). |
-| `title_fade` | duration | — | Fade the title in at the start of its window and out at the end by this much (e.g. `title_fade: 0.3s`), so it never pops on/off. |
+| `title_fade` | duration \| list | — | Fade the title in/out by this much (e.g. `0.3s`) so it never pops. A list fades per clip by position (`[0, 0, 0.4]` = fade only the 3rd clip). |
 | `title_size` | int | `92` | Title font size, in pixels of the export resolution. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
