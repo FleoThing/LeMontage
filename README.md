@@ -4,40 +4,40 @@
 
 > The TailwindCSS of automated video creation for social media.
 
-[![CI](https://github.com/FleoThing/LeMontage/actions/workflows/ci.yml/badge.svg)](https://github.com/FleoThing/LeMontage/actions/workflows/ci.yml)
+[![Tests](https://github.com/FleoThing/LeMontage/actions/workflows/test.yml/badge.svg)](https://github.com/FleoThing/LeMontage/actions/workflows/test.yml)
+[![Quality](https://github.com/FleoThing/LeMontage/actions/workflows/quality.yml/badge.svg)](https://github.com/FleoThing/LeMontage/actions/workflows/quality.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/github/license/FleoThing/LeMontage)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 
-LeMontage is a declarative YAML pipeline framework for automating the creation of viral videos - Shorts, Reels, TikToks and more - without writing the same boilerplate code for every new trend.
+LeMontage is a local-first YAML pipeline engine for turning long videos into short,
+captioned, ready-to-post clips. You describe the workflow once, then LeMontage
+runs the media steps: transcription, clip detection, cutting, captions and export.
+
+## Tech Stack
+
+- **Language**: Python 3.10+
+- **Pipeline format**: YAML
+- **CLI packaging**: setuptools, editable installs, `pipx`
+- **Media processing**: FFmpeg via `imageio-ffmpeg`
+- **Speech-to-text**: Whisper through `faster-whisper`
+- **Validation**: custom YAML validator backed by `pyyaml`
+- **Testing**: pytest
+- **Linting and formatting**: Ruff, pre-commit
+- **Containers**: Docker, Docker Compose
+- **CI and security**: GitHub Actions, Hadolint, Trivy, CodeQL
 
 ![LeMontage install & usage workflow](docs/assets/workflow-example.svg)
 
-## Vision
+## 1. What LeMontage Does
 
-Just as TailwindCSS became a de-facto standard for web styling (largely replacing hand-written CSS), LeMontage aims to be the standard language for automated video creation - for people and autonomous agents alike.
+LeMontage turns this kind of intent:
 
-There is **nothing AI-specific** inside LeMontage. It's a plain, declarative YAML format with a clear, self-contained spec ([SPEC.md](docs/SPEC.md), `man lemontage`) - simple enough that anyone, or any coding agent (Claude Code, OpenClaw, …), can read it and write a valid pipeline **with no SDK or special integration**. The intelligence stays in the human or the agent; LeMontage just runs the result, locally and reliably.
-
-So the end-to-end story becomes: an agent turns a one-line intent into a valid pipeline, and LeMontage executes it.
-
-```
-"Make me a viral short about the DeepSeek trend, energetic, 60s"
-        ↓
-   AI generates YAML
-        ↓
-  LeMontage executes
-        ↓
-     🎬 Video
+```text
+Make me a viral short from this podcast, energetic, 60 seconds max.
 ```
 
-## What it does
-
-LeMontage lets you define a video production workflow as a YAML file - a series of composable steps (transcription, clip detection, captions, export) that execute as a DAG (Directed Acyclic Graph), with automatic parallelism and resumability.
-
-> 🎬 **Coming soon:** animated transitions between clips (fades, cuts, filters) for ready-to-post montages.
-
-> **Scope v1:** MP4 input only. Output saved to `./output/` by default (overridable in YAML). Automatic publishing to social platforms is out of scope for v1.
+into a repeatable pipeline:
 
 ```yaml
 lemontage: "1.0"
@@ -55,7 +55,7 @@ steps:
 
   - id: clips
     detect_clips:
-      method: loudness        # or: silence | scene_change
+      method: loudness
       max_clips: 5
       emit: clips
 
@@ -64,7 +64,7 @@ steps:
 
   - captions:
       from: clips
-      words: "{{ steps.transcript.words }}"   # word-by-word karaoke
+      words: "{{ steps.transcript.words }}"
       style: tiktok
 
   - export:
@@ -76,248 +76,180 @@ output:
   dir: ./output
 ```
 
-## Example workflow
-
-Inside a run, a single YAML file becomes a DAG: one source video fans out into N
-captioned, titled vertical clips - processed in parallel - and optionally merged
-into one reel.
+Inside a run, the YAML becomes a DAG: one source video fans out into captioned,
+titled vertical clips that can be processed in parallel and resumed through cache.
 
 ![LeMontage pipeline DAG](docs/assets/pipeline-dag.svg)
 
-> Full pipelines: [`examples/podcast-to-clips.yaml`](examples/podcast-to-clips.yaml)
-> · [`examples/ufc-highlights.yaml`](examples/ufc-highlights.yaml)
+### Core Ideas
 
-## Why it matters
+- **Declarative**: describe the media pipeline in YAML instead of writing glue code.
+- **Local-first**: runs on your machine; Whisper STT runs locally through `faster-whisper`.
+- **Composable**: blocks, channels, matrix runs, cache, retries and named outputs.
+- **Agent-friendly**: the format is constrained and validatable, so coding agents can generate it.
+- **Shareable**: pipelines are plain files that can be reviewed, versioned and reused.
 
-Content creation pipelines are naturally DAG-shaped:
+### Current Scope
 
-```
-raw video
-    │
-    ├──► STT (transcription)
-    │         │
-    │         ├──► hook detection ──► clip cutting
-    │         └──► subtitle generation
-    │
-    └──► audio extraction ──► rhythm analysis
-```
+LeMontage v0.1.x targets MP4 input and local execution. The implemented engine covers
+STT, clip detection, cutting, captions, export, concat, cache, matrix, channels and
+`on_failure` handling. Automatic publishing to social platforms is out of scope for
+the current engine.
 
-Today, every creator rewrites this plumbing from scratch. LeMontage makes it **define once, reuse everywhere**, and lets the community share recipes for every trend and format.
+Full examples:
 
-## Community Hub
+- [`examples/podcast-to-clips.yaml`](examples/podcast-to-clips.yaml)
+- [`examples/ufc-highlights.yaml`](examples/ufc-highlights.yaml)
 
-> 🔜 **Planned (not in v1):** a community hub will be created where anyone can
-> deposit their pipelines and exchange ready-made video-creation templates.
+Reference docs:
 
-Anyone can publish their YAML pipelines. A creator specializing in Reddit Stories shares their pipeline. A finance creator shares theirs. A news channel shares theirs.
+- [YAML Specification](docs/SPEC.md)
+- [`man` page](docs/lemontage.1)
+- [Contributing guide](CONTRIBUTING.md)
 
-The more pipelines in the hub, the better AI models become at generating them - a self-reinforcing flywheel.
+## 2. Install And Deploy
 
-## Stack
+### Which Method Should I Use?
 
-### Phase 1 - 100% local, no external dependencies
+| Method | Best for | Security note |
+|---|---|---|
+| `pipx` from GitHub | Daily CLI usage on your machine | **Recommended for users.** Isolated Python app install; review the GitHub ref before running. |
+| `curl | bash` | Fast install on a disposable or personal machine | Convenient, but pipes remote code into a shell. Read the script first for sensitive machines. |
+| Docker Compose | Local deployment and repeatable runs | **Recommended for isolation.** Runs in a container and mounts only the project folder. |
+| Docker CLI | CI, servers, reproducible builds | Good isolation; pin tags or commit SHAs for production. |
+| Source install | Development and contribution | Full repo checkout; safest when you want to inspect or modify code before running. |
 
-| Layer | Technology |
-|---|---|
-| Orchestration engine | Python |
-| Media processing | FFmpeg (system, or bundled via `imageio-ffmpeg`) |
-| STT | Whisper via `faster-whisper` (local) |
-| TTS | _planned for v2_ - see below |
-| LLM | _planned_ - local via Ollama (script/scoring blocks, not in v1) |
+### Option A: `pipx` Install
 
-> *STT uses [Whisper](https://github.com/openai/whisper), OpenAI's open-source
-> speech-to-text model, run locally via `faster-whisper` (no API, offline after
-> the first download). Pick the model size (`tiny` → `large`) to trade speed for
-> accuracy and download size - see [SPEC §6.1](docs/SPEC.md).*
+Use this if you want `lemontage` available like a normal CLI without activating a
+virtualenv.
 
-> **Text-to-speech is deferred to v2.** It will be added once the engine can mux
-> a voiceover onto video (faceless / narrated content). Planned stack, all local:
-> `kokoro-onnx` (synthesis) + `onnxruntime` (inference) + `soundfile` (write audio).
-> Removed from v1 to keep the install light (no `onnxruntime`).
-
-The entire pipeline runs on your machine. No API key, no internet connection, no usage cost.
-
-### Phase 2 - Optional cloud providers
-
-Once the core is stable, swappable cloud providers will be added as optional plugins:
-
-| Layer | Provider |
-|---|---|
-| STT | Deepgram |
-| TTS | ElevenLabs |
-| LLM | Claude, GPT-4 |
-
-Switching provider = one line change in your YAML. The pipeline logic stays the same.
-
-## Architecture
-
-```
-src/lemontage/
-├── validator.py        # validate a pipeline against the v1 spec
-├── spec.py             # single source of truth for the spec constants
-├── cli.py              # run / validate / init
-└── engine/
-    ├── template.py     # {{ }} reference resolution
-    ├── dag.py          # dependency graph builder
-    ├── executor.py     # states, cache, on_failure, channels, matrix
-    ├── ffmpeg.py       # FFmpeg wrapper (system or bundled binary)
-    ├── timecode.py     # duration / timecode parsing
-    ├── blocks/         # built-in steps
-    │   ├── stt.py  detect_clips.py  cut.py
-    │   └── captions.py  export.py  concat.py
-    └── providers/      # swappable adapters
-        ├── base.py     # STTProvider interface
-        └── whisper.py  # faster-whisper
+```bash
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+pipx install "lemontage[engine] @ git+https://github.com/FleoThing/LeMontage@main"
+lemontage --version
 ```
 
-## Key design principles
+Security note: this installs from the `main` branch. For stricter environments,
+replace `@main` with a reviewed tag or commit SHA.
 
-- **Declarative** - describe what you want, not how to do it
-- **Local-first** - runs fully offline with open-source models; FFmpeg bundled
-- **Composable** - channels, matrix, checkpoints, named outputs and states (proven pipeline paradigms)
-- **Shareable** - pipelines are plain YAML files, not code
+### Option B: One-Line Installer
 
-*By design (for the future):* the format is intentionally constrained and validatable, so AI agents can reliably generate it, and providers (STT/TTS/LLM) can be swapped in later - see [Vision](#vision).
-
-## Comparison
-
-| | LeMontage | MoviePy | n8n | Remotion |
-|---|---|---|---|---|
-| Declarative YAML | ✅ | ❌ | ✅ | ❌ |
-| Content-focused blocks | ✅ | ❌ | ❌ | ❌ |
-| Local AI models | ✅ | ❌ | ❌ | ❌ |
-| Community pipeline hub | ✅ | ❌ | ✅ | ❌ |
-| AI-generatable format | ✅ | ❌ | ❌ | ❌ |
-| Developer-friendly | ✅ | ✅ | ❌ | ✅ |
-
-## Installation
-
-### 1. One-liner (recommended)
-
-Linux/macOS - installs pipx if needed, then LeMontage as a global CLI you can run
-from anywhere (like `nextflow`):
+Linux/macOS installer. It installs `pipx` if missing, then installs LeMontage with
+the media engine extra.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/infrastructure/script/get.sh | bash
 ```
 
-Or do the pipx step yourself (any OS, needs Python 3.10+ and
-[pipx](https://pipx.pypa.io)):
+Safer variant:
 
 ```bash
-pipx install "lemontage[engine] @ git+https://github.com/FleoThing/LeMontage@main"
-lemontage --version
+curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/infrastructure/script/get.sh -o get.sh
+less get.sh
+bash get.sh
 ```
 
-Prerequisites per OS:
+Security note: `curl | bash` is the least auditable install path. Use it for speed,
+not for locked-down production machines.
+
+### Option C: Docker Compose
+
+Use this for local deployment with no Python setup on the host.
 
 ```bash
-# Debian/Ubuntu/Lubuntu/Mint…   sudo apt install pipx git fontconfig && pipx ensurepath
-# macOS                          brew install pipx && pipx ensurepath
-# Windows (PowerShell)           py -m pip install --user pipx; py -m pipx ensurepath
+git clone https://github.com/FleoThing/LeMontage
+cd LeMontage
+docker compose -f infrastructure/local/compose.yaml build
+docker compose -f infrastructure/local/compose.yaml run --rm lemontage --help
+docker compose -f infrastructure/local/compose.yaml run --rm lemontage validate examples/podcast-to-clips.yaml
 ```
 
-> Not on PyPI yet, so we install straight from GitHub (`main` branch). Once
-> published this becomes `pipx install "lemontage[engine]"`. Drop `[engine]` for a
-> light, validate-only install.
-
-### 2. Docker (zero local setup)
-
-No Python or system deps to manage. Build the image from source, then run
-pipelines against your current folder (mounted as the working dir):
+Run your own pipeline from the repo folder:
 
 ```bash
-git clone https://github.com/FleoThing/LeMontage && cd LeMontage
+docker compose -f infrastructure/local/compose.yaml run --rm lemontage run pipeline.yaml
+```
+
+Security note: Compose mounts the repo into `/work` and keeps model caches in named
+Docker volumes. This is the best local isolation path while the image is built from
+source.
+
+### Option D: Docker CLI
+
+```bash
+git clone https://github.com/FleoThing/LeMontage
+cd LeMontage
 docker build -t lemontage .
 
+docker run --rm -v "$PWD":/work lemontage validate examples/podcast-to-clips.yaml
 docker run --rm -v "$PWD":/work lemontage run pipeline.yaml
-docker run --rm -v "$PWD":/work lemontage validate pipeline.yaml
-docker run --rm -v "$PWD":/work lemontage init
+```
 
-# Keep the Whisper model + fonts between runs (avoid re-downloading):
+Keep Whisper and font caches between runs:
+
+```bash
 docker run --rm -v "$PWD":/work \
-  -v lemontage-cache:/root/.lemontage -v hf-cache:/root/.cache/huggingface \
+  -v lemontage-cache:/root/.lemontage \
+  -v hf-cache:/root/.cache/huggingface \
   lemontage run pipeline.yaml
 ```
 
-> A prebuilt `ghcr.io/FleoThing/LeMontage` image will be published by the release
-> CI later, so you can skip the build step.
+Security note: pin a reviewed tag or commit SHA when building images for CI or
+servers.
 
-### 3. From source (developer setup)
+### Option E: From Source
+
+Use this when you want to inspect the code, contribute, or run tests.
 
 ```bash
-git clone https://github.com/FleoThing/LeMontage && cd LeMontage
-python -m venv .venv && . .venv/bin/activate
-pip install -e ".[engine]"        # add the media/model dependencies
-
-lemontage init pipeline.yaml        # write a starter pipeline
-lemontage validate pipeline.yaml    # check it against the spec
-lemontage run pipeline.yaml         # produce the clips into ./output/
+git clone https://github.com/FleoThing/LeMontage
+cd LeMontage
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -U pip
+pip install -e ".[engine,dev]"
 ```
 
-**What is `".[engine]"`?** `.` is the project in the current folder (its
-`pyproject.toml`); `[engine]` is the optional **extra** that pulls the libraries
-needed to *run* pipelines - `imageio-ffmpeg` (bundled FFmpeg) and `faster-whisper`
-(speech-to-text). So:
-
-| Command | Installs | Lets you |
-|---|---|---|
-| `pip install .` | core only (`pyyaml`) | `init`, `validate` |
-| `pip install ".[engine]"` | core **+ engine** | `init`, `validate`, **`run`** |
-| `pip install -e ".[engine]"` | same, **editable** (source-linked) | develop on LeMontage |
-
-> The Whisper model and title fonts download on first use - see
-> [SPEC §13](docs/SPEC.md).
->
-> ℹ️ This (clone + venv) is the **developer** setup - `lemontage` only works inside
-> the activated venv. To use it **anywhere like a normal CLI** (no venv to
-> activate), install with `pipx` instead:
-> ```bash
-> pipx install "lemontage[engine] @ git+https://github.com/FleoThing/LeMontage@main"
-> ```
-
-### 4. Install scripts (from source)
-
-Install the system prerequisites, create a venv and install LeMontage in one step.
+Then:
 
 ```bash
-git clone https://github.com/FleoThing/LeMontage && cd LeMontage
+lemontage init pipeline.yaml
+lemontage validate pipeline.yaml
+lemontage run pipeline.yaml
+```
 
-# Linux (apt: Debian/Ubuntu/Lubuntu/Mint/Pop!_OS…) or macOS (Homebrew)
+Security note: this is the most auditable path because you can inspect the repo
+before running anything. It also gives you the full development toolchain.
+
+### Option F: Install Scripts From Source
+
+These scripts create a local `.venv`, install the engine extra and install the man
+page on Linux/macOS.
+
+```bash
+git clone https://github.com/FleoThing/LeMontage
+cd LeMontage
+
+# Linux/macOS
 ./infrastructure/script/install.sh
 
-# Windows (PowerShell)
+# Windows PowerShell
 ./infrastructure/script/install.ps1
 ```
 
-`infrastructure/script/install.sh` also installs the man page (`man lemontage`). For a no-clone install,
-use the [one-liner](#1-one-liner-recommended) above; a hosted
-`install.lemontage.dev` shortcut will come later.
+Security note: use these after cloning the repo so you can inspect the script first.
 
-### 5. Coming soon - PyPI (`pip install lemontage`)
+## Quick Commands
 
 ```bash
-# pip
-pip install lemontage
-
-# uv
-uv tool install lemontage
+lemontage init pipeline.yaml
+lemontage validate pipeline.yaml
+lemontage run pipeline.yaml
+lemontage run pipeline.yaml --var lang=fr --clean
 ```
-
-Native installation with optional extras for STT, TTS, and LLM blocks will be available once the core is stable.
-
-## Documentation
-
-- [YAML Specification](docs/SPEC.md) - the authoritative reference for the pipeline file format and all built-in blocks.
-- [`man` page](docs/lemontage.1) - CLI reference. View with `man -l docs/lemontage.1`, or install with `cp docs/lemontage.1 ~/.local/share/man/man1/ && mandb` then `man lemontage`.
 
 ## License
 
-MIT - free to use, modify, and distribute.
-
-## Status
-
-> v1 engine implemented: the six built-in blocks run end to end (STT, clip
-> detection, cutting, captions, export) with channels, matrix, caching and
-> `on_failure` handling. Distribution (Docker, install script, pip) and the
-> community hub are next. Contributors welcome.
+MIT - free to use, modify and distribute.
