@@ -351,6 +351,12 @@ def test_title_window_rejects_end_before_start():
         _title_window({"title_start": "3s", "title_end": "1s"})
 
 
+def test_title_clips_restricts_to_listed_clips(tmp_path):
+    params = {"title": "hi", "title_clips": [0]}
+    assert _title_ass(params, ctx(tmp_path), "t0", index=0) is not None  # first clip: title
+    assert _title_ass(params, ctx(tmp_path), "t1", index=1) is None  # others: no title
+
+
 def test_title_ass_writes_the_window_into_the_dialogue(tmp_path):
     content = _title_ass({"title": "hi", "title_duration": "2s"}, ctx(tmp_path), "t").read_text()
     dialogue = next(ln for ln in content.splitlines() if ln.startswith("Dialogue"))

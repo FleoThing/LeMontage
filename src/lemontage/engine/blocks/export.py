@@ -110,7 +110,7 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     (1-based clip number), ``{{ index }}`` (0-based) and ``{{ name }}``.
     """
     title = params.get("title")
-    if not title:
+    if not title or not _title_on_clip(params, index):
         return None
     width, height = _target_size(params)
     size = int(params.get("title_size", _DEFAULT_TITLE_SIZE))
@@ -129,6 +129,20 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
         )
     )
     return path
+
+
+def _title_on_clip(params: dict[str, Any], index: int) -> bool:
+    """Whether this clip (0-based ``index``) should get the title.
+
+    ``title_clips`` restricts the title to specific clips — an int or a list of
+    0-based indices (e.g. ``[0]`` = only the first clip). Omit for every clip.
+    """
+    which = params.get("title_clips")
+    if which is None:
+        return True
+    if isinstance(which, int) and not isinstance(which, bool):
+        which = [which]
+    return index in which
 
 
 # Shown for the whole clip unless a window is given (libass clamps to the clip).
