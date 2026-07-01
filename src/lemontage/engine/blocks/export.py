@@ -25,6 +25,14 @@ _RESOLUTIONS = {
 
 _DEFAULT_TITLE_SIZE = 92
 _DEFAULT_TITLE_MARGIN = 120  # distance from the top edge (into the letterbox band)
+# Hard spaces added on each side of a boxed title. BorderStyle 3 pads all four
+# sides equally by the Outline value, so this is the only way to widen the box
+# horizontally (breathing room left/right of the text) without adding height.
+_DEFAULT_TITLE_BOX_HPAD = 3
+# Letter outline (contour) thickness in pixels; the historical hard-coded value.
+_DEFAULT_TITLE_OUTLINE = 2
+# Shadow depth when `title_shadow: true` (px offset of the drop shadow).
+_TITLE_SHADOW_ON = 4
 
 # Alignment 8 = top-centre. PlayResX/Y match the export size so FontSize is in
 # real pixels; ScaledBorderAndShadow keeps the outline proportional.
@@ -43,7 +51,7 @@ Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle,
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 """
     "Style: Title,{font},{size},{primary},&H000000FF,{outline},&H64000000,"
-    "-1,0,0,0,100,100,0,0,{border},2,1,{align},40,40,{margin},1\n"
+    "-1,0,0,0,100,100,0,0,{border},{outline_w:g},{shadow:g},{align},40,40,{margin},1\n"
     """\
 
 [Events]
@@ -119,6 +127,11 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     raw = _fill_title_tokens(str(title), index, ctx.pipeline_name)
     # Accept both literal "\n" and real newlines; ASS uses "\N" for a line break.
     lines = [ln.strip() for ln in raw.replace("\\n", "\n").splitlines() if ln.strip()]
+    border, outline = _title_border(params)
+    if border == 3:  # opaque box: widen it horizontally with hard spaces
+        hpad = int(params.get("title_box_pad", _DEFAULT_TITLE_BOX_HPAD))
+        pad = "\\h" * max(hpad, 0)
+        lines = [f"{pad}{ln}{pad}" for ln in lines]
     text = _fade_tag(params, index) + r"\N".join(lines)
     start, end = _title_window(params)
 
@@ -127,7 +140,6 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     if isinstance(color, list):  # per-clip colour by position, like title_fade
         color = color[index] if index < len(color) else None
     primary = _ass_color(color)
-    border, outline = _title_border(params)
     path.write_text(
         _ASS_TEMPLATE.format(
             w=width,
@@ -142,9 +154,31 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
             align=_title_align(params),
             border=border,
             outline=outline,
+            outline_w=_title_outline_width(params),
+            shadow=_title_shadow_depth(params),
         )
     )
     return path
+
+
+def _title_outline_width(params: dict[str, Any]) -> float:
+    """Contour (letter outline) thickness in px. Visible with a plain outline
+    (``title_box: false``); with a box it widens the box padding instead."""
+    return float(params.get("title_outline", _DEFAULT_TITLE_OUTLINE))
+
+
+def _title_shadow_depth(params: dict[str, Any]) -> float:
+    """Drop-shadow depth in px behind the title (BackColour = translucent black).
+
+    ``title_shadow`` accepts ``true`` (a visible shadow), ``false`` (none), or a
+    number for a custom offset. Absent keeps the historical subtle 1px shadow.
+    """
+    shadow = params.get("title_shadow")
+    if shadow is None:
+        return 1
+    if isinstance(shadow, bool):
+        return _TITLE_SHADOW_ON if shadow else 0
+    return float(shadow)
 
 
 # ASS numpad alignment: centre column is 8 (top), 5 (middle), 2 (bottom).
@@ -355,11 +389,12 @@ def _render(
     fps = int(params.get("fps", 30))
     # Strip the source's own baked-in letterbox bars first (default on) so a
     # letterboxed source fills the frame instead of carrying its bars into the
-    # result. Needed for `cover` (else bars leak into the crop) and for
-    # `bg: blur` (else the sharp foreground keeps its bars over the blur).
+    # result. Needed for `cover` (else bars leak into the crop) and whenever a
+    # `bg` fill is set: with `blur` the sharp foreground would keep its bars over
+    # the blur, and with a colour the bars show as a black band inside the fill.
     # Detected with FFmpeg's cropdetect — no extra dependency.
     fit = str(params.get("fit", "contain")).lower()
-    wants_fill = fit == "cover" or str(params.get("bg", "")).lower() == "blur"
+    wants_fill = fit == "cover" or bool(params.get("bg"))
     source_crop = None
     if wants_fill and params.get("trim_bars", True):
         source_crop = ffmpeg.detect_content_crop(media)
