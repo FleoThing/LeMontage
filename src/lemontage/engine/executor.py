@@ -239,7 +239,9 @@ def _gather_channels(channels: list[str], ctx: RunContext) -> list[dict[str, Any
     merged: list[dict[str, Any]] = []
     for channel in channels:
         chan_items = sorted(ctx.channels.get(channel, []), key=lambda it: it.get("index", 0))
-        merged.extend(chan_items)
+        # Tag each item with its source channel so an aggregator can tell where
+        # one channel ends and the next begins (e.g. transitions only at joins).
+        merged.extend({**item, "_channel": channel} for item in chan_items)
     return [{**item, "index": i} for i, item in enumerate(merged)]
 
 

@@ -162,6 +162,29 @@ def test_concat_channel_list_reports_unknown_entry():
     assert any("ghost" in e and "unknown channel" in e for e in errors)
 
 
+def test_concat_transitions_at_boundaries_accepted():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {
+            "concat": {
+                "from": ["viral", "montage"],
+                "transitions": "fade",
+                "transitions_at": "boundaries",
+            }
+        },
+    ]
+    assert validate_doc(d) == []
+
+
+def test_concat_transitions_at_invalid_value_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [{"concat": {"from": "clip_channel", "transitions_at": "sometimes"}}]
+    errors = validate_doc(d)
+    assert any("transitions_at" in e for e in errors)
+
+
 def test_mapped_block_rejects_channel_list():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [

@@ -174,6 +174,9 @@ def _check_block_params(
 
     if block == "concat":
         _check_concat_transitions(params.get("transitions"), label, errors)
+        scope = params.get("transitions_at")
+        if scope is not None and scope not in ("all", "boundaries"):
+            errors.append(f"{label}: concat.transitions_at must be 'all' or 'boundaries'")
 
     emit = params.get("emit")
     if emit is not None:

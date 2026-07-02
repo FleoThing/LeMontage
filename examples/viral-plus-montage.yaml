@@ -41,12 +41,14 @@ steps:
 
   # --- Merge both channels into one reel ------------------------------------
   # `from` is a LIST here: the viral clip plays first, then the montage, joined
-  # in listed order. With N total clips there are N-1 gaps; `transitions: fade`
-  # crossfades every gap (including the viral -> montage boundary).
+  # in listed order. `transitions_at: boundaries` puts a single crossfade at the
+  # viral -> montage join only; the cuts within the montage stay hard cuts.
+  # (Use `transitions_at: all`, the default, to crossfade every gap instead.)
   - id: reel
     concat:
       from: [viral, montage]
       transitions: fade
+      transitions_at: boundaries
       output: "./output/{{ name }}.mp4"
 
 output:

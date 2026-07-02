@@ -383,6 +383,79 @@ def test_resolve_transitions_single_clip_raises():
         _resolve_transitions({"transitions": "fade"}, 1)
 
 
+# --- transitions_at: boundaries (channel-merge joins only) ------------------
+
+
+def test_boundary_gaps_detects_channel_change():
+    from lemontage.engine.blocks.concat import _boundary_gaps
+
+    ordered = [
+        {"_channel": "viral"},
+        {"_channel": "montage"},
+        {"_channel": "montage"},
+    ]
+    assert _boundary_gaps(ordered) == [0]  # only the viral->montage join
+
+
+def test_boundary_gaps_none_for_single_channel():
+    from lemontage.engine.blocks.concat import _boundary_gaps
+
+    assert _boundary_gaps([{"_channel": "ch"}, {"_channel": "ch"}]) == []
+    assert _boundary_gaps([{}, {}]) == []  # untagged items -> no boundaries
+
+
+def test_resolve_transitions_boundaries_only_at_join():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    # 4 clips (viral x1, montage x3) -> 3 gaps; boundary only at gap 0.
+    names = _resolve_transitions(
+        {"transitions": "fade", "transitions_at": "boundaries"}, 4, boundary_gaps=[0]
+    )
+    assert names == ["fade", "none", "none"]
+
+
+def test_resolve_transitions_boundaries_list_per_join():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    # 3 channels -> 2 joins (gaps 0 and 3); one transition each.
+    names = _resolve_transitions(
+        {"transitions": ["fade", "wipeleft"], "transitions_at": "boundaries"},
+        5,
+        boundary_gaps=[0, 3],
+    )
+    assert names == ["fade", "none", "none", "wipeleft"]
+
+
+def test_resolve_transitions_boundaries_wrong_count_raises():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    with pytest.raises(ValueError, match="one transition per channel join"):
+        _resolve_transitions(
+            {"transitions": ["fade", "wipeleft"], "transitions_at": "boundaries"},
+            4,
+            boundary_gaps=[0],
+        )
+
+
+def test_resolve_transitions_boundaries_single_channel_is_plain():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    # No channel boundary -> all hard cuts -> plain concat (None).
+    assert (
+        _resolve_transitions(
+            {"transitions": "fade", "transitions_at": "boundaries"}, 3, boundary_gaps=[]
+        )
+        is None
+    )
+
+
+def test_resolve_transitions_bad_scope_raises():
+    from lemontage.engine.blocks.concat import _resolve_transitions
+
+    with pytest.raises(ValueError, match="transitions_at"):
+        _resolve_transitions({"transitions": "fade", "transitions_at": "sometimes"}, 2)
+
+
 def test_concat_with_transitions_builds_xfade_chain(tmp_path, monkeypatch):
     from lemontage.engine import ffmpeg as ff
     from lemontage.engine.blocks.concat import _concat_with_transitions
@@ -446,6 +519,31 @@ def test_concat_block_routes_to_transitions(tmp_path, monkeypatch):
         "concat",
     )
     assert "-filter_complex" in calls["args"]  # took the xfade path, not the demuxer
+
+
+def test_concat_boundaries_transition_only_at_channel_join(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import ConcatBlock
+
+    monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    calls = {}
+    monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
+
+    # viral x1 then montage x3, tagged as the executor would after merging channels.
+    items = [{"index": 0, "file": str(tmp_path / "v0.mp4"), "_channel": "viral"}]
+    items += [
+        {"index": i, "file": str(tmp_path / f"m{i}.mp4"), "_channel": "montage"}
+        for i in range(1, 4)
+    ]
+    ConcatBlock().execute_channel(
+        {"transitions": "fade", "transitions_at": "boundaries", "output": str(tmp_path / "r.mp4")},
+        items,
+        ctx(tmp_path),
+        "concat",
+    )
+    graph = calls["args"][calls["args"].index("-filter_complex") + 1]
+    assert graph.count("xfade=transition=fade") == 1  # one crossfade, at the join
+    assert graph.count("concat=n=2") == 2  # the two within-montage gaps stay hard cuts
 
 
 def test_export_renders_and_lists_file(tmp_path, monkeypatch):

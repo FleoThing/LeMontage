@@ -384,6 +384,12 @@ unlike mapped consumers it receives the whole channel at once. Place it after
 - concat:
     from: [viral, montage]
     transitions: fade
+
+# ...with a single crossfade at the viral -> montage join only
+- concat:
+    from: [viral, montage]
+    transitions: fade
+    transitions_at: boundaries
 ```
 
 `from` may be a **list of channels**: they are joined in the order listed, and
@@ -397,7 +403,8 @@ list here; mapped blocks (`cut`/`captions`/`export`) read a single channel.
 |---|---|---|---|
 | `from` | channel \| list | — | Channel, or list of channels merged in order, whose clips are concatenated (required). |
 | `output` | path | `<name>-reel.mp4` | Output path; supports `{{ name }}`. |
-| `transitions` | string \| list | — | Play a transition between clips. A single name applies to every gap; a list gives one per gap (length must be **clips − 1**). Omit for a plain cut. |
+| `transitions` | string \| list | — | Play a transition between clips. A single name applies to the targeted gaps; a list gives one per gap. Omit for a plain cut. |
+| `transitions_at` | string | `all` | Where transitions apply: `all` (every gap; a `transitions` list must be **clips − 1** long) or `boundaries` (only at channel-merge joins; a list must be **channels − 1** long, and within-channel gaps stay hard cuts). |
 | `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
 
 **Transitions:** `fade`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`,
