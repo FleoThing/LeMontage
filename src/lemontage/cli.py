@@ -1,4 +1,4 @@
-"""LeMontage command-line interface: ``run``, ``validate`` and ``init``."""
+"""LeMontage command-line interface: ``run``, ``validate``, ``init`` and ``completion``."""
 
 from __future__ import annotations
 
@@ -47,7 +47,8 @@ output:
 """
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Shared by main() and the completion generator."""
     parser = argparse.ArgumentParser(prog="lemontage", description=__doc__)
     parser.add_argument("--version", action="version", version=f"lemontage {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -74,6 +75,16 @@ def main(argv: list[str] | None = None) -> int:
     p_init.add_argument("file", nargs="?", default="pipeline.yaml", help="output path")
     p_init.add_argument("--force", action="store_true", help="overwrite if the file exists")
 
+    p_completion = sub.add_parser(
+        "completion", help="print a shell completion script (bash, zsh or fish)"
+    )
+    p_completion.add_argument("shell", choices=("bash", "zsh", "fish"), help="target shell")
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "validate":
@@ -82,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_init(args.file, args.force)
     if args.command == "run":
         return _cmd_run(args.file, args.var, args.clean)
+    if args.command == "completion":
+        return _cmd_completion(args.shell)
     parser.print_help()
     return 1
 
@@ -94,6 +107,13 @@ def _cmd_validate(file: str) -> int:
             print(f"  - {err}", file=sys.stderr)
         return 1
     print(f"✓ {file}: valid")
+    return 0
+
+
+def _cmd_completion(shell: str) -> int:
+    from .completion import completion_script
+
+    print(completion_script(shell, build_parser()))
     return 0
 
 
@@ -153,4 +173,4 @@ def _parse_var_overrides(var_args: list[str]) -> dict[str, str]:
 
 
 # Re-exported so tests can build docs without importing the file path machinery.
-__all__ = ["main", "validate_doc", "STARTER_PIPELINE"]
+__all__ = ["main", "build_parser", "validate_doc", "STARTER_PIPELINE"]

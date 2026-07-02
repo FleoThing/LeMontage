@@ -9,6 +9,7 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `lemontage completion <shell>` command: bash, zsh and fish completion scripts.
 - `concat` transitions: crossfade / wipe / slide between clips via `transitions` and `duration`.
 - `reverse` built-in block: play a clip backwards (video + audio).
 - `speed` built-in block: slow-motion / fast-forward by a playback factor.
