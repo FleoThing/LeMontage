@@ -1,5 +1,6 @@
 """Tests for the LeMontage CLI."""
 
+import pytest
 import yaml
 
 from lemontage.cli import STARTER_PIPELINE, main
@@ -63,6 +64,20 @@ def test_run_surfaces_engine_errors(tmp_path):
     target = tmp_path / "p.yaml"
     target.write_text(pipeline, encoding="utf-8")
     assert main(["run", str(target)]) == 1
+
+
+def test_run_rejects_malformed_var(tmp_path, capsys):
+    """A --var without '=' is reported and aborts the run (before the engine)."""
+    target = tmp_path / "p.yaml"
+    target.write_text(STARTER_PIPELINE, encoding="utf-8")
+    assert main(["run", str(target), "--var", "novalue"]) == 1
+    assert "KEY=VALUE" in capsys.readouterr().err
+
+
+def test_main_without_subcommand_errors():
+    # The subcommand is required, so argparse exits rather than falling through.
+    with pytest.raises(SystemExit):
+        main([])
 
 
 def test_run_executes_pipeline(tmp_path, monkeypatch):

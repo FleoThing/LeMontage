@@ -91,6 +91,44 @@ def test_windowed_clips_drops_short_spans():
     assert clips == [(10.0, 40.0)]
 
 
+# --- detect_clips scene_change ---------------------------------------------
+
+
+def test_spans_from_scene_cuts_builds_boundaries(monkeypatch):
+    from lemontage.engine.blocks import detect_clips
+
+    monkeypatch.setattr(
+        detect_clips.ffmpeg,
+        "run_capture",
+        lambda args: "pts_time:2.0 showinfo pts_time:5.0 showinfo",
+    )
+    spans = detect_clips._spans_from_scene_cuts("x.mp4", 8.0)
+    assert spans == [(0.0, 2.0), (2.0, 5.0), (5.0, 8.0)]
+
+
+def test_detect_clips_scene_change_dispatch(tmp_path, monkeypatch):
+    from lemontage.engine.blocks import detect_clips
+
+    monkeypatch.setattr(detect_clips.ffmpeg, "probe_duration", lambda _m: 60.0)
+    monkeypatch.setattr(
+        detect_clips.ffmpeg, "run_capture", lambda args: "pts_time:20.0 pts_time:40.0"
+    )
+    result = detect_clips.DetectClipsBlock().execute(
+        {"method": "scene_change", "min_duration": "15s", "max_duration": "60s"},
+        ctx(tmp_path),
+        "d",
+    )
+    assert result.outputs["count"] == 3  # three ~20s spans between the two cuts
+
+
+def test_detect_clips_unknown_method_raises(tmp_path, monkeypatch):
+    from lemontage.engine.blocks import detect_clips
+
+    monkeypatch.setattr(detect_clips.ffmpeg, "probe_duration", lambda _m: 60.0)
+    with pytest.raises(ValueError, match="unsupported method"):
+        detect_clips.DetectClipsBlock().execute({"method": "engagement"}, ctx(tmp_path), "d")
+
+
 # --- detect_clips loudness auto-framing ------------------------------------
 
 
@@ -428,6 +466,14 @@ def test_concat_with_transitions_duration_too_long_raises(tmp_path, monkeypatch)
     files = [str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")]
     with pytest.raises(ValueError, match="shorter than both clips"):
         _concat_with_transitions(files, ["fade"], 2.0, tmp_path / "reel.mp4")
+
+
+def test_concat_with_transitions_nonpositive_duration_raises(tmp_path):
+    from lemontage.engine.blocks.concat import _concat_with_transitions
+
+    files = [str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")]
+    with pytest.raises(ValueError, match="must be > 0"):
+        _concat_with_transitions(files, ["fade"], 0.0, tmp_path / "reel.mp4")
 
 
 def test_concat_block_routes_to_transitions(tmp_path, monkeypatch):
