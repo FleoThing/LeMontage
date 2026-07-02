@@ -1,0 +1,25 @@
+lemontage: "1.0"
+name: subtitles
+description: "Transcribe a video and write a subtitle (.srt) sidecar instead of burning captions into the frame"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Transcribe the audio to timed text
+  - id: transcript
+    stt:
+      model: base
+      lang: auto
+
+  # 2. Write an .srt from the transcript. `burn: false` produces a sidecar
+  #    subtitle file rather than compositing the captions onto the video.
+  - id: subs
+    captions:
+      words: "{{ steps.transcript.words }}"
+      burn: false
+    requires: transcript.success
+
+output:
+  dir: ./output
