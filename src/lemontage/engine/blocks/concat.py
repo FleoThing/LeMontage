@@ -53,7 +53,13 @@ class ConcatBlock(Block):
         else:
             duration = parse_seconds(params.get("duration", _DEFAULT_TRANSITION_DURATION))
             _concat_with_transitions(files, transitions, duration, out)
-        return BlockResult(outputs={"file": str(out), "parts": files})
+        # Also expose the reel as a single-item channel: a step with `emit:` can
+        # hand its finished clip to a parent concat (nested sub-pipelines).
+        reel = str(out)
+        return BlockResult(
+            outputs={"file": reel, "parts": files},
+            channel_items=[{"index": 0, "file": reel, "clip": reel}],
+        )
 
 
 def _output_path(params: dict[str, Any], ctx: RunContext) -> Path:

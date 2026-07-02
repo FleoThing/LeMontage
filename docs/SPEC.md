@@ -392,6 +392,21 @@ unlike mapped consumers it receives the whole channel at once. Place it after
     transitions_at: boundaries
 ```
 
+**Nesting (sub-pipelines).** A `concat` may itself `emit:` its reel as a
+single-item channel, so a parent `concat` can join it with other reels. This
+lets each branch be an independent sub-pipeline that concatenates on its own —
+with its own transitions — into one finished clip; the final `concat` then joins
+those clips (with, or without, a transition between them):
+
+```yaml
+# Branch A: top moments -> one reel (its own transitions), emitted as `top10`
+- concat: { from: top_clips, transitions: fade, emit: top10 }
+# Branch B: a montage -> one reel (different transitions), emitted as `montage`
+- concat: { from: mtg_clips, transitions: wipeleft, emit: montage }
+# Join the two finished clips, one crossfade between them
+- concat: { from: [top10, montage], transitions: fade }
+```
+
 `from` may be a **list of channels**: they are joined in the order listed, and
 within each channel the existing clip order is kept. The clips are re-indexed
 sequentially, so with `[viral, montage]` the viral clips play first and the
@@ -505,6 +520,11 @@ channels — `from: [viral, montage]` — joining them in listed order into one
 output. This is how independent branches (e.g. the single most viral moment plus
 a separate montage) become a single reel. Mapped consumers still read exactly
 one channel.
+
+**Sub-pipelines.** Because `concat` can also `emit:` its reel as a one-item
+channel, each branch can be a self-contained sub-pipeline — cut, caption, export
+and concat on its own — that produces one finished clip; a parent `concat` then
+joins those clips. Branches with no dependency between them run concurrently.
 
 ---
 

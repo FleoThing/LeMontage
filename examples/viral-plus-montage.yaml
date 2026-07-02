@@ -1,54 +1,58 @@
 lemontage: "1.0"
 name: viral-plus-montage
-description: "Open on the single most viral moment, then cut to a montage — merged into one reel with a crossfade at the join"
+description: "Two independent sub-pipelines — a top-moments reel and a scene-change montage, each concatenated on its own with its own transitions — then joined into one video with a crossfade between the two finished clips"
 
 input:
   type: video
   source: ./video-example.mp4
 
 steps:
-  # --- Branch A: the single most viral moment (loudest window) --------------
-  - id: viral-clips
+  # === Sub-pipeline A: the top moments -> ONE finished clip =================
+  # Detect the loudest moments, cut + export each, then concat them into a
+  # single reel (with A's own transition), emitted as the channel `top10`.
+  - id: top-detect
     detect_clips:
       method: loudness
-      max_clips: 1
-      min_duration: 6s
-      max_duration: 15s
-      emit: viral
-
+      max_clips: 10
+      min_duration: 3s
+      max_duration: 8s
+      emit: top_clips
   - cut:
-      from: viral
-
+      from: top_clips
   - export:
-      from: viral
-      format: vertical
+      from: top_clips
+  - id: top-reel
+    concat:
+      from: top_clips
+      transitions: fade
+      emit: top10          # A's finished clip, exposed as a channel
 
-  # --- Branch B: a montage of scene-change cuts -----------------------------
-  - id: montage-clips
+  # === Sub-pipeline B: a scene-change montage -> ONE finished clip ==========
+  # A different logic (and a different transition), emitted as `montage`.
+  - id: mtg-detect
     detect_clips:
       method: scene_change
       max_clips: 6
       min_duration: 2s
       max_duration: 5s
-      emit: montage
-
+      emit: mtg_clips
   - cut:
-      from: montage
-
+      from: mtg_clips
   - export:
-      from: montage
-      format: vertical
-
-  # --- Merge both channels into one reel ------------------------------------
-  # `from` is a LIST here: the viral clip plays first, then the montage, joined
-  # in listed order. `transitions_at: boundaries` puts a single crossfade at the
-  # viral -> montage join only; the cuts within the montage stay hard cuts.
-  # (Use `transitions_at: all`, the default, to crossfade every gap instead.)
-  - id: reel
+      from: mtg_clips
+  - id: mtg-reel
     concat:
-      from: [viral, montage]
+      from: mtg_clips
+      transitions: wipeleft
+      emit: montage        # B's finished clip, exposed as a channel
+
+  # === Join the two finished clips, with a transition between them ==========
+  # The final concat sees just two items (the two reels); a single crossfade
+  # plays at the A -> B join. Drop `transitions` here for a hard cut instead.
+  - id: final
+    concat:
+      from: [top10, montage]
       transitions: fade
-      transitions_at: boundaries
       output: "./output/{{ name }}.mp4"
 
 output:

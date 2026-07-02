@@ -546,6 +546,23 @@ def test_concat_boundaries_transition_only_at_channel_join(tmp_path, monkeypatch
     assert graph.count("concat=n=2") == 2  # the two within-montage gaps stay hard cuts
 
 
+def test_concat_emits_reel_as_single_item_channel(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import ConcatBlock
+
+    monkeypatch.setattr(ff, "run", lambda args: None)
+    items = [
+        {"index": 0, "file": str(tmp_path / "a.mp4")},
+        {"index": 1, "file": str(tmp_path / "b.mp4")},
+    ]
+    result = ConcatBlock().execute_channel(
+        {"output": str(tmp_path / "reel.mp4")}, items, ctx(tmp_path), "c"
+    )
+    reel = str(tmp_path / "reel.mp4")
+    # The finished reel is exposed as one channel item so a parent concat can join it.
+    assert result.channel_items == [{"index": 0, "file": reel, "clip": reel}]
+
+
 def test_export_renders_and_lists_file(tmp_path, monkeypatch):
     def fake_run(args):
         # last arg is the output path; create it so the result is realistic.

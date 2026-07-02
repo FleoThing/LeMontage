@@ -220,6 +220,10 @@ def _execute(node: Node, block: Block, params: dict[str, Any], ctx: RunContext) 
         items = _gather_channels(node.consumes_list, ctx)
         result = block.execute_channel(params, items, ctx, node.step_id)
         ctx.step_outputs[node.step_id] = result.outputs
+        # An aggregator may itself `emit:` its result as a channel (a finished
+        # reel as one item), so a parent concat can join it with other reels.
+        if node.emits and result.channel_items is not None:
+            ctx.channels[node.emits] = result.channel_items
     else:
         result = block.execute(params, ctx, node.step_id)
         ctx.step_outputs[node.step_id] = result.outputs
