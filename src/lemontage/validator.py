@@ -212,10 +212,35 @@ def _check_channel_refs(doc: dict, errors: list[str], emitted: set[str]) -> None
         block_keys = [k for k in step if k not in spec.COMMON_STEP_FIELDS]
         if len(block_keys) != 1:
             continue
-        params = step.get(block_keys[0])
+        block = block_keys[0]
+        params = step.get(block)
         if not isinstance(params, dict):
             continue
-        channel = params.get("from")
-        if isinstance(channel, str) and channel not in emitted:
-            label = f"step '{step['id']}'" if "id" in step else f"step #{index + 1}"
-            errors.append(f"{label}: 'from: {channel}' references an unknown channel")
+        label = f"step '{step['id']}'" if "id" in step else f"step #{index + 1}"
+        _check_from(params.get("from"), block, label, errors, emitted)
+
+
+def _check_from(
+    channel: object, block: str, label: str, errors: list[str], emitted: set[str]
+) -> None:
+    """Validate a `from:` — a single channel name, or a list for aggregators."""
+    if channel is None:
+        return
+    if isinstance(channel, str):
+        names = [channel]
+    elif isinstance(channel, list):
+        # Only channel aggregators may merge several channels; a mapped block
+        # (cut/captions/export) reads exactly one.
+        if block not in spec.CHANNEL_MERGERS:
+            errors.append(f"{label}: block '{block}' does not support a list of channels in 'from'")
+            return
+        names = channel
+    else:
+        errors.append(f"{label}: 'from' must be a channel name or a list of channel names")
+        return
+
+    for name in names:
+        if not isinstance(name, str):
+            errors.append(f"{label}: 'from' entries must be channel names (strings)")
+        elif name not in emitted:
+            errors.append(f"{label}: 'from: {name}' references an unknown channel")

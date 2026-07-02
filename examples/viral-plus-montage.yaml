@@ -1,0 +1,53 @@
+lemontage: "1.0"
+name: viral-plus-montage
+description: "Open on the single most viral moment, then cut to a montage — merged into one reel with a crossfade at the join"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # --- Branch A: the single most viral moment (loudest window) --------------
+  - id: viral-clips
+    detect_clips:
+      method: loudness
+      max_clips: 1
+      min_duration: 6s
+      max_duration: 15s
+      emit: viral
+
+  - cut:
+      from: viral
+
+  - export:
+      from: viral
+      format: vertical
+
+  # --- Branch B: a montage of scene-change cuts -----------------------------
+  - id: montage-clips
+    detect_clips:
+      method: scene_change
+      max_clips: 6
+      min_duration: 2s
+      max_duration: 5s
+      emit: montage
+
+  - cut:
+      from: montage
+
+  - export:
+      from: montage
+      format: vertical
+
+  # --- Merge both channels into one reel ------------------------------------
+  # `from` is a LIST here: the viral clip plays first, then the montage, joined
+  # in listed order. With N total clips there are N-1 gaps; `transitions: fade`
+  # crossfades every gap (including the viral -> montage boundary).
+  - id: reel
+    concat:
+      from: [viral, montage]
+      transitions: fade
+      output: "./output/{{ name }}.mp4"
+
+output:
+  dir: ./output

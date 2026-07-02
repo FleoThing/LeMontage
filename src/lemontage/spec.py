@@ -20,6 +20,10 @@ BUILTIN_BLOCKS = frozenset(
     {"stt", "detect_clips", "cut", "captions", "export", "concat", "speed", "reverse"}
 )
 
+# Channel aggregators that may merge several channels via a list-valued `from`
+# (e.g. `concat: {from: [viral, montage]}`). Mapped blocks read a single channel.
+CHANNEL_MERGERS = frozenset({"concat"})
+
 # Transitions the `concat` block can play between clips (a curated subset of
 # FFmpeg's xfade set), plus "none" for an explicit hard cut at a single gap.
 CONCAT_TRANSITIONS = frozenset(

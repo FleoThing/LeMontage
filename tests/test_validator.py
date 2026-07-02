@@ -142,6 +142,37 @@ def test_unknown_channel_reference_rejected():
     assert any("unknown channel" in e for e in errors)
 
 
+def test_concat_accepts_channel_list():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {"concat": {"from": ["viral", "montage"]}},
+    ]
+    assert validate_doc(d) == []
+
+
+def test_concat_channel_list_reports_unknown_entry():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"concat": {"from": ["viral", "ghost"]}},
+    ]
+    errors = validate_doc(d)
+    assert any("ghost" in e and "unknown channel" in e for e in errors)
+
+
+def test_mapped_block_rejects_channel_list():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {"cut": {"from": ["viral", "montage"]}},
+    ]
+    errors = validate_doc(d)
+    assert any("does not support a list of channels" in e for e in errors)
+
+
 def test_invalid_on_failure():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [{"stt": {}, "on_failure": "explode"}]
@@ -166,4 +197,12 @@ def test_example_pipeline_is_valid():
     from pathlib import Path
 
     example = Path(__file__).resolve().parents[1] / "examples" / "podcast-to-clips.yaml"
+    assert validate_file(example) == []
+
+
+def test_multi_channel_example_is_valid():
+    """The channel-merge example (concat over a list of channels) must validate."""
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[1] / "examples" / "viral-plus-montage.yaml"
     assert validate_file(example) == []

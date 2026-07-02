@@ -9,6 +9,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `concat` can merge several channels: `from: [viral, montage]` joins channels
+  in listed order into one reel (with a transition available at the boundary).
 - `lemontage completion <shell>` command: bash, zsh and fish completion scripts.
 - `concat` transitions: crossfade / wipe / slide between clips via `transitions` and `duration`.
 - `reverse` built-in block: play a clip backwards (video + audio).

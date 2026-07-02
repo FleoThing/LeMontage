@@ -379,11 +379,23 @@ unlike mapped consumers it receives the whole channel at once. Place it after
 - concat:
     from: clip_channel
     transitions: [fade, wipeleft, slideright, none]
+
+# merge several channels into one reel (viral moment, then a montage)
+- concat:
+    from: [viral, montage]
+    transitions: fade
 ```
+
+`from` may be a **list of channels**: they are joined in the order listed, and
+within each channel the existing clip order is kept. The clips are re-indexed
+sequentially, so with `[viral, montage]` the viral clips play first and the
+montage follows — with a transition available at the boundary like any other
+gap. Empty channels contribute nothing. Only aggregators (`concat`) accept a
+list here; mapped blocks (`cut`/`captions`/`export`) read a single channel.
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `from` | channel | — | Channel whose clips are concatenated (required). |
+| `from` | channel \| list | — | Channel, or list of channels merged in order, whose clips are concatenated (required). |
 | `output` | path | `<name>-reel.mp4` | Output path; supports `{{ name }}`. |
 | `transitions` | string \| list | — | Play a transition between clips. A single name applies to every gap; a list gives one per gap (length must be **clips − 1**). Omit for a plain cut. |
 | `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
@@ -480,6 +492,12 @@ steps:
 
 This is what lets one source video fan out into N captioned, exported clips
 without writing a loop.
+
+**Merging channels.** An aggregator (`concat`) may consume a **list** of
+channels — `from: [viral, montage]` — joining them in listed order into one
+output. This is how independent branches (e.g. the single most viral moment plus
+a separate montage) become a single reel. Mapped consumers still read exactly
+one channel.
 
 ---
 

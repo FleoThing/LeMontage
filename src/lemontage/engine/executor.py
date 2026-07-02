@@ -216,8 +216,8 @@ def _run_node(node: Node, ctx: RunContext, cache: _Cache, report: Reporter) -> N
 def _execute(node: Node, block: Block, params: dict[str, Any], ctx: RunContext) -> None:
     if node.consumes and block.maps:
         _execute_mapped(node, block, params, ctx)
-    elif node.consumes:  # channel aggregator (e.g. concat): gets the whole channel
-        items = ctx.channels.get(node.consumes, [])
+    elif node.consumes_list:  # channel aggregator (e.g. concat): gets whole channel(s)
+        items = _gather_channels(node.consumes_list, ctx)
         result = block.execute_channel(params, items, ctx, node.step_id)
         ctx.step_outputs[node.step_id] = result.outputs
     else:
@@ -225,6 +225,22 @@ def _execute(node: Node, block: Block, params: dict[str, Any], ctx: RunContext) 
         ctx.step_outputs[node.step_id] = result.outputs
         if node.emits and result.channel_items is not None:
             ctx.channels[node.emits] = result.channel_items
+
+
+def _gather_channels(channels: list[str], ctx: RunContext) -> list[dict[str, Any]]:
+    """Merge one or more channels into a single ordered, re-indexed item list.
+
+    Channels are joined in the order listed in ``from``; within each channel the
+    existing ``index`` order is kept. Items are copied and re-indexed sequentially
+    so a downstream sort-by-index preserves this order (and the per-channel
+    ``index`` collisions — every channel starts at 0 — don't interleave clips).
+    Empty or absent channels simply contribute nothing.
+    """
+    merged: list[dict[str, Any]] = []
+    for channel in channels:
+        chan_items = sorted(ctx.channels.get(channel, []), key=lambda it: it.get("index", 0))
+        merged.extend(chan_items)
+    return [{**item, "index": i} for i, item in enumerate(merged)]
 
 
 def _execute_mapped(node: Node, block: Block, params: dict[str, Any], ctx: RunContext) -> None:

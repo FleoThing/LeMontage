@@ -220,6 +220,59 @@ def test_channel_aggregator_receives_all_items(patch_registry, tmp_path):
     assert result.cells[0].outputs["reel"]["count"] == 3
 
 
+class RecordingAggregator(Block):
+    """A concat-like aggregator that records the items it received."""
+
+    name = "concat"
+    maps = False
+
+    def __init__(self):
+        self.items = None
+
+    def execute(self, params, ctx, step_id):  # pragma: no cover - must aggregate
+        raise AssertionError("should aggregate, not run single")
+
+    def execute_channel(self, params, items, ctx, step_id):
+        self.items = items
+        return BlockResult(outputs={"count": len(items)})
+
+
+def test_merge_channels_orders_in_listed_order_and_reindexes(patch_registry, tmp_path):
+    patch_registry["detect_clips"] = Producer()
+    agg = RecordingAggregator()
+    patch_registry["concat"] = agg
+    doc = base_doc(
+        [
+            {"id": "va", "detect_clips": {"n": 1, "emit": "viral"}},
+            {"id": "mo", "detect_clips": {"n": 3, "emit": "montage"}},
+            {"id": "reel", "concat": {"from": ["viral", "montage"]}},
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+    assert result.cells[0].outputs["reel"]["count"] == 4
+    # viral (1 item) then montage (3 items); Producer sets start=i per channel.
+    assert [it["start"] for it in agg.items] == [0, 0, 1, 2]
+    # merged items are re-indexed sequentially so a sort-by-index keeps this order.
+    assert [it["index"] for it in agg.items] == [0, 1, 2, 3]
+
+
+def test_merge_skips_empty_channel(patch_registry, tmp_path):
+    patch_registry["detect_clips"] = Producer()
+    agg = RecordingAggregator()
+    patch_registry["concat"] = agg
+    doc = base_doc(
+        [
+            {"id": "va", "detect_clips": {"n": 0, "emit": "viral"}},
+            {"id": "mo", "detect_clips": {"n": 2, "emit": "montage"}},
+            {"id": "reel", "concat": {"from": ["viral", "montage"]}},
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+    assert result.cells[0].outputs["reel"]["count"] == 2  # empty 'viral' drops out
+
+
 def test_matrix_fans_out_runs(patch_registry, tmp_path):
     block = RecordingBlock("stt")
     patch_registry["stt"] = block
