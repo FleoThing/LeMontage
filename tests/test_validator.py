@@ -8,7 +8,7 @@ from lemontage.validator import validate_doc, validate_file
 
 VALID_PIPELINE = {
     "lemontage": "1.0",
-    "name": "podcast-to-clips",
+    "name": "clips",
     "input": {"type": "video", "source": "./video-example.mp4"},
     "steps": [
         {"id": "transcript", "stt": {"model": "base", "lang": "fr"}},
@@ -219,7 +219,7 @@ def test_example_pipeline_is_valid():
     """The shipped example must validate."""
     from pathlib import Path
 
-    example = Path(__file__).resolve().parents[1] / "examples" / "podcast-to-clips.yaml"
+    example = Path(__file__).resolve().parents[1] / "examples" / "pipeline_clips.yaml"
     assert validate_file(example) == []
 
 
@@ -227,5 +227,5 @@ def test_multi_channel_example_is_valid():
     """The channel-merge example (concat over a list of channels) must validate."""
     from pathlib import Path
 
-    example = Path(__file__).resolve().parents[1] / "examples" / "viral-plus-montage.yaml"
+    example = Path(__file__).resolve().parents[1] / "examples" / "pipeline_merge.yaml"
     assert validate_file(example) == []

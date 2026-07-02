@@ -201,7 +201,7 @@ more accurate but slower and heavier to download (cached after first use):
 |---|---|---|---|
 | `tiny` | ~75 MB | fastest | quick tests |
 | `base` | ~140 MB | fast | default, decent |
-| `small` | ~460 MB | medium | good quality (used by the UFC example) |
+| `small` | ~460 MB | medium | good quality (used by the top3 example) |
 | `medium` | ~1.5 GB | slow | high accuracy |
 | `large` / `large-v3` | ~3 GB | slowest | best accuracy |
 
@@ -587,19 +587,19 @@ not implemented in v1 — using them is a validation error:
 
 ## 12. Full example
 
-A complete, valid v1 pipeline: long podcast → 5 captioned vertical clips.
+A complete, valid v1 pipeline: a long video → 5 captioned vertical clips.
 
 ```yaml
 lemontage: "1.0"
-name: podcast-to-clips
-description: "Turn a long podcast into short captioned clips"
+name: clips
+description: "Split a long video into short captioned clips"
 
 vars:
-  lang: fr
+  lang: auto
 
 input:
   type: video
-  source: ./episode.mp4
+  source: ./video.mp4
 
 steps:
   - id: transcript

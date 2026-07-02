@@ -263,7 +263,7 @@ def test_title_ass_none_without_title(tmp_path):
 def test_title_ass_writes_playres_and_lines(tmp_path):
     params = {
         "format": "vertical",
-        "title": "UFC Maison Blanche\nCyril Gane vs Pereira",
+        "title": "Line One\nLine Two",
         "title_size": 40,
     }
     path = _title_ass(params, ctx(tmp_path), "export-0-title")
@@ -271,7 +271,7 @@ def test_title_ass_writes_playres_and_lines(tmp_path):
     assert "PlayResX: 1080" in content and "PlayResY: 1920" in content
     assert "Anton,40," in content  # default font + size honoured
     # Two lines joined with the ASS line break.
-    assert r"UFC Maison Blanche\NCyril Gane vs Pereira" in content
+    assert r"Line One\NLine Two" in content
 
 
 def test_title_ass_accepts_literal_backslash_n(tmp_path):
