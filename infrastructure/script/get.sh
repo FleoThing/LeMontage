@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # LeMontage one-line installer (no clone needed):
-#   curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/get.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/FleoThing/LeMontage/main/infrastructure/script/get.sh | bash
 #
 # Installs pipx if needed, then installs LeMontage (with its media engine) as a
 # global CLI you can run from anywhere. Works on Linux and macOS.
