@@ -368,14 +368,78 @@ unlike mapped consumers it receives the whole channel at once. Place it after
 - concat:
     from: clip_channel
     output: "./output/{{ name }}-reel.mp4"
+
+# with a crossfade between every clip
+- concat:
+    from: clip_channel
+    transitions: fade
+    duration: 0.5s
+
+# a different transition per gap (N clips → N-1 gaps)
+- concat:
+    from: clip_channel
+    transitions: [fade, wipeleft, slideright, none]
 ```
 
 | Param | Type | Default | Description |
 |---|---|---|---|
 | `from` | channel | — | Channel whose clips are concatenated (required). |
 | `output` | path | `<name>-reel.mp4` | Output path; supports `{{ name }}`. |
+| `transitions` | string \| list | — | Play a transition between clips. A single name applies to every gap; a list gives one per gap (length must be **clips − 1**). Omit for a plain cut. |
+| `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
+
+**Transitions:** `fade`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`,
+`slideleft`, `slideright`, `slideup`, `slidedown`, and `none` (a hard cut for
+that gap). Any transition re-encodes the join (via FFmpeg's `xfade`/`acrossfade`);
+a plain concat without `transitions` is faster. Place `concat` after `export` so
+all clips share the same resolution and frame rate.
 
 **Outputs:** `file` (the joined video), `parts` (the source clips, in order).
+
+---
+
+### 6.8 `speed` — slow-motion / fast-forward
+
+Retimes a clip by a playback `factor`. Operates on the pipeline input, or maps
+over a channel of clips. Audio is retimed in step with the video.
+
+```yaml
+# half-speed slow-motion of every clip in a channel
+- speed:
+    from: clip_channel
+    factor: 0.5
+
+# 2x fast-forward of a single video
+- speed:
+    factor: 2
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `factor` | float | `1.0` | Playback multiplier: `>1` faster, `<1` slow-motion (must be `> 0`). |
+| `from` | channel | — | Channel of clips to map over. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
+### 6.9 `reverse` — play backwards
+
+Reverses video and audio. Operates on the pipeline input, or maps over a
+channel of clips. Intended for short clips (it buffers the stream in memory).
+
+```yaml
+- reverse:
+    from: clip_channel
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel | — | Channel of clips to map over. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
 ---
 

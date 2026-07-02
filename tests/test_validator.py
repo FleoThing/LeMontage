@@ -122,6 +122,19 @@ def test_reserved_tts_block_rejected():
     assert any("reserved" in e and "tts" in e for e in errors)
 
 
+def test_concat_valid_transitions_pass():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"concat": {"from": "clip_channel", "transitions": ["fade", "wipeleft"]}}]
+    assert validate_doc(d) == []
+
+
+def test_concat_unknown_transition_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"concat": {"from": "clip_channel", "transitions": "zoom"}}]
+    errors = validate_doc(d)
+    assert any("unknown transition" in e and "zoom" in e for e in errors)
+
+
 def test_unknown_channel_reference_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [{"cut": {"from": "ghost_channel"}}]
