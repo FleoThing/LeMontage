@@ -63,7 +63,7 @@ def _bash(commands: list[_Command]) -> str:
             body = (
                 f'if [[ "$cur" == -* ]]; then COMPREPLY=( $(compgen -W "{opts}" -- "$cur") ); '
                 "else COMPREPLY=( $(compgen -f -X '!*.yaml' -- \"$cur\") "
-                "$(compgen -f -X '!*.yml' -- \"$cur\") $(compgen -d -- \"$cur\") ); fi"
+                '$(compgen -f -X \'!*.yml\' -- "$cur") $(compgen -d -- "$cur") ); fi'
             )
         elif cmd.choices:
             words = " ".join(cmd.choices + cmd.options)
@@ -123,7 +123,8 @@ def _fish(commands: list[_Command]) -> str:
     lines = ["complete -c lemontage -f"]
     for cmd in commands:
         lines.append(
-            f"complete -c lemontage -n __fish_use_subcommand -a {cmd.name} -d 'lemontage {cmd.name}'"
+            f"complete -c lemontage -n __fish_use_subcommand -a {cmd.name} "
+            f"-d 'lemontage {cmd.name}'"
         )
         seen = f"__fish_seen_subcommand_from {cmd.name}"
         for opt in cmd.options:
@@ -136,7 +137,6 @@ def _fish(commands: list[_Command]) -> str:
             # only for *.yaml / *.yml pipeline files.
             for suffix in (".yaml", ".yml"):
                 lines.append(
-                    f"complete -c lemontage -n '{seen}' -k -a "
-                    f'"(__fish_complete_suffix {suffix})"'
+                    f"complete -c lemontage -n '{seen}' -k -a \"(__fish_complete_suffix {suffix})\""
                 )
     return "\n".join(lines) + "\n"
