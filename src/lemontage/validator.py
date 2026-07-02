@@ -172,12 +172,32 @@ def _check_block_params(
         if method in spec.RESERVED_DETECT_METHODS:
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
 
+    if block == "concat":
+        _check_concat_transitions(params.get("transitions"), label, errors)
+
     emit = params.get("emit")
     if emit is not None:
         if not isinstance(emit, str):
             errors.append(f"{label}: emit must be a channel name (string)")
         else:
             emitted.add(emit)
+
+
+def _check_concat_transitions(transitions: object, label: str, errors: list[str]) -> None:
+    """Validate concat's `transitions` names (its per-gap count is a runtime check)."""
+    if transitions is None:
+        return
+    if isinstance(transitions, str):
+        names = [transitions]
+    elif isinstance(transitions, list):
+        names = [t for t in transitions]
+    else:
+        errors.append(f"{label}: concat.transitions must be a string or a list of strings")
+        return
+    valid = ", ".join(sorted(spec.CONCAT_TRANSITIONS))
+    for name in names:
+        if not isinstance(name, str) or name not in spec.CONCAT_TRANSITIONS:
+            errors.append(f"{label}: unknown transition '{name}' (choose from: {valid})")
 
 
 def _check_channel_refs(doc: dict, errors: list[str], emitted: set[str]) -> None:
