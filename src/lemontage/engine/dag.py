@@ -28,7 +28,13 @@ class DagError(ValueError):
 
 @dataclass
 class Node:
-    """A single step, with its block name, parameters and wiring."""
+    """A single step, with its block name, parameters and wiring.
+
+    ``consumes`` names a single input channel (mapped blocks like ``cut`` always
+    consume exactly one). ``consumes_list`` is the full ordered list a step reads
+    — one entry for the common case, several when an aggregator merges channels
+    (``concat: {from: [a, b]}``). It is empty for a producer/single step.
+    """
 
     index: int
     step_id: str
@@ -37,6 +43,7 @@ class Node:
     common: dict[str, Any]
     emits: str | None = None
     consumes: str | None = None
+    consumes_list: list[str] = field(default_factory=list)
     deps: set[int] = field(default_factory=set)
 
 
@@ -51,6 +58,7 @@ def build_nodes(steps: list[dict[str, Any]]) -> list[Node]:
         step_id = step.get("id", block)
         emit = params.get("emit") if isinstance(params, dict) else None
         consume = params.get("from") if isinstance(params, dict) else None
+        consumes_list = _consumed_channels(consume)
         nodes.append(
             Node(
                 index=index,
@@ -59,10 +67,22 @@ def build_nodes(steps: list[dict[str, Any]]) -> list[Node]:
                 params=params if isinstance(params, dict) else {},
                 common=common,
                 emits=emit if isinstance(emit, str) else None,
-                consumes=consume if isinstance(consume, str) else None,
+                # `consumes` stays single-valued (used by the mapped path); the
+                # aggregator path reads the full `consumes_list`.
+                consumes=consumes_list[0] if len(consumes_list) == 1 else None,
+                consumes_list=consumes_list,
             )
         )
     return nodes
+
+
+def _consumed_channels(consume: Any) -> list[str]:
+    """Normalise a step's ``from`` (a string or a list of strings) to a list."""
+    if isinstance(consume, str):
+        return [consume]
+    if isinstance(consume, list):
+        return [c for c in consume if isinstance(c, str)]
+    return []
 
 
 def build_dag(steps: list[dict[str, Any]]) -> list[Node]:
@@ -88,19 +108,21 @@ def _add_template_edges(nodes: list[Node], by_id: dict[str, Node]) -> None:
 
 
 def _add_channel_edges(nodes: list[Node], emitters: dict[str, Node]) -> None:
-    # Consumer depends on the producer of its channel...
+    # Consumer depends on the producer of every channel it reads...
     for node in nodes:
-        if node.consumes:
-            producer = emitters.get(node.consumes)
+        for channel in node.consumes_list:
+            producer = emitters.get(channel)
             if producer is None:
-                raise DagError(f"step '{node.step_id}' consumes unknown channel '{node.consumes}'")
+                raise DagError(f"step '{node.step_id}' consumes unknown channel '{channel}'")
             node.deps.add(producer.index)
 
-    # ...and consumers of the same channel keep their listed order.
+    # ...and consumers of the same channel keep their listed order. A step that
+    # merges several channels joins each of their chains, so it is ordered after
+    # the last consumer of every channel it reads (e.g. concat after both exports).
     consumers: dict[str, list[Node]] = {}
     for node in sorted(nodes, key=lambda n: n.index):
-        if node.consumes:
-            consumers.setdefault(node.consumes, []).append(node)
+        for channel in node.consumes_list:
+            consumers.setdefault(channel, []).append(node)
     for chain in consumers.values():
         for prev, curr in zip(chain, chain[1:], strict=False):
             curr.deps.add(prev.index)

@@ -201,7 +201,7 @@ more accurate but slower and heavier to download (cached after first use):
 |---|---|---|---|
 | `tiny` | ~75 MB | fastest | quick tests |
 | `base` | ~140 MB | fast | default, decent |
-| `small` | ~460 MB | medium | good quality (used by the UFC example) |
+| `small` | ~460 MB | medium | good quality (used by the top3 example) |
 | `medium` | ~1.5 GB | slow | high accuracy |
 | `large` / `large-v3` | ~3 GB | slowest | best accuracy |
 
@@ -379,13 +379,47 @@ unlike mapped consumers it receives the whole channel at once. Place it after
 - concat:
     from: clip_channel
     transitions: [fade, wipeleft, slideright, none]
+
+# merge several channels into one reel (viral moment, then a montage)
+- concat:
+    from: [viral, montage]
+    transitions: fade
+
+# ...with a single crossfade at the viral -> montage join only
+- concat:
+    from: [viral, montage]
+    transitions: fade
+    transitions_at: boundaries
 ```
+
+**Nesting (sub-pipelines).** A `concat` may itself `emit:` its reel as a
+single-item channel, so a parent `concat` can join it with other reels. This
+lets each branch be an independent sub-pipeline that concatenates on its own —
+with its own transitions — into one finished clip; the final `concat` then joins
+those clips (with, or without, a transition between them):
+
+```yaml
+# Branch A: top moments -> one reel (its own transitions), emitted as `top10`
+- concat: { from: top_clips, transitions: fade, emit: top10 }
+# Branch B: a montage -> one reel (different transitions), emitted as `montage`
+- concat: { from: mtg_clips, transitions: wipeleft, emit: montage }
+# Join the two finished clips, one crossfade between them
+- concat: { from: [top10, montage], transitions: fade }
+```
+
+`from` may be a **list of channels**: they are joined in the order listed, and
+within each channel the existing clip order is kept. The clips are re-indexed
+sequentially, so with `[viral, montage]` the viral clips play first and the
+montage follows — with a transition available at the boundary like any other
+gap. Empty channels contribute nothing. Only aggregators (`concat`) accept a
+list here; mapped blocks (`cut`/`captions`/`export`) read a single channel.
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `from` | channel | — | Channel whose clips are concatenated (required). |
+| `from` | channel \| list | — | Channel, or list of channels merged in order, whose clips are concatenated (required). |
 | `output` | path | `<name>-reel.mp4` | Output path; supports `{{ name }}`. |
-| `transitions` | string \| list | — | Play a transition between clips. A single name applies to every gap; a list gives one per gap (length must be **clips − 1**). Omit for a plain cut. |
+| `transitions` | string \| list | — | Play a transition between clips. A single name applies to the targeted gaps; a list gives one per gap. Omit for a plain cut. |
+| `transitions_at` | string | `all` | Where transitions apply: `all` (every gap; a `transitions` list must be **clips − 1** long) or `boundaries` (only at channel-merge joins; a list must be **channels − 1** long, and within-channel gaps stay hard cuts). |
 | `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
 
 **Transitions:** `fade`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`,
@@ -481,6 +515,17 @@ steps:
 This is what lets one source video fan out into N captioned, exported clips
 without writing a loop.
 
+**Merging channels.** An aggregator (`concat`) may consume a **list** of
+channels — `from: [viral, montage]` — joining them in listed order into one
+output. This is how independent branches (e.g. the single most viral moment plus
+a separate montage) become a single reel. Mapped consumers still read exactly
+one channel.
+
+**Sub-pipelines.** Because `concat` can also `emit:` its reel as a one-item
+channel, each branch can be a self-contained sub-pipeline — cut, caption, export
+and concat on its own — that produces one finished clip; a parent `concat` then
+joins those clips. Branches with no dependency between them run concurrently.
+
 ---
 
 ## 9. Matrix
@@ -542,19 +587,19 @@ not implemented in v1 — using them is a validation error:
 
 ## 12. Full example
 
-A complete, valid v1 pipeline: long podcast → 5 captioned vertical clips.
+A complete, valid v1 pipeline: a long video → 5 captioned vertical clips.
 
 ```yaml
 lemontage: "1.0"
-name: podcast-to-clips
-description: "Turn a long podcast into short captioned clips"
+name: clips
+description: "Split a long video into short captioned clips"
 
 vars:
-  lang: fr
+  lang: auto
 
 input:
   type: video
-  source: ./episode.mp4
+  source: ./video.mp4
 
 steps:
   - id: transcript

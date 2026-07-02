@@ -55,7 +55,7 @@ lemontage validate pipeline.yaml
 Validate an example pipeline:
 
 ```bash
-lemontage validate examples/podcast-to-clips.yaml
+lemontage validate examples/pipeline_clips.yaml
 ```
 
 Run a pipeline after setting `input.source` to a real local video:

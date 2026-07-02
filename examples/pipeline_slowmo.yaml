@@ -1,20 +1,17 @@
 lemontage: "1.0"
-name: slow-motion-replay
-description: "Find the peak moment, slow it to half-speed for a dramatic replay, caption and export vertical"
-
-vars:
-  lang: fr
+name: slowmo
+description: "Find the peak moment and slow it to half-speed for a dramatic replay, captioned and vertical"
 
 input:
   type: video
   source: ./video-example.mp4
 
 steps:
-  # 1. Transcribe the commentary (used later for captions)
+  # 1. Transcribe the audio (used later for captions)
   - id: transcript
     stt:
       model: small
-      lang: "{{ vars.lang }}"
+      lang: auto
       vad_filter: true
     cache: true
 
@@ -27,14 +24,13 @@ steps:
       max_clips: 1
       emit: highlights
 
-  # 3. Cut the highlight out of the source
+  # 3. Cut the moment out of the source
   - cut:
       from: highlights
 
-  # 4. Slow it to half-speed for a dramatic slow-motion replay.
-  #    Mapped over the channel: each clip is retimed in place, so the captions
-  #    and export below operate on the slowed clip. factor < 1 = slow-motion,
-  #    factor > 1 = fast-forward (e.g. factor: 2 for a 2x speed-ramp).
+  # 4. Slow it to half-speed for a dramatic replay. Mapped over the channel, so
+  #    captions and export below run on the slowed clip. factor < 1 = slow-motion,
+  #    factor > 1 = fast-forward (e.g. factor: 2 for a 2x speed-up).
   - speed:
       from: highlights
       factor: 0.5
