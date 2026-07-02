@@ -21,6 +21,21 @@ may still introduce breaking changes, and those changes must be called out here.
 
 - Installation scripts moved under `infrastructure/script/`.
 - README reorganized around app description, tech stack and install/deploy options.
+- **Breaking:** a step's `output:` path must now resolve inside the pipeline's
+  output directory or the current working directory; absolute paths or `..`
+  traversal that escape both are rejected.
+
+### Security
+
+- Confine `export` and `concat` output paths to the allowed output tree,
+  preventing a shared pipeline from writing files to arbitrary locations.
+- Escape ASS override syntax (`{`, `}`, `\`) in caption text (from the
+  transcript) and export title text (from the pipeline), so neither can inject
+  libass render directives.
+- Escape single quotes and backslashes in concat-demuxer clip paths.
+- Bound `export` `resolution`, `fps` and `title_size`, plus `speed` `factor`,
+  to sane ranges to avoid absurd FFmpeg allocations.
+- Reject empty or dotted `--var` keys instead of silently dropping them.
 
 ## [0.1.4] - Current
 
