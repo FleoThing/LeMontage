@@ -440,7 +440,10 @@ def test_concat_block_routes_to_transitions(tmp_path, monkeypatch):
 
     items = [{"index": i, "file": str(tmp_path / f"c{i}.mp4")} for i in range(3)]
     ConcatBlock().execute_channel(
-        {"transitions": "fade", "output": str(tmp_path / "reel.mp4")}, items, ctx(tmp_path), "concat"
+        {"transitions": "fade", "output": str(tmp_path / "reel.mp4")},
+        items,
+        ctx(tmp_path),
+        "concat",
     )
     assert "-filter_complex" in calls["args"]  # took the xfade path, not the demuxer
 

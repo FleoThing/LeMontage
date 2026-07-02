@@ -14,8 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .. import ffmpeg
 from ...spec import CONCAT_TRANSITIONS
+from .. import ffmpeg
 from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult
