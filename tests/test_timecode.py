@@ -28,6 +28,16 @@ def test_parse_invalid_raises():
         parse_seconds("abc")
 
 
+def test_parse_timecode_too_many_parts_raises():
+    with pytest.raises(ValueError, match="invalid timecode"):
+        parse_seconds("01:02:03:04")
+
+
+def test_parse_non_time_type_raises():
+    with pytest.raises(ValueError, match="expected a time value"):
+        parse_seconds(["not", "a", "time"])
+
+
 def test_to_timecode():
     assert to_timecode(90.5) == "00:01:30.500"
     assert to_timecode(3661.0) == "01:01:01.000"

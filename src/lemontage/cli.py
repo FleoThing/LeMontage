@@ -168,7 +168,14 @@ def _parse_var_overrides(var_args: list[str]) -> dict[str, str]:
         if "=" not in raw:
             raise ValueError(f"--var expects KEY=VALUE, got '{raw}'")
         key, _, value = raw.partition("=")
-        overrides[key.strip()] = value
+        key = key.strip()
+        if not key:
+            raise ValueError(f"--var has an empty key: '{raw}'")
+        # `vars` is a flat mapping; a dotted key would create an entry no
+        # template reference ({{ vars.<key> }}) could ever resolve.
+        if "." in key:
+            raise ValueError(f"--var key '{key}' must not contain '.'")
+        overrides[key] = value
     return overrides
 
 
