@@ -332,6 +332,13 @@ def test_author_ass_position_and_size(tmp_path):
     assert ",3,24,24,24,1" in content  # alignment 3 = bottom-right
 
 
+def test_author_ass_centered_positions(tmp_path):
+    top = _author_ass({"author": "x", "author_position": "top-center"}, ctx(tmp_path), "a")
+    assert ",8,60,60,60,1" in top.read_text()  # alignment 8 = top-center
+    bottom = _author_ass({"author": "x", "author_position": "bottom-center"}, ctx(tmp_path), "b")
+    assert ",2,60,60,60,1" in bottom.read_text()  # alignment 2 = bottom-center
+
+
 def test_author_ass_unknown_position_raises(tmp_path):
     with pytest.raises(ValueError, match="author_position"):
         _author_ass({"author": "x", "author_position": "center"}, ctx(tmp_path), "a")

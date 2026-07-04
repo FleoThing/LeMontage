@@ -5,10 +5,10 @@ whole clip. It is rendered with libass (the static FFmpeg build ships no
 ``drawtext``), so it composes after the vertical scale+pad in the same way the
 ``captions`` block burns subtitles.
 
-An optional ``author`` draws a small persistent credit label in a corner —
-the source channel of the clip, or the editor's own handle. It defaults to the
-top-left corner because the Shorts/TikTok player UI covers the right edge and
-the bottom of the frame.
+An optional ``author`` draws a small persistent credit label — the source
+channel of the clip, or the editor's own handle. It defaults to the top-left
+corner because the Shorts/TikTok player UI covers the right edge and the
+bottom of the frame; centred positions are also available.
 """
 
 from __future__ import annotations
@@ -32,11 +32,13 @@ _DEFAULT_TITLE_MARGIN = 120  # distance from the top edge (into the letterbox ba
 _DEFAULT_AUTHOR_SIZE = 26
 _DEFAULT_AUTHOR_MARGIN = 60  # distance from the frame edges
 
-# ASS numpad alignments for the author label corners.
+# ASS numpad alignments for the author label positions.
 _AUTHOR_POSITIONS = {
     "top-left": 7,
+    "top-center": 8,
     "top-right": 9,
     "bottom-left": 1,
+    "bottom-center": 2,
     "bottom-right": 3,
 }
 
@@ -176,8 +178,11 @@ def _author_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int =
     ``author`` credits the clip's source channel — or the editor's own handle
     when the footage is theirs. Same token support as the title
     (``{{ part }}``, ``{{ index }}``, ``{{ name }}``). ``author_position``
-    picks a corner; the default ``top-left`` stays clear of the Shorts/TikTok
-    player UI, which covers the right edge and the bottom of the frame.
+    picks a corner or a centred spot; the default ``top-left`` stays clear of
+    the Shorts/TikTok player UI, which covers the right edge and the bottom of
+    the frame. ``top-center`` sits in the title band (mind ``title``) and
+    ``bottom-center`` in the captions band — bump ``author_margin`` if both
+    are in play.
     """
     author = params.get("author")
     if not author:
