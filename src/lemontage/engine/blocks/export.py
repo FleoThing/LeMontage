@@ -4,6 +4,11 @@ An optional ``title`` draws a persistent banner at the top of the frame for the
 whole clip. It is rendered with libass (the static FFmpeg build ships no
 ``drawtext``), so it composes after the vertical scale+pad in the same way the
 ``captions`` block burns subtitles.
+
+An optional ``author`` draws a small persistent credit label in a corner —
+the source channel of the clip, or the editor's own handle. It defaults to the
+top-left corner because the Shorts/TikTok player UI covers the right edge and
+the bottom of the frame.
 """
 
 from __future__ import annotations
@@ -23,6 +28,17 @@ _RESOLUTIONS = {
 
 _DEFAULT_TITLE_SIZE = 34
 _DEFAULT_TITLE_MARGIN = 120  # distance from the top edge (into the letterbox band)
+
+_DEFAULT_AUTHOR_SIZE = 26
+_DEFAULT_AUTHOR_MARGIN = 60  # distance from the frame edges
+
+# ASS numpad alignments for the author label corners.
+_AUTHOR_POSITIONS = {
+    "top-left": 7,
+    "top-right": 9,
+    "bottom-left": 1,
+    "bottom-right": 3,
+}
 
 # Alignment 8 = top-centre. PlayResX/Y match the export size so FontSize is in
 # real pixels; ScaledBorderAndShadow keeps the outline proportional.
@@ -50,6 +66,32 @@ Dialogue: 0,0:00:00.00,9:59:59.99,Title,,0,0,0,,{text}
 """
 )
 
+# Slightly transparent white with a thin outline: readable on any footage
+# without stealing attention from the captions or the title.
+_AUTHOR_ASS_TEMPLATE = (
+    """\
+[Script Info]
+ScriptType: v4.00+
+PlayResX: {w}
+PlayResY: {h}
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, \
+Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, \
+Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+"""
+    "Style: Author,{font},{size},&H20FFFFFF,&H000000FF,&H00000000,&H96000000,"
+    "0,0,0,0,100,100,0,0,1,1,0,{align},{margin},{margin},{margin},1\n"
+    """\
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,9:59:59.99,Author,,0,0,0,,{text}
+"""
+)
+
 
 class ExportBlock(Block):
     name = "export"
@@ -60,7 +102,8 @@ class ExportBlock(Block):
             raise ValueError("export: no input media")
         out = _output_path(params, ctx, index=0)
         title = _title_ass(params, ctx, f"{step_id}-title", index=0)
-        _render(media, params, out, title)
+        author = _author_ass(params, ctx, f"{step_id}-author", index=0)
+        _render(media, params, out, title, author)
         return BlockResult(outputs={"files": [str(out)]})
 
     def execute_item(
@@ -71,7 +114,8 @@ class ExportBlock(Block):
             raise ValueError("export: channel item has no 'clip' to export")
         out = _output_path(params, ctx, index=item["index"])
         title = _title_ass(params, ctx, f"{step_id}-{item['index']}-title", index=item["index"])
-        _render(clip, params, out, title)
+        author = _author_ass(params, ctx, f"{step_id}-{item['index']}-author", index=item["index"])
+        _render(clip, params, out, title, author)
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
 
 
@@ -126,6 +170,43 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     return path
 
 
+def _author_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 0) -> Path | None:
+    """Write an ASS file for the author/credit label, if requested.
+
+    ``author`` credits the clip's source channel — or the editor's own handle
+    when the footage is theirs. Same token support as the title
+    (``{{ part }}``, ``{{ index }}``, ``{{ name }}``). ``author_position``
+    picks a corner; the default ``top-left`` stays clear of the Shorts/TikTok
+    player UI, which covers the right edge and the bottom of the frame.
+    """
+    author = params.get("author")
+    if not author:
+        return None
+    position = str(params.get("author_position", "top-left"))
+    if position not in _AUTHOR_POSITIONS:
+        valid = ", ".join(sorted(_AUTHOR_POSITIONS))
+        raise ValueError(f"export: unknown author_position '{position}' (choose from: {valid})")
+    width, height = _target_size(params)
+    size = int(params.get("author_size", _DEFAULT_AUTHOR_SIZE))
+    margin = int(params.get("author_margin", _DEFAULT_AUTHOR_MARGIN))
+    font = fonts.family(params.get("author_font"))
+    text = _fill_title_tokens(str(author), index, ctx.pipeline_name)
+
+    path = ctx.work_dir() / f"{name}.ass"
+    path.write_text(
+        _AUTHOR_ASS_TEMPLATE.format(
+            w=width,
+            h=height,
+            font=font,
+            size=size,
+            align=_AUTHOR_POSITIONS[position],
+            margin=margin,
+            text=text,
+        )
+    )
+    return path
+
+
 def _fill_title_tokens(text: str, index: int, name: str) -> str:
     for token, value in (
         ("{{ part }}", str(index + 1)),
@@ -139,7 +220,13 @@ def _fill_title_tokens(text: str, index: int, name: str) -> str:
     return text
 
 
-def _render(media: str, params: dict[str, Any], out: Path, title: Path | None = None) -> None:
+def _render(
+    media: str,
+    params: dict[str, Any],
+    out: Path,
+    title: Path | None = None,
+    author: Path | None = None,
+) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
     chain = [
@@ -150,6 +237,9 @@ def _render(media: str, params: dict[str, Any], out: Path, title: Path | None = 
     if title is not None:
         fonts.ensure(params.get("title_font"))  # download preset / warn on missing
         chain.append(fonts.libass_filter(title))
+    if author is not None:
+        fonts.ensure(params.get("author_font"))
+        chain.append(fonts.libass_filter(author))
     ffmpeg.run(
         [
             "-i",

@@ -9,6 +9,9 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `export` author label: persistent corner credit for the clip's source channel
+  or the editor's own handle (`author`, `author_position`, `author_size`,
+  `author_margin`, `author_font`).
 - `lemontage completion <shell>` command: bash, zsh and fish completion scripts.
 - `concat` transitions: crossfade / wipe / slide between clips via `transitions` and `duration`.
 - `reverse` built-in block: play a clip backwards (video + audio).
