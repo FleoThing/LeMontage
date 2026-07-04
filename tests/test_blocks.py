@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from lemontage.engine import ffmpeg, providers
+from lemontage.engine import ffmpeg, fonts, providers
 from lemontage.engine.blocks.captions import (
     CaptionsBlock,
     _ass_time,
@@ -19,6 +19,7 @@ from lemontage.engine.blocks.captions import (
 from lemontage.engine.blocks.detect_clips import _select_loud_clips, _windowed_clips
 from lemontage.engine.blocks.export import (
     ExportBlock,
+    _author_ass,
     _output_path,
     _target_size,
     _title_ass,
@@ -304,6 +305,73 @@ def test_title_name_and_index_tokens(tmp_path):
         {"title": "{{ name }} {{ index }}"}, ctx(tmp_path, pipeline_name="demo"), "t", index=1
     ).read_text()
     assert "demo 1" in content
+
+
+def test_author_ass_none_without_author(tmp_path):
+    assert _author_ass({}, ctx(tmp_path), "a") is None
+
+
+def test_author_ass_defaults_to_top_left(tmp_path):
+    params = {"format": "vertical", "author": "Extrait de @CercleAristote"}
+    content = _author_ass(params, ctx(tmp_path), "export-0-author").read_text()
+    assert "PlayResX: 1080" in content and "PlayResY: 1920" in content
+    # numpad alignment 7 = top-left, default margin 60 on every edge
+    assert ",7,60,60,60,1" in content
+    assert "Extrait de @CercleAristote" in content
+
+
+def test_author_ass_position_and_size(tmp_path):
+    params = {
+        "author": "@monedit",
+        "author_position": "bottom-right",
+        "author_size": 30,
+        "author_margin": 24,
+    }
+    content = _author_ass(params, ctx(tmp_path), "a").read_text()
+    assert "Style: Author,Anton,30," in content  # default preset font1
+    assert ",3,24,24,24,1" in content  # alignment 3 = bottom-right
+
+
+def test_author_ass_centered_positions(tmp_path):
+    top = _author_ass({"author": "x", "author_position": "top-center"}, ctx(tmp_path), "a")
+    assert ",8,60,60,60,1" in top.read_text()  # alignment 8 = top-center
+    bottom = _author_ass({"author": "x", "author_position": "bottom-center"}, ctx(tmp_path), "b")
+    assert ",2,60,60,60,1" in bottom.read_text()  # alignment 2 = bottom-center
+
+
+def test_author_ass_unknown_position_raises(tmp_path):
+    with pytest.raises(ValueError, match="author_position"):
+        _author_ass({"author": "x", "author_position": "center"}, ctx(tmp_path), "a")
+
+
+def test_author_ass_font_alias_resolves(tmp_path):
+    content = _author_ass({"author": "x", "author_font": "font2"}, ctx(tmp_path), "a").read_text()
+    assert "Style: Author,Bebas Neue," in content
+
+
+def test_author_ass_tokens(tmp_path):
+    content = _author_ass(
+        {"author": "{{ name }} #{{ part }}"}, ctx(tmp_path, pipeline_name="demo"), "a", index=1
+    ).read_text()
+    assert "demo #2" in content
+
+
+def test_export_render_burns_author_label(tmp_path, monkeypatch):
+    calls = {}
+
+    def fake_run(args):
+        calls["args"] = args
+        Path(args[-1]).write_bytes(b"v")
+
+    monkeypatch.setattr(ffmpeg, "run", fake_run)
+    monkeypatch.setattr(fonts, "ensure", lambda _f: None)
+    ExportBlock().execute(
+        {"format": "vertical", "author": "@chaine", "output": str(tmp_path / "o.mp4")},
+        ctx(tmp_path),
+        "exp",
+    )
+    vf = calls["args"][calls["args"].index("-vf") + 1]
+    assert "-author.ass" in vf  # the author label joined the filter chain
 
 
 # --- concat -----------------------------------------------------------------
