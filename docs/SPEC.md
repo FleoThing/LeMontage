@@ -107,8 +107,19 @@ input:
 
 | Field | Required | Values | Description |
 |---|---|---|---|
-| `type` | ✅ | `video` | Media kind. **v1 supports `video` only.** |
-| `source` | ✅ | path | Path to the source file. **v1 supports `.mp4` only.** |
+| `type` | ✅ | `video` \| `images` | Media kind: a single video, or a folder of images (slideshow / photo montage). |
+| `source` | ✅ | path | For `video`: path to the source file (**`.mp4` only**). For `images`: path to a folder of images (`.jpg`, `.jpeg`, `.png`, `.webp`). |
+
+```yaml
+# photo montage: a folder of images instead of a video
+input:
+  type: images
+  source: ./photos/
+```
+
+With `type: images`, start the pipeline with [`stills`](#610-stills--folder-of-images-as-a-channel)
+(one channel item per image) followed by [`still`](#611-still--render-an-image-into-a-clip)
+(render each image into a short clip).
 
 > Out of scope for v1: audio-only input, URLs (YouTube), RSS, multiple inputs.
 
@@ -397,7 +408,9 @@ that happens.
 
 Joins a channel's clips, in order, into a single file. A channel *aggregator*:
 unlike mapped consumers it receives the whole channel at once. Place it after
-`export` to assemble the rendered clips into a final reel.
+`export` to assemble the rendered clips into a final reel. If any clip has no
+audio track (e.g. a rendered `still`), the join is rendered video-only instead
+of failing.
 
 ```yaml
 - concat:
@@ -512,6 +525,62 @@ channel of clips. Intended for short clips (it buffers the stream in memory).
 
 ---
 
+### 6.10 `stills` — folder of images as a channel
+
+A producer block (the image counterpart of `detect_clips`): lists a folder of
+images, orders them by natural filename sort (`img2` before `img10`), and emits
+one channel item per image (`{index, image, duration}`). Use with an
+`input.type: images` pipeline, or point it at any folder via `input`.
+
+```yaml
+- stills:
+    id: photos
+    duration: 3s
+    shuffle: true
+    seed: 42
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `input` | path | pipeline input source | Folder of images (`.jpg`, `.jpeg`, `.png`, `.webp`). |
+| `duration` | time | `3s` | On-screen duration of each image. |
+| `shuffle` | bool | `false` | Shuffle the order (deterministic, seeded). |
+| `seed` | int | `0` | Seed for `shuffle`. |
+| `max` | int | — | Keep only the first N images (after shuffling). |
+
+**Outputs:** `count`, + a channel (one item per image).
+
+---
+
+### 6.11 `still` — render an image into a clip
+
+Maps over a `stills` channel: each image becomes a `duration`-second H.264
+clip, so downstream `export` (format / fit / title) and `concat` (transitions)
+treat it like any other clip. Rendered clips are **video-only** (no audio
+track); `concat` tolerates this and drops audio for the join.
+
+```yaml
+- still:
+    from: photos
+    fps: 30
+
+# single mode: one image, one clip
+- still:
+    image: ./photos/cover.png
+    duration: 5s
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel | — | `stills` channel to map over. |
+| `image` | path | — | Source image (single mode). |
+| `duration` | time | `3s` | Clip length. Channel items carry their own duration; this is the fallback. |
+| `fps` | int | `30` | Frame rate of the rendered clip. |
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
@@ -524,6 +593,8 @@ Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
 | `captions` | `clips` / `srt` |
 | `concat` | `file`, `parts` |
 | `export` | `files` |
+| `stills` | `count`, + channel |
+| `still` | `clips` / `clip` |
 
 ---
 

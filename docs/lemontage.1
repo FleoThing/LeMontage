@@ -1,4 +1,4 @@
-.TH LEMONTAGE 1 "2026-07-06" "lemontage 0.2.0" "LeMontage Manual"
+.TH LEMONTAGE 1 "2026-07-07" "lemontage 0.3.0" "LeMontage Manual"
 .SH NAME
 lemontage \- declarative YAML pipelines for automated social video creation
 .SH SYNOPSIS
@@ -89,8 +89,9 @@ Pipeline identifier, used for logs and output naming (required).
 Free\-text human\-readable summary (optional).
 .TP
 .B input
-Source media: \fBtype: video\fR and a \fB.mp4\fR \fBsource\fR (required; v1
-supports local MP4 only).
+Source media (required): \fBtype: video\fR with a \fB.mp4\fR \fBsource\fR, or
+\fBtype: images\fR with a folder of images (\fB.jpg\fR, \fB.jpeg\fR,
+\fB.png\fR, \fB.webp\fR) as \fBsource\fR.
 .TP
 .B steps
 Ordered list of steps; each is a single\-key map \fIblock\fR: \fIparams\fR
@@ -107,7 +108,8 @@ Fan the whole pipeline out over every combination of the listed values
 Global output settings, e.g. \fBdir: ./output\fR (optional).
 .PP
 Built\-in blocks: \fBstt\fR, \fBdetect_clips\fR, \fBcut\fR,
-\fBcaptions\fR, \fBexport\fR, \fBconcat\fR, \fBspeed\fR, \fBreverse\fR. Common per\-step fields: \fBid\fR, \fBcache\fR,
+\fBcaptions\fR, \fBexport\fR, \fBconcat\fR, \fBspeed\fR, \fBreverse\fR,
+\fBstills\fR, \fBstill\fR. Common per\-step fields: \fBid\fR, \fBcache\fR,
 \fBon_failure\fR (\fBabort\fR|\fBskip\fR|\fBretry\fR), \fBretries\fR,
 \fBrequires\fR.
 .SS Templating
