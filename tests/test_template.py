@@ -67,3 +67,15 @@ def test_missing_key_raises():
     ctx = make_ctx(vars={"a": {"b": 1}})
     with pytest.raises(template.TemplateError):
         template.resolve("{{ vars.a.c }}", ctx)
+
+
+def test_steps_reference_without_id_raises():
+    with pytest.raises(template.TemplateError, match="needs a step id"):
+        template.resolve("{{ steps }}", make_ctx())
+
+
+def test_walk_into_non_dict_raises():
+    # Indexing into a list value ({{ steps.t.items.0 }}) is not supported.
+    ctx = make_ctx(step_outputs={"t": {"items": [1, 2, 3]}})
+    with pytest.raises(template.TemplateError, match="no key '0'"):
+        template.resolve("{{ steps.t.items.0 }}", ctx)

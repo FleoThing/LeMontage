@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ...spec import CONCAT_TRANSITIONS
-from .. import ffmpeg
+from .. import ffmpeg, safepath
 from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult
@@ -60,6 +60,8 @@ def _output_path(params: dict[str, Any], ctx: RunContext) -> Path:
         out = Path(rendered)
     else:
         out = ctx.output_dir / f"{ctx.pipeline_name}-reel.mp4"
+    # A pipeline-supplied path must not escape the output tree (path traversal).
+    out = safepath.confine(out, safepath.allowed_roots(ctx.output_dir))
     out.parent.mkdir(parents=True, exist_ok=True)
     return out
 
@@ -160,10 +162,21 @@ def _concat_with_transitions(
     ffmpeg.run(args)
 
 
+def _concat_escape(path: str) -> str:
+    """Escape a path for a concat-demuxer ``file '…'`` line.
+
+    FFmpeg's concat parser treats ``\\`` as an escape and ``'`` as the string
+    delimiter, so a path containing either would break the list (or, with a
+    crafted clip path, smuggle in a directive). Backslashes are doubled and each
+    single quote is closed/escaped/reopened (``'\\''``).
+    """
+    return path.replace("\\", "\\\\").replace("'", "'\\''")
+
+
 def _concat(files: list[str], out: Path, list_path: Path) -> None:
     # concat demuxer: a text file of `file '<abs path>'` lines, then re-encode
     # (clips share the same export settings, but re-encoding avoids timestamp glitches).
-    lines = [f"file '{Path(f).resolve()}'" for f in files]
+    lines = [f"file '{_concat_escape(str(Path(f).resolve()))}'" for f in files]
     list_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     ffmpeg.run(
         [
