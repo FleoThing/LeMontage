@@ -339,11 +339,28 @@ Renders the final video(s) to disk.
 | `title_size` | int | `34` | Title font size, in pixels of the export resolution. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
+| `author` | string | — | Small persistent credit label: the clip's source channel (e.g. `Extrait de @Chaine`) or the editor's own handle. Same tokens as `title`. |
+| `author_position` | enum | `top-left` | `top-left` \| `top-center` \| `top-right` \| `bottom-left` \| `bottom-center` \| `bottom-right`. The default stays clear of the Shorts/TikTok player UI (right edge and bottom are covered). `top-center` shares the title band and `bottom-center` the captions band — bump `author_margin` if both are in play. |
+| `author_size` | int | `26` | Author label font size, in pixels of the export resolution. |
+| `author_margin` | int | `60` | Author label distance from the frame edges. |
+| `author_font` | string | `font1` | Same presets/family rules as `title_font`. |
 | `output` | path | `output.dir` | Output path; supports `{{ part }}`, `{{ index }}` and `{{ name }}` when mapping a channel. |
 
-**Title tokens.** Inside `title`, `output` and overlays you can use `{{ part }}`
-(1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and `{{ name }}`
-(pipeline name).
+**Title tokens.** Inside `title`, `author`, `output` and overlays you can use
+`{{ part }}` (1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and
+`{{ name }}` (pipeline name).
+
+**Author label.** `author` burns a discreet always-on credit in a corner of the
+frame — slightly transparent white with a thin outline, sized to stay readable
+without competing with the captions or the title. Use it to credit the channel
+a clip was extracted from, or to sign your own edits:
+
+```yaml
+- export:
+    from: clip_channel
+    format: vertical
+    author: "Extrait de @CercleAristote"
+```
 
 **Title fonts.** The presets are bundled-by-download: on first use the (OFL)
 font is fetched to `~/.lemontage/fonts/` and given to libass via `fontsdir`, so

@@ -38,10 +38,15 @@ class SpeedBlock(Block):
         return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
 
 
+_MAX_FACTOR = 100.0  # bounds the atempo chain length; well beyond any real use
+
+
 def _factor(params: dict[str, Any]) -> float:
     factor = float(params.get("factor", 1.0))
     if factor <= 0:
         raise ValueError("speed: 'factor' must be > 0 (e.g. 2 = 2x faster, 0.5 = slow-motion)")
+    if factor > _MAX_FACTOR:
+        raise ValueError(f"speed: 'factor' must be <= {_MAX_FACTOR:g}")
     return factor
 
 

@@ -364,3 +364,47 @@ def test_cache_disabled_reruns(patch_registry, tmp_path):
     run(doc, reporter=lambda m: None)
     run(doc, reporter=lambda m: None)
     assert block.calls == 2
+
+
+# --- matrix expansion & RunResult -------------------------------------------
+
+
+def test_matrix_cells_cartesian_product():
+    cells = executor._matrix_cells({"lang": ["fr", "en"], "size": "base"})
+    assert len(cells) == 2
+    assert {"lang": "fr", "size": "base"} in cells
+    assert {"lang": "en", "size": "base"} in cells
+
+
+def test_matrix_cells_none_is_single_default_cell():
+    assert executor._matrix_cells(None) == [{}]
+
+
+def test_runresult_empty_is_not_ok():
+    # No cells ran -> the pipeline did not succeed.
+    assert executor.RunResult().ok is False
+
+
+# --- cleanup safety guard ---------------------------------------------------
+
+
+def test_remove_merged_parts_keeps_files_outside_output_dir(tmp_path):
+    """Only clips *under* the output dir are pruned; anything else is kept."""
+    outdir = tmp_path / "output"
+    outdir.mkdir()
+    inside = outdir / "part0.mp4"
+    outside = tmp_path / "elsewhere.mp4"
+    reel = outdir / "reel.mp4"
+    for f in (inside, outside, reel):
+        f.write_bytes(b"v")
+
+    cell = executor.CellResult(
+        matrix={},
+        outputs={"reel": {"file": str(reel), "parts": [str(inside), str(outside)]}},
+    )
+    removed = executor._remove_merged_parts(executor.RunResult(cells=[cell]), outdir)
+
+    assert not inside.exists()  # under output dir -> removed
+    assert outside.exists()  # outside the tree -> kept by the safety guard
+    assert reel.exists()  # the final reel is never a 'part'
+    assert removed == 1
