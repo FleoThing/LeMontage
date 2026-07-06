@@ -41,6 +41,9 @@ CONCAT_TRANSITIONS = frozenset(
     }
 )
 
+# How `export` fits the source into the target frame (see SPEC §6.6).
+EXPORT_FIT_MODES = frozenset({"contain", "cover"})
+
 # Fields a step may carry alongside its single block key (see SPEC §5.1).
 COMMON_STEP_FIELDS = frozenset({"id", "cache", "on_failure", "retries", "requires"})
 

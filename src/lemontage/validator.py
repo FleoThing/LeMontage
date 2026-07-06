@@ -172,6 +172,17 @@ def _check_block_params(
         if method in spec.RESERVED_DETECT_METHODS:
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
 
+    if block == "export":
+        fit = params.get("fit")
+        if fit is not None and (
+            not isinstance(fit, str) or fit.lower() not in spec.EXPORT_FIT_MODES
+        ):
+            valid = ", ".join(sorted(spec.EXPORT_FIT_MODES))
+            errors.append(f"{label}: unknown export fit '{fit}' (choose from: {valid})")
+        mute = params.get("mute")
+        if mute is not None and not isinstance(mute, (bool, list)):
+            errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
+
     if block == "concat":
         _check_concat_transitions(params.get("transitions"), label, errors)
         scope = params.get("transitions_at")

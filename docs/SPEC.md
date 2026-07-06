@@ -226,7 +226,7 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 ```yaml
 - id: clips
   detect_clips:
-    method: silence       # silence | scene_change | loudness
+    method: silence       # silence | scene_change | loudness | random
     min_duration: 30s
     max_duration: 60s
     max_clips: 5
@@ -235,10 +235,11 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random`. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
+| `seed` | int/string | — | (`random` only) Seed for reproducible picks; omit for a different set each run. |
 | `emit` | string | — | Channel name to emit clips into. |
 
 **Methods.** `silence` keeps the spoken spans (best for talking-head / podcast).
@@ -248,7 +249,9 @@ local proxy for action highlights (crowd roar, commentator excitement) in sports
 footage. For `loudness`, each clip's boundaries are found **automatically** by
 expanding around the peak while the level stays high, so the build-up and the
 sustained reaction are both captured; `min_duration`/`max_duration` only bound
-the resulting length (no manual offset).
+the resulting length (no manual offset). `random` picks `max_clips` random,
+non-overlapping moments (each of a random length in the min/max window) with no
+analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
 
 **Outputs:** `count`, `timestamps` (list of `{start, end}`), plus the named
 channel.
@@ -333,10 +336,25 @@ Renders the final video(s) to disk.
 |---|---|---|---|
 | `format` | enum | `vertical` | `vertical` (9:16) \| `horizontal` (16:9) \| `square` (1:1). |
 | `resolution` | string | per-format | e.g. `1080x1920`. |
+| `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars). |
+| `trim_bars` | bool | `true` | Auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source fills the frame. Applied with `fit: cover` (else the bars leak into the crop) and whenever a `bg` fill is set — `blur` (else the sharp foreground keeps its bars over the blur) or a colour (else the bars show as a black band inside the fill). Set `false` to keep them. |
+| `bg` | string | `black` | Fill for the `contain` bars: a colour (`white`, `#101010`) or `blur` — a blurred, zoomed copy of the source behind the sharp centred video (the classic vertical look). |
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
-| `title` | string | — | Persistent title banner at the top of the frame, for the whole clip. `\n` splits lines. |
-| `title_size` | int | `34` | Title font size, in pixels of the export resolution. |
+| `mute` | bool \| list | `false` | Silence the audio. `true` mutes every clip; a list of booleans mutes per clip by position (e.g. `[false, true]`). The (silent) audio track is kept so a later `concat` still works. |
+| `title` | string | — | Title banner at the top of the frame. Shown for the whole clip unless a window is set below. `\n` splits lines. |
+| `title_start` | duration | `0` | When the title appears (relative to each clip). |
+| `title_end` | duration | clip end | When the title disappears. |
+| `title_duration` | duration | — | Shorthand for `title_end` = `title_start` + this (e.g. `title_duration: 2s`). |
+| `title_clips` | int \| list | all | Only draw the title on these clips (0-based indices; e.g. `[0]` = first clip only). |
+| `title_fade` | duration \| list | — | Fade the title in/out by this much (e.g. `0.3s`) so it never pops. A list fades per clip by position (`[0, 0, 0.4]` = fade only the 3rd clip). |
+| `title_size` | int | `92` | Title font size, in pixels of the export resolution. |
+| `title_color` | string \| list | `white` | Title text colour: a `#RRGGBB` hex or a name (`white`, `yellow`, `red`, …). A list sets it per clip by position (e.g. `[red, null, blue]`). |
+| `title_position` | enum | `top` | Vertical placement: `top` \| `center` \| `bottom`. |
+| `title_box` | bool \| string | — | Draw an opaque box behind the title for legibility: `true` (semi-transparent black) or a colour name/hex. |
+| `title_box_pad` | int | `3` | Horizontal breathing room inside a `title_box`, as hard-space widths added each side (BorderStyle 3 pads all sides equally, so this is the only way to widen the box left/right without adding height). `0` = none. |
+| `title_outline` | number | `2` | Letter-outline (contour) thickness in px. Visible with a plain outline (`title_box: false`); with a box it widens the box padding instead. |
+| `title_shadow` | bool \| number | — | Drop shadow behind the title: `true` (visible), `false` (none), or a px offset. Absent keeps a subtle 1px shadow. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
 | `author` | string | — | Small persistent credit label: the clip's source channel (e.g. `Extrait de @Chaine`) or the editor's own handle. Same tokens as `title`. |

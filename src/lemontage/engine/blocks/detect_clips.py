@@ -1,20 +1,23 @@
 """``detect_clips`` — find candidate clips and emit them as a channel (SPEC §6.3).
 
-Three local methods:
+Four local methods:
 
 * ``silence``      — split on silence (``silencedetect``), keep the spoken spans.
 * ``scene_change`` — split on visual scene cuts (``select='gt(scene,…)'``).
 * ``loudness``     — rank moments by audio loudness (``ebur128``) and keep the
   loudest, centred on each peak — the best local proxy for action/highlights
   (crowd roar + commentator excitement).
+* ``random``       — pick random, non-overlapping moments (no analysis); handy
+  for a quick montage or B-roll. A ``seed`` makes it reproducible.
 
 ``silence`` and ``scene_change`` then trim/split the spans to the
 ``[min_duration, max_duration]`` window and cap at ``max_clips``; ``loudness``
-emits centred clips directly.
+emits centred clips directly, and ``random`` scatters clips across the timeline.
 """
 
 from __future__ import annotations
 
+import random
 import re
 import statistics
 from typing import Any
@@ -61,6 +64,9 @@ class DetectClipsBlock(Block):
         elif method == "scene_change":
             spans = _spans_from_scene_cuts(media, total)
             clips = _windowed_clips(spans, min_dur, max_dur, max_clips)
+        elif method == "random":
+            rng = random.Random(params.get("seed"))
+            clips = _random_clips(total, min_dur, max_dur, max_clips, rng)
         else:
             raise ValueError(f"detect_clips: unsupported method '{method}'")
 
@@ -126,6 +132,30 @@ def _windowed_clips(
             cursor = clip_end
             if len(clips) >= max_clips:
                 return clips
+    return clips
+
+
+def _random_clips(
+    total: float, min_dur: float, max_dur: float, max_clips: int, rng: random.Random
+) -> list[tuple[float, float]]:
+    """Pick random moments, each one *further along* the video than the last.
+
+    The timeline is split into ``n`` successive equal segments and one random
+    clip (a random length within ``[min_dur, max_dur]``) is placed inside each,
+    at a random position. So every clip advances past the previous one and no
+    moment is ever picked twice — a forward walk with random spots. Pass a
+    ``seed`` for reproducible runs.
+    """
+    if total <= 0 or min_dur <= 0 or total < min_dur or max_clips <= 0:
+        return []
+    n = min(max_clips, int(total // min_dur))
+    slot = total / n  # each clip lives in its own forward slice of the timeline
+
+    clips: list[tuple[float, float]] = []
+    for i in range(n):
+        length = rng.uniform(min_dur, min(max_dur, slot))
+        start = i * slot + rng.uniform(0.0, slot - length)
+        clips.append((start, start + length))
     return clips
 
 

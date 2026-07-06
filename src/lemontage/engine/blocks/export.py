@@ -16,9 +16,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ...spec import EXPORT_FIT_MODES
 from .. import ffmpeg, fonts, safepath
 from ..assformat import escape_text
 from ..context import RunContext
+from ..timecode import parse_seconds
 from .base import Block, BlockResult, ItemResult
 
 # Sanity bounds so a pipeline can't ask FFmpeg for an absurd allocation.
@@ -32,8 +34,16 @@ _RESOLUTIONS = {
     "square": (1080, 1080),
 }
 
-_DEFAULT_TITLE_SIZE = 34
+_DEFAULT_TITLE_SIZE = 92
 _DEFAULT_TITLE_MARGIN = 120  # distance from the top edge (into the letterbox band)
+# Hard spaces added on each side of a boxed title. BorderStyle 3 pads all four
+# sides equally by the Outline value, so this is the only way to widen the box
+# horizontally (breathing room left/right of the text) without adding height.
+_DEFAULT_TITLE_BOX_HPAD = 3
+# Letter outline (contour) thickness in pixels; the historical hard-coded value.
+_DEFAULT_TITLE_OUTLINE = 2
+# Shadow depth when `title_shadow: true` (px offset of the drop shadow).
+_TITLE_SHADOW_ON = 4
 
 _DEFAULT_AUTHOR_SIZE = 26
 _DEFAULT_AUTHOR_MARGIN = 60  # distance from the frame edges
@@ -64,13 +74,13 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, \
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 """
-    "Style: Title,{font},{size},&H00FFFFFF,&H000000FF,&H00000000,&H64000000,"
-    "-1,0,0,0,100,100,0,0,1,2,1,8,40,40,{margin},1\n"
+    "Style: Title,{font},{size},{primary},&H000000FF,{outline},&H64000000,"
+    "-1,0,0,0,100,100,0,0,{border},{outline_w:g},{shadow:g},{align},40,40,{margin},1\n"
     """\
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,9:59:59.99,Title,,0,0,0,,{text}
+Dialogue: 0,{start},{end},Title,,0,0,0,,{text}
 """
 )
 
@@ -111,7 +121,7 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=0)
         title = _title_ass(params, ctx, f"{step_id}-title", index=0)
         author = _author_ass(params, ctx, f"{step_id}-author", index=0)
-        _render(media, params, out, title, author)
+        _render(media, params, out, title, author, mute=_muted(params, 0))
         return BlockResult(outputs={"files": [str(out)]})
 
     def execute_item(
@@ -123,7 +133,7 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=item["index"])
         title = _title_ass(params, ctx, f"{step_id}-{item['index']}-title", index=item["index"])
         author = _author_ass(params, ctx, f"{step_id}-{item['index']}-author", index=item["index"])
-        _render(clip, params, out, title, author)
+        _render(clip, params, out, title, author, mute=_muted(params, item["index"]))
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
 
 
@@ -175,7 +185,7 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     (1-based clip number), ``{{ index }}`` (0-based) and ``{{ name }}``.
     """
     title = params.get("title")
-    if not title:
+    if not title or not _title_on_clip(params, index):
         return None
     width, height = _target_size(params)
     size = int(params.get("title_size", _DEFAULT_TITLE_SIZE))
@@ -185,16 +195,184 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
     font = fonts.family(params.get("title_font"))
     raw = _fill_title_tokens(str(title), index, ctx.pipeline_name)
     # Accept both literal "\n" and real newlines; ASS uses "\N" for a line break.
-    # Escape each line's content before joining with our own "\N" directive, so
-    # the title text can't inject ASS override blocks.
+    # Escape each line's content first (so the title text can't inject ASS
+    # override blocks), then add our own box padding / fade tag around it.
     lines = [escape_text(ln.strip()) for ln in raw.replace("\\n", "\n").splitlines() if ln.strip()]
-    text = r"\N".join(lines)
+    border, outline = _title_border(params)
+    if border == 3:  # opaque box: widen it horizontally with hard spaces
+        hpad = int(params.get("title_box_pad", _DEFAULT_TITLE_BOX_HPAD))
+        pad = "\\h" * max(hpad, 0)
+        lines = [f"{pad}{ln}{pad}" for ln in lines]
+    text = _fade_tag(params, index) + r"\N".join(lines)
+    start, end = _title_window(params)
 
     path = ctx.work_dir() / f"{name}.ass"
+    color = params.get("title_color")
+    if isinstance(color, list):  # per-clip colour by position, like title_fade
+        color = color[index] if index < len(color) else None
+    primary = _ass_color(color)
     path.write_text(
-        _ASS_TEMPLATE.format(w=width, h=height, font=font, size=size, margin=margin, text=text)
+        _ASS_TEMPLATE.format(
+            w=width,
+            h=height,
+            font=font,
+            size=size,
+            margin=margin,
+            text=text,
+            start=start,
+            end=end,
+            primary=primary,
+            align=_title_align(params),
+            border=border,
+            outline=outline,
+            outline_w=_title_outline_width(params),
+            shadow=_title_shadow_depth(params),
+        )
     )
     return path
+
+
+def _title_outline_width(params: dict[str, Any]) -> float:
+    """Contour (letter outline) thickness in px. Visible with a plain outline
+    (``title_box: false``); with a box it widens the box padding instead."""
+    return float(params.get("title_outline", _DEFAULT_TITLE_OUTLINE))
+
+
+def _title_shadow_depth(params: dict[str, Any]) -> float:
+    """Drop-shadow depth in px behind the title (BackColour = translucent black).
+
+    ``title_shadow`` accepts ``true`` (a visible shadow), ``false`` (none), or a
+    number for a custom offset. Absent keeps the historical subtle 1px shadow.
+    """
+    shadow = params.get("title_shadow")
+    if shadow is None:
+        return 1
+    if isinstance(shadow, bool):
+        return _TITLE_SHADOW_ON if shadow else 0
+    return float(shadow)
+
+
+# ASS numpad alignment: centre column is 8 (top), 5 (middle), 2 (bottom).
+_TITLE_ALIGN = {"top": 8, "center": 5, "centre": 5, "middle": 5, "bottom": 2}
+
+
+def _title_align(params: dict[str, Any]) -> int:
+    """Map ``title_position`` (top/center/bottom) to an ASS alignment code."""
+    pos = str(params.get("title_position", "top")).lower()
+    if pos not in _TITLE_ALIGN:
+        valid = ", ".join(sorted(_TITLE_ALIGN))
+        raise ValueError(f"export: unknown title_position '{pos}' (choose from: {valid})")
+    return _TITLE_ALIGN[pos]
+
+
+def _title_border(params: dict[str, Any]) -> tuple[int, str]:
+    """Return (BorderStyle, OutlineColour) for the title.
+
+    ``title_box`` draws an opaque box behind the text (BorderStyle 3) for
+    legibility: ``true`` = semi-transparent black, or a colour name/hex. Without
+    it, the title keeps its plain outline (BorderStyle 1).
+    """
+    box = params.get("title_box")
+    if not box:
+        return 1, "&H00000000"  # outline style (current default)
+    if box is True or str(box).lower() == "true":
+        return 3, "&H80000000"  # semi-transparent black box
+    return 3, _ass_color(box)  # box in a named/hex colour
+
+
+# A few named colours; anything else must be a #RRGGBB hex.
+_NAMED_COLORS = {
+    "white": "ffffff",
+    "black": "000000",
+    "red": "ff0000",
+    "green": "00ff00",
+    "blue": "0000ff",
+    "yellow": "ffff00",
+    "cyan": "00ffff",
+    "magenta": "ff00ff",
+    "orange": "ffa500",
+    "pink": "ffc0cb",
+    "gray": "808080",
+    "grey": "808080",
+}
+
+
+def _ass_color(value: object) -> str:
+    """Convert a ``#RRGGBB`` hex or a colour name to an ASS ``&H00BBGGRR`` string.
+
+    ASS stores the primary colour as ``&HAABBGGRR`` (alpha, then blue/green/red),
+    so we reorder the RGB bytes. Defaults to white when unset.
+    """
+    if not value:
+        return "&H00FFFFFF"
+    text = _NAMED_COLORS.get(str(value).strip().lower(), str(value).strip().lstrip("#").lower())
+    if len(text) != 6 or any(c not in "0123456789abcdef" for c in text):
+        raise ValueError(f"export: invalid title_color '{value}' (use #RRGGBB or a colour name)")
+    rr, gg, bb = text[0:2], text[2:4], text[4:6]
+    return f"&H00{bb}{gg}{rr}".upper()
+
+
+def _fade_tag(params: dict[str, Any], index: int) -> str:
+    """ASS ``\\fad`` override to fade the title in/out, or "" when not requested.
+
+    ``title_fade`` (a duration) fades the title in at the start of its window and
+    out at the end by that much — so it never pops on/off. A list applies a fade
+    per clip by position (``[0, 0, 0.4]`` = fade only the 3rd clip), so titled
+    clips can differ.
+    """
+    fade = params.get("title_fade")
+    if isinstance(fade, list):
+        fade = fade[index] if index < len(fade) else 0
+    if not fade:
+        return ""
+    ms = int(round(parse_seconds(fade) * 1000))
+    return rf"{{\fad({ms},{ms})}}"
+
+
+def _title_on_clip(params: dict[str, Any], index: int) -> bool:
+    """Whether this clip (0-based ``index``) should get the title.
+
+    ``title_clips`` restricts the title to specific clips — an int or a list of
+    0-based indices (e.g. ``[0]`` = only the first clip). Omit for every clip.
+    """
+    which = params.get("title_clips")
+    if which is None:
+        return True
+    if isinstance(which, int) and not isinstance(which, bool):
+        which = [which]
+    return index in which
+
+
+# Shown for the whole clip unless a window is given (libass clamps to the clip).
+_TITLE_FOREVER = "9:59:59.99"
+
+
+def _title_window(params: dict[str, Any]) -> tuple[str, str]:
+    """Return the (start, end) ASS timestamps the title is visible for.
+
+    ``title_start`` sets when it appears (default 0); ``title_end`` sets when it
+    disappears, or ``title_duration`` gives that end as start + duration. With
+    neither, the title stays for the whole clip.
+    """
+    start = parse_seconds(params.get("title_start", 0))
+    if "title_end" in params:
+        end = parse_seconds(params["title_end"])
+    elif "title_duration" in params:
+        end = start + parse_seconds(params["title_duration"])
+    else:
+        return _ass_timestamp(start), _TITLE_FOREVER
+    if end <= start:
+        raise ValueError("export: title window end must be after title_start")
+    return _ass_timestamp(start), _ass_timestamp(end)
+
+
+def _ass_timestamp(seconds: float) -> str:
+    """Format seconds as an ASS timestamp ``H:MM:SS.cc`` (centiseconds)."""
+    cs = int(round(seconds * 100))
+    hours, cs = divmod(cs, 360000)
+    minutes, cs = divmod(cs, 6000)
+    secs, cs = divmod(cs, 100)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
 def _author_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 0) -> Path | None:
@@ -250,40 +428,101 @@ def _fill_title_tokens(text: str, index: int, name: str) -> str:
     return text
 
 
+def _scale_chain(
+    params: dict[str, Any], width: int, height: int, source_crop: str | None = None
+) -> list[str]:
+    """Video filters that fit the source into width×height per the `fit` mode.
+
+    * ``contain`` (default) — scale to fit, then fill the sides. ``bg`` chooses the
+      fill: a colour (default black), or ``blur`` = the source itself scaled to
+      cover and blurred behind the sharp centred video (the classic vertical look).
+    * ``cover`` — scale to fill, then centre-crop the overflow so there are no
+      bars (the source edges are cropped instead).
+
+    ``source_crop`` (a ``"w:h:x:y"`` spec) strips baked-in bars from the source
+    *before* fitting, so a letterboxed source still fills the whole frame.
+    """
+    fit = str(params.get("fit", "contain")).lower()
+    if fit not in EXPORT_FIT_MODES:
+        valid = ", ".join(sorted(EXPORT_FIT_MODES))
+        raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
+    chain = [f"crop={source_crop}"] if source_crop else []
+    if fit == "cover":
+        return chain + [
+            f"scale={width}:{height}:force_original_aspect_ratio=increase",
+            f"crop={width}:{height}",
+        ]
+    # contain
+    if str(params.get("bg", "")).lower() == "blur":
+        # Blurred, zoomed copy of the source fills the frame; the fitted video is
+        # overlaid centred on top — no black bars. One split→overlay filtergraph.
+        return chain + [
+            f"split=2[b0][f0];"
+            f"[b0]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},gblur=sigma=20[bg];"
+            f"[f0]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
+        ]
+    return chain + [
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color={_bg_pad_color(params.get('bg'))}",
+    ]
+
+
+def _bg_pad_color(bg: object) -> str:
+    """FFmpeg colour for the letterbox pad (default black); '#RRGGBB' -> '0xRRGGBB'."""
+    if not bg:
+        return "black"
+    text = str(bg)
+    return text.replace("#", "0x") if text.startswith("#") else text
+
+
+def _muted(params: dict[str, Any], index: int) -> bool:
+    """Whether this clip's audio should be silenced.
+
+    ``mute: true`` silences every clip; a list silences per clip by position
+    (``mute: [false, true, ...]``), so a single clip can be muted.
+    """
+    mute = params.get("mute")
+    if isinstance(mute, list):
+        return bool(mute[index]) if index < len(mute) else False
+    return bool(mute)
+
+
 def _render(
     media: str,
     params: dict[str, Any],
     out: Path,
     title: Path | None = None,
     author: Path | None = None,
+    mute: bool = False,
 ) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
     if not 0 < fps <= _MAX_FPS:
         raise ValueError(f"export: fps {fps} out of range (1..{_MAX_FPS})")
-    chain = [
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
-        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
-        f"fps={fps}",
-    ]
+    # Strip the source's own baked-in letterbox bars first (default on) so a
+    # letterboxed source fills the frame instead of carrying its bars into the
+    # result. Needed for `cover` (else bars leak into the crop) and whenever a
+    # `bg` fill is set: with `blur` the sharp foreground would keep its bars over
+    # the blur, and with a colour the bars show as a black band inside the fill.
+    # Detected with FFmpeg's cropdetect — no extra dependency.
+    fit = str(params.get("fit", "contain")).lower()
+    wants_fill = fit == "cover" or bool(params.get("bg"))
+    source_crop = None
+    if wants_fill and params.get("trim_bars", True):
+        source_crop = ffmpeg.detect_content_crop(media)
+    chain = [*_scale_chain(params, width, height, source_crop), f"fps={fps}"]
     if title is not None:
         fonts.ensure(params.get("title_font"))  # download preset / warn on missing
         chain.append(fonts.libass_filter(title))
     if author is not None:
         fonts.ensure(params.get("author_font"))
         chain.append(fonts.libass_filter(author))
-    ffmpeg.run(
-        [
-            "-i",
-            str(media),
-            "-vf",
-            ",".join(chain),
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-c:a",
-            "aac",
-            str(out),
-        ]
-    )
+    args = ["-i", str(media), "-vf", ",".join(chain)]
+    # Keep a (silent) audio stream rather than dropping it (-an), so a later
+    # concat / crossfade still finds audio on every clip.
+    if mute:
+        args += ["-af", "volume=0"]
+    args += ["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac", str(out)]
+    ffmpeg.run(args)
