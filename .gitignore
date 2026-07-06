@@ -34,3 +34,6 @@ TODO.md
 .idea/
 .vscode/
 *.swp
+
+# local example assets (image carousel input)
+/photos/

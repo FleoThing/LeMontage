@@ -129,12 +129,15 @@ def test_concat_list_quotes_are_escaped(tmp_path):
     def fake_run(args):
         captured["args"] = args
 
-    original = concat_mod.ffmpeg.run
+    original_run = concat_mod.ffmpeg.run
+    original_has_audio = concat_mod.ffmpeg.has_audio
     concat_mod.ffmpeg.run = fake_run
+    concat_mod.ffmpeg.has_audio = lambda _f: False  # avoid probing ffmpeg (not installed in CI)
     try:
         _concat([str(clip)], tmp_path / "out.mp4", list_path)
     finally:
-        concat_mod.ffmpeg.run = original
+        concat_mod.ffmpeg.run = original_run
+        concat_mod.ffmpeg.has_audio = original_has_audio
 
     written = list_path.read_text()
     # The apostrophe is closed/escaped/reopened, never left bare inside the quotes.

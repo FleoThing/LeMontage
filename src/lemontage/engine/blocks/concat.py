@@ -190,6 +190,10 @@ def _concat_with_transitions(
                 f"it joins (clip #{i + 1}: {left:.2f}s, clip #{i + 2}: {right:.2f}s)"
             )
 
+    # Audio is crossfaded only when EVERY clip has a track; a single silent clip
+    # (e.g. a rendered still) drops audio for the whole join rather than failing.
+    keep_audio = all(ffmpeg.has_audio(f) for f in files)
+
     filters: list[str] = []
     cur_v, cur_a = "0:v:0", "0:a:0"
     cur_dur = durations[0]
@@ -197,9 +201,12 @@ def _concat_with_transitions(
         nxt_v, nxt_a = f"{i + 1}:v:0", f"{i + 1}:a:0"
         out_v, out_a = f"vs{i}", f"as{i}"
         if name == "none":
-            filters.append(
-                f"[{cur_v}][{cur_a}][{nxt_v}][{nxt_a}]concat=n=2:v=1:a=1[{out_v}][{out_a}]"
-            )
+            if keep_audio:
+                filters.append(
+                    f"[{cur_v}][{cur_a}][{nxt_v}][{nxt_a}]concat=n=2:v=1:a=1[{out_v}][{out_a}]"
+                )
+            else:
+                filters.append(f"[{cur_v}][{nxt_v}]concat=n=2:v=1:a=0[{out_v}]")
             cur_dur += durations[i + 1]
         else:
             offset = max(cur_dur - duration, 0.0)
@@ -207,28 +214,18 @@ def _concat_with_transitions(
                 f"[{cur_v}][{nxt_v}]xfade=transition={name}:duration={duration}:"
                 f"offset={offset:.3f}[{out_v}]"
             )
-            filters.append(f"[{cur_a}][{nxt_a}]acrossfade=d={duration}[{out_a}]")
+            if keep_audio:
+                filters.append(f"[{cur_a}][{nxt_a}]acrossfade=d={duration}[{out_a}]")
             cur_dur += durations[i + 1] - duration
         cur_v, cur_a = out_v, out_a
 
     args: list[str] = []
     for f in files:
         args += ["-i", str(f)]
-    args += [
-        "-filter_complex",
-        ";".join(filters),
-        "-map",
-        f"[{cur_v}]",
-        "-map",
-        f"[{cur_a}]",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-c:a",
-        "aac",
-        str(out),
-    ]
+    args += ["-filter_complex", ";".join(filters), "-map", f"[{cur_v}]"]
+    if keep_audio:
+        args += ["-map", f"[{cur_a}]", "-c:a", "aac"]
+    args += ["-c:v", "libx264", "-preset", "veryfast", str(out)]
     ffmpeg.run(args)
 
 
@@ -248,20 +245,20 @@ def _concat(files: list[str], out: Path, list_path: Path) -> None:
     # (clips share the same export settings, but re-encoding avoids timestamp glitches).
     lines = [f"file '{_concat_escape(str(Path(f).resolve()))}'" for f in files]
     list_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    ffmpeg.run(
-        [
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(list_path),
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-c:a",
-            "aac",
-            str(out),
-        ]
-    )
+    # Keep audio only if every clip has a track; otherwise render video-only
+    # (`-an`) so a silent clip in the list doesn't break the mux.
+    keep_audio = all(ffmpeg.has_audio(f) for f in files)
+    args = [
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(list_path),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+    ]
+    args += ["-c:a", "aac"] if keep_audio else ["-an"]
+    ffmpeg.run([*args, str(out)])

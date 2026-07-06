@@ -555,6 +555,7 @@ def test_concat_joins_channel_files_in_order(tmp_path, monkeypatch):
         Path(args[-1]).write_bytes(b"v")
 
     monkeypatch.setattr(ff, "run", fake_run)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     items = [  # given out of order -> concat must sort by index
         {"index": 1, "file": str(tmp_path / "b.mp4")},
         {"index": 0, "file": str(tmp_path / "a.mp4")},
@@ -817,6 +818,7 @@ def test_concat_with_transitions_builds_xfade_chain(tmp_path, monkeypatch):
     from lemontage.engine.blocks.concat import _concat_with_transitions
 
     monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     calls = {}
     monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
 
@@ -836,6 +838,7 @@ def test_concat_with_transitions_none_gap_uses_hard_cut(tmp_path, monkeypatch):
     from lemontage.engine.blocks.concat import _concat_with_transitions
 
     monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     calls = {}
     monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
 
@@ -872,6 +875,7 @@ def test_concat_block_routes_to_transitions(tmp_path, monkeypatch):
     from lemontage.engine.blocks.concat import ConcatBlock
 
     monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     calls = {}
     monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
 
@@ -885,11 +889,55 @@ def test_concat_block_routes_to_transitions(tmp_path, monkeypatch):
     assert "-filter_complex" in calls["args"]  # took the xfade path, not the demuxer
 
 
+def test_concat_transitions_video_only_drops_audio(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import _concat_with_transitions
+
+    monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: False)  # e.g. rendered stills
+    calls = {}
+    monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
+
+    files = [str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")]
+    _concat_with_transitions(files, ["fade"], 1.0, tmp_path / "reel.mp4")
+    graph = calls["args"][calls["args"].index("-filter_complex") + 1]
+    assert "xfade" in graph  # video crossfade still happens
+    assert "acrossfade" not in graph  # ...but no audio crossfade
+    assert "-c:a" not in calls["args"]  # and no audio codec / map
+
+
+def test_concat_transitions_keeps_audio_when_all_present(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import _concat_with_transitions
+
+    monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
+    calls = {}
+    monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
+
+    files = [str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")]
+    _concat_with_transitions(files, ["fade"], 1.0, tmp_path / "reel.mp4")
+    assert "acrossfade" in calls["args"][calls["args"].index("-filter_complex") + 1]
+
+
+def test_concat_plain_video_only_uses_an(tmp_path, monkeypatch):
+    from lemontage.engine import ffmpeg as ff
+    from lemontage.engine.blocks.concat import _concat
+
+    monkeypatch.setattr(ff, "has_audio", lambda _f: False)
+    calls = {}
+    monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
+    (tmp_path / "a.mp4").write_bytes(b"v")
+    _concat([str(tmp_path / "a.mp4")], tmp_path / "out.mp4", tmp_path / "list.txt")
+    assert "-an" in calls["args"] and "-c:a" not in calls["args"]
+
+
 def test_concat_boundaries_transition_only_at_channel_join(tmp_path, monkeypatch):
     from lemontage.engine import ffmpeg as ff
     from lemontage.engine.blocks.concat import ConcatBlock
 
     monkeypatch.setattr(ff, "probe_duration", lambda _f: 3.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     calls = {}
     monkeypatch.setattr(ff, "run", lambda args: calls.setdefault("args", args))
 
@@ -915,6 +963,7 @@ def test_concat_emits_reel_as_single_item_channel(tmp_path, monkeypatch):
     from lemontage.engine.blocks.concat import ConcatBlock
 
     monkeypatch.setattr(ff, "run", lambda args: None)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     items = [
         {"index": 0, "file": str(tmp_path / "a.mp4")},
         {"index": 1, "file": str(tmp_path / "b.mp4")},

@@ -83,6 +83,36 @@ def probe_resolution(path: str | Path) -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
+def has_audio(path: str | Path) -> bool:
+    """Return True if the media has at least one audio stream.
+
+    Used by ``concat`` to stay tolerant of video-only clips (e.g. rendered
+    stills carry no audio) — it drops the audio crossfade when a clip is silent.
+    """
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        proc = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        return bool(proc.stdout.strip())
+    # No ffprobe (imageio-ffmpeg ships only ffmpeg): parse ffmpeg's stream dump.
+    proc = subprocess.run([ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True)
+    return "Audio:" in proc.stderr
+
+
 def detect_content_crop(path: str | Path) -> str | None:
     """Detect a video's non-black content rectangle via ``cropdetect``.
 
