@@ -17,7 +17,18 @@ KNOWN_TOP_LEVEL = frozenset(
 
 # Built-in blocks shipped in v1. (tts is deferred to v2 — see TODO.)
 BUILTIN_BLOCKS = frozenset(
-    {"stt", "detect_clips", "cut", "captions", "export", "concat", "speed", "reverse"}
+    {
+        "stt",
+        "detect_clips",
+        "cut",
+        "captions",
+        "export",
+        "concat",
+        "speed",
+        "reverse",
+        "stills",
+        "still",
+    }
 )
 
 # Channel aggregators that may merge several channels via a list-valued `from`
@@ -46,9 +57,11 @@ COMMON_STEP_FIELDS = frozenset({"id", "cache", "on_failure", "retries", "require
 
 VALID_ON_FAILURE = frozenset({"abort", "skip", "retry"})
 
-# Input: v1 supports local MP4 video only.
-SUPPORTED_INPUT_TYPES = frozenset({"video"})
+# Input: a local MP4 video, or a folder of images (slideshow / photo montage).
+SUPPORTED_INPUT_TYPES = frozenset({"video", "images"})
 SUPPORTED_INPUT_EXTENSIONS = (".mp4",)
+# Image files the `stills` producer will pick up from an `images` source folder.
+SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 
 # Reserved but out of scope for v1 — using these is a validation error so that
 # pipelines shared today stay forward-compatible (see SPEC §11).

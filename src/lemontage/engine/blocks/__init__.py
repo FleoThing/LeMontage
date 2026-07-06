@@ -10,6 +10,8 @@ from .detect_clips import DetectClipsBlock
 from .export import ExportBlock
 from .reverse import ReverseBlock
 from .speed import SpeedBlock
+from .still import StillBlock
+from .stills import StillsBlock
 from .stt import SttBlock
 
 # Maps a block name to its implementation. The executor looks blocks up here.
@@ -24,6 +26,8 @@ REGISTRY: dict[str, Block] = {
         ConcatBlock(),
         SpeedBlock(),
         ReverseBlock(),
+        StillsBlock(),
+        StillBlock(),
     )
 }
 

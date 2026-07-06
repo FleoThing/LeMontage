@@ -86,13 +86,18 @@ def _check_input(doc: dict, errors: list[str]) -> None:
     elif itype in spec.RESERVED_INPUT_TYPES:
         errors.append(f"input.type '{itype}' is reserved and not supported in v1 (use 'video')")
     elif itype not in spec.SUPPORTED_INPUT_TYPES:
-        errors.append(f"unknown input.type '{itype}' (v1 supports 'video')")
+        supported = ", ".join(sorted(spec.SUPPORTED_INPUT_TYPES))
+        errors.append(f"unknown input.type '{itype}' (v1 supports: {supported})")
 
     source = src.get("source")
     if source is None:
         errors.append("input is missing 'source'")
     elif not isinstance(source, str):
         errors.append("input.source must be a string path")
+    elif itype == "images":
+        # A folder (or glob) of images — not a .mp4. Existence is a runtime check.
+        if source.lower().endswith(spec.SUPPORTED_INPUT_EXTENSIONS):
+            errors.append("input.source for type 'images' must be a folder of images, not a .mp4")
     elif not source.lower().endswith(spec.SUPPORTED_INPUT_EXTENSIONS):
         errors.append("input.source must be a .mp4 file in v1")
 

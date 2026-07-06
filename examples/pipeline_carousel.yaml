@@ -1,0 +1,57 @@
+lemontage: "1.0"
+name: carousel
+description: "A loudness highlight from a video, then a photo carousel (a transition between each image) — joined into one vertical video"
+
+# The pipeline input is the video the highlight branch works on. The carousel
+# branch reads a folder of images via a per-step `input:` override on `stills`.
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # === Sub-pipeline A: the loudness highlight -> one clip ===================
+  - id: hl-detect
+    detect_clips:
+      method: loudness
+      max_clips: 1
+      min_duration: 6s
+      max_duration: 10s
+      emit: highlight
+  - cut:
+      from: highlight
+  - export:
+      from: highlight
+      format: vertical
+  - id: hl-reel
+    concat:
+      from: highlight
+      emit: intro          # A's finished clip (keeps the video's audio)
+
+  # === Sub-pipeline B: the photo carousel -> one clip ======================
+  - id: shots
+    stills:
+      input: ./photos/     # folder of images (jpg/png/webp)
+      duration: 2s
+      emit: carousel
+  - still:                 # each image -> a 2s video clip (no audio)
+      from: carousel
+  - export:
+      from: carousel
+      format: vertical
+  - id: carousel-reel
+    concat:
+      from: carousel
+      transitions: fade    # a crossfade between every photo
+      emit: slideshow      # B's finished clip (video-only)
+
+  # === Join: highlight first, then the carousel ============================
+  # A single fade at the highlight -> carousel seam. The carousel is silent, so
+  # concat renders the join video-only (no audio is synthesised).
+  - id: final
+    concat:
+      from: [intro, slideshow]
+      transitions: fade
+      output: "./output/{{ name }}.mp4"
+
+output:
+  dir: ./output
