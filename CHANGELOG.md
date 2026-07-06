@@ -7,6 +7,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-06
+
 ### Added
 
 - `concat` can merge several channels: `from: [viral, montage]` joins channels
@@ -46,7 +48,7 @@ may still introduce breaking changes, and those changes must be called out here.
   to sane ranges to avoid absurd FFmpeg allocations.
 - Reject empty or dotted `--var` keys instead of silently dropping them.
 
-## [0.1.4] - Current
+## [0.1.4]
 
 ### Added
 
