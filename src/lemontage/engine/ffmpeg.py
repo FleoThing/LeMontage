@@ -113,6 +113,37 @@ def has_audio(path: str | Path) -> bool:
     return "Audio:" in proc.stderr
 
 
+def detect_content_crop(path: str | Path) -> str | None:
+    """Detect a video's non-black content rectangle via ``cropdetect``.
+
+    Returns an ffmpeg crop spec ``"w:h:x:y"`` for stripping baked-in letterbox /
+    pillar bars, or ``None`` when detection is inconclusive or there is nothing
+    to crop. Uses only FFmpeg — no extra dependency.
+    """
+    proc = subprocess.run(
+        [
+            ffmpeg_bin(),
+            "-hide_banner",
+            "-i",
+            str(path),
+            "-vf",
+            "cropdetect=round=2",
+            "-frames:v",
+            "120",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    matches = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", proc.stderr)
+    if not matches:
+        return None
+    w, h, x, y = matches[-1]
+    return f"{w}:{h}:{x}:{y}"
+
+
 def _parse_duration(stderr: str) -> float:
     match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", stderr)
     if not match:

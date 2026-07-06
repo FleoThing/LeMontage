@@ -16,13 +16,22 @@ from lemontage.engine.blocks.captions import (
     _dialogue,
     _lines_from_words,
 )
-from lemontage.engine.blocks.detect_clips import _select_loud_clips, _windowed_clips
+from lemontage.engine.blocks.detect_clips import (
+    _random_clips,
+    _select_loud_clips,
+    _windowed_clips,
+)
 from lemontage.engine.blocks.export import (
     ExportBlock,
     _author_ass,
+    _muted,
     _output_path,
+    _scale_chain,
     _target_size,
+    _title_align,
     _title_ass,
+    _title_border,
+    _title_window,
 )
 from lemontage.engine.blocks.stt import SttBlock
 from lemontage.engine.context import RunContext
@@ -182,6 +191,54 @@ def test_select_loud_clips_empty_timeline():
     assert _select_loud_clips([], total=100.0, min_dur=8, max_dur=20, max_clips=5) == []
 
 
+# --- detect_clips random ----------------------------------------------------
+
+
+def test_random_clips_count_lengths_and_no_overlap():
+    import random
+
+    clips = _random_clips(60.0, 1.3, 1.3, 8, random.Random(42))
+    assert len(clips) == 8
+    for i, (start, end) in enumerate(clips):
+        assert 0 <= start < end <= 60.0
+        assert abs((end - start) - 1.3) < 1e-6  # fixed length min==max
+        if i:
+            assert start >= clips[i - 1][1]  # non-overlapping, chronological
+
+
+def test_random_clips_advance_through_the_video():
+    import random
+
+    # Each clip must start after the previous one ends (forward walk), so a
+    # passage is never picked twice.
+    clips = _random_clips(120.0, 2.0, 4.0, 6, random.Random(3))
+    starts = [s for s, _ in clips]
+    assert starts == sorted(starts)
+    for i in range(1, len(clips)):
+        assert clips[i][0] >= clips[i - 1][1]
+
+
+def test_random_clips_is_reproducible_with_seed():
+    import random
+
+    a = _random_clips(60.0, 2.0, 5.0, 5, random.Random(7))
+    b = _random_clips(60.0, 2.0, 5.0, 5, random.Random(7))
+    assert a == b
+
+
+def test_random_clips_capped_by_available_space():
+    import random
+
+    # total 3s, min 1.3s -> at most 2 fit even though max_clips=8
+    assert len(_random_clips(3.0, 1.3, 1.3, 8, random.Random(0))) == 2
+
+
+def test_random_clips_empty_when_too_short():
+    import random
+
+    assert _random_clips(1.0, 1.3, 1.3, 8, random.Random(0)) == []
+
+
 # --- captions (word-level karaoke) -----------------------------------------
 
 
@@ -318,6 +375,78 @@ def test_title_ass_accepts_literal_backslash_n(tmp_path):
     assert r"line one\Nline two" in path.read_text()
 
 
+def test_title_window_defaults_to_whole_clip():
+    assert _title_window({}) == ("0:00:00.00", "9:59:59.99")
+
+
+def test_title_window_duration_sets_end():
+    assert _title_window({"title_duration": "2s"}) == ("0:00:00.00", "0:00:02.00")
+
+
+def test_title_window_start_and_end():
+    assert _title_window({"title_start": "1s", "title_end": "3s"}) == ("0:00:01.00", "0:00:03.00")
+
+
+def test_title_window_rejects_end_before_start():
+    with pytest.raises(ValueError, match="end must be after"):
+        _title_window({"title_start": "3s", "title_end": "1s"})
+
+
+def test_title_fade_injects_ass_fad_tag(tmp_path):
+    content = _title_ass({"title": "hi", "title_fade": "0.3s"}, ctx(tmp_path), "t").read_text()
+    dialogue = next(ln for ln in content.splitlines() if ln.startswith("Dialogue"))
+    assert r"{\fad(300,300)}" in dialogue
+
+
+def test_title_without_fade_has_no_fad_tag(tmp_path):
+    content = _title_ass({"title": "hi"}, ctx(tmp_path), "t").read_text()
+    assert r"\fad" not in content
+
+
+def test_title_fade_list_applies_per_clip(tmp_path):
+    params = {"title": "hi", "title_fade": [0, 0, "0.4s"]}
+    # clip 0: no fade
+    assert r"\fad" not in _title_ass(params, ctx(tmp_path), "t0", index=0).read_text()
+    # clip 2: 0.4s fade
+    assert r"{\fad(400,400)}" in _title_ass(params, ctx(tmp_path), "t2", index=2).read_text()
+
+
+def test_title_color_sets_ass_primary(tmp_path):
+    content = _title_ass({"title": "hi", "title_color": "#FFCC00"}, ctx(tmp_path), "t").read_text()
+    style = next(ln for ln in content.splitlines() if ln.startswith("Style: Title"))
+    assert "&H0000CCFF" in style  # #FFCC00 -> ASS &H00BBGGRR
+
+
+def test_title_color_list_applies_per_clip(tmp_path):
+    params = {"title": "hi", "title_color": ["red", None, "blue"]}
+
+    def primary(index):
+        content = _title_ass(params, ctx(tmp_path), f"t{index}", index=index).read_text()
+        style = next(ln for ln in content.splitlines() if ln.startswith("Style: Title"))
+        return style.split(",")[3]
+
+    assert primary(0) == "&H000000FF"  # red
+    assert primary(2) == "&H00FF0000"  # blue
+
+
+def test_title_color_defaults_to_white(tmp_path):
+    content = _title_ass({"title": "hi"}, ctx(tmp_path), "t").read_text()
+    style = next(ln for ln in content.splitlines() if ln.startswith("Style: Title"))
+    assert "&H00FFFFFF" in style
+
+
+def test_title_clips_restricts_to_listed_clips(tmp_path):
+    params = {"title": "hi", "title_clips": [0]}
+    assert _title_ass(params, ctx(tmp_path), "t0", index=0) is not None  # first clip: title
+    assert _title_ass(params, ctx(tmp_path), "t1", index=1) is None  # others: no title
+
+
+def test_title_ass_writes_the_window_into_the_dialogue(tmp_path):
+    content = _title_ass({"title": "hi", "title_duration": "2s"}, ctx(tmp_path), "t").read_text()
+    dialogue = next(ln for ln in content.splitlines() if ln.startswith("Dialogue"))
+    assert dialogue.split(",")[1:3] == ["0:00:00.00", "0:00:02.00"]
+
+
 def test_title_ass_default_font(tmp_path):
     content = _title_ass({"title": "Hi"}, ctx(tmp_path), "t").read_text()
     assert "Style: Title,Anton," in content  # default preset font1
@@ -444,6 +573,127 @@ def test_concat_single_mode_requires_channel(tmp_path):
 
     with pytest.raises(ValueError):
         ConcatBlock().execute({}, ctx(tmp_path), "concat")
+
+
+def test_scale_chain_contain_letterboxes(tmp_path):
+    chain = _scale_chain({}, 1080, 1920)  # default fit
+    assert any("force_original_aspect_ratio=decrease" in f for f in chain)
+    assert any(f.startswith("pad=") for f in chain)
+
+
+def test_scale_chain_cover_crops_without_bars(tmp_path):
+    chain = _scale_chain({"fit": "cover"}, 1080, 1920)
+    assert any("force_original_aspect_ratio=increase" in f for f in chain)
+    assert any(f.startswith("crop=1080:1920") for f in chain)
+    assert not any(f.startswith("pad=") for f in chain)  # no black bars
+
+
+def test_scale_chain_unknown_fit_raises():
+    with pytest.raises(ValueError, match="unknown fit"):
+        _scale_chain({"fit": "zoom"}, 1080, 1920)
+
+
+def test_bg_color_sets_pad_colour():
+    pad = _scale_chain({"fit": "contain", "bg": "white"}, 1080, 1920)[-1]
+    assert pad.startswith("pad=") and "color=white" in pad
+    hexpad = _scale_chain({"fit": "contain", "bg": "#101010"}, 1080, 1920)[-1]
+    assert "color=0x101010" in hexpad  # # -> 0x for ffmpeg
+
+
+def test_bg_blur_builds_split_overlay():
+    chain = _scale_chain({"fit": "contain", "bg": "blur"}, 1080, 1920)
+    graph = chain[-1]
+    assert graph.startswith("split=2")
+    assert "gblur=" in graph  # blurred background
+    assert graph.rstrip().endswith("overlay=(W-w)/2:(H-h)/2")  # fitted video on top
+    assert "pad=" not in graph  # no black bars
+
+
+def test_title_position_maps_to_alignment():
+    assert _title_align({}) == 8  # top (default)
+    assert _title_align({"title_position": "center"}) == 5
+    assert _title_align({"title_position": "bottom"}) == 2
+
+
+def test_title_position_unknown_raises():
+    with pytest.raises(ValueError, match="unknown title_position"):
+        _title_align({"title_position": "sideways"})
+
+
+def test_title_box_uses_border_style_3(tmp_path):
+    assert _title_border({}) == (1, "&H00000000")  # plain outline by default
+    border, _ = _title_border({"title_box": True})
+    assert border == 3  # opaque box
+    style = next(
+        ln
+        for ln in _title_ass({"title": "hi", "title_box": True}, ctx(tmp_path), "t")
+        .read_text()
+        .splitlines()
+        if ln.startswith("Style: Title")
+    )
+    assert ",3,2,1," in style  # BorderStyle 3 in the style line
+
+
+def test_muted_bool_applies_to_all():
+    assert _muted({"mute": True}, 0) is True
+    assert _muted({"mute": True}, 7) is True
+    assert _muted({}, 0) is False
+
+
+def test_muted_list_is_per_clip():
+    params = {"mute": [False, True, False]}
+    assert _muted(params, 0) is False
+    assert _muted(params, 1) is True
+    assert _muted(params, 5) is False  # out of range -> not muted
+
+
+def test_render_cover_and_mute_reach_ffmpeg(tmp_path, monkeypatch):
+    calls = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
+    monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: None)  # no source bars
+    ExportBlock().execute(
+        {"format": "vertical", "fit": "cover", "mute": True, "output": str(tmp_path / "o.mp4")},
+        ctx(tmp_path),
+        "exp",
+    )
+    vf = calls["args"][calls["args"].index("-vf") + 1]
+    assert "crop=1080:1920" in vf and "pad=" not in vf  # cover, no bars
+    assert "-af" in calls["args"] and "volume=0" in calls["args"]  # muted
+
+
+def test_cover_strips_source_letterbox_bars(tmp_path, monkeypatch):
+    calls = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
+    # Source has baked-in bars: real content is 1920x800 at y=140.
+    monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: "1920:800:0:140")
+    ExportBlock().execute(
+        {"format": "vertical", "fit": "cover", "output": str(tmp_path / "o.mp4")},
+        ctx(tmp_path),
+        "exp",
+    )
+    vf = calls["args"][calls["args"].index("-vf") + 1]
+    # the source crop is applied BEFORE the fill+crop, so the bars are gone
+    assert vf.startswith("crop=1920:800:0:140,")
+    assert "force_original_aspect_ratio=increase" in vf
+
+
+def test_cover_trim_bars_can_be_disabled(tmp_path, monkeypatch):
+    seen = {"detect": 0}
+
+    def fake_detect(_m):
+        seen["detect"] += 1
+        return "1920:800:0:140"
+
+    monkeypatch.setattr(ffmpeg, "run", lambda args: None)
+    monkeypatch.setattr(ffmpeg, "detect_content_crop", fake_detect)
+    params = {
+        "format": "vertical",
+        "fit": "cover",
+        "trim_bars": False,
+        "output": str(tmp_path / "o.mp4"),
+    }
+    ExportBlock().execute(params, ctx(tmp_path), "exp")
+    assert seen["detect"] == 0  # detection skipped when trim_bars: false
 
 
 # --- concat transitions -----------------------------------------------------

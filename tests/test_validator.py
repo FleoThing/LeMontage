@@ -122,6 +122,26 @@ def test_reserved_tts_block_rejected():
     assert any("reserved" in e and "tts" in e for e in errors)
 
 
+def test_export_valid_fit_and_mute_pass():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"][-1] = {"export": {"from": "clip_channel", "fit": "cover", "mute": [False, True]}}
+    assert validate_doc(d) == []
+
+
+def test_export_unknown_fit_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"][-1] = {"export": {"from": "clip_channel", "fit": "zoom"}}
+    errors = validate_doc(d)
+    assert any("unknown export fit" in e and "zoom" in e for e in errors)
+
+
+def test_export_bad_mute_type_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"][-1] = {"export": {"from": "clip_channel", "mute": "yes"}}
+    errors = validate_doc(d)
+    assert any("mute must be a boolean" in e for e in errors)
+
+
 def test_concat_valid_transitions_pass():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] += [{"concat": {"from": "clip_channel", "transitions": ["fade", "wipeleft"]}}]
