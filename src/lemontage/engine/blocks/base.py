@@ -8,6 +8,13 @@ A block runs in one of two modes:
 * **mapped** — when the step has ``from: <channel>``, the executor calls
   :meth:`Block.execute_item` once per channel item, in parallel, and aggregates
   the per-item outputs into lists.
+* **aggregator** — a block with ``maps = False`` receives the whole channel via
+  :meth:`Block.execute_channel`. Its ``from`` may name a single channel or a
+  **list** of channels (``from: [a, b]``): the executor merges them in listed
+  order, re-indexes the items, and hands the block one flat list. An aggregator
+  may also set ``channel_items`` on its result and carry an ``emit:``; the
+  executor then publishes that channel, so a produced reel can feed a parent
+  aggregator (nested sub-pipelines).
 """
 
 from __future__ import annotations

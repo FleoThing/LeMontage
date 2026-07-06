@@ -7,6 +7,11 @@ after ``export`` to assemble the rendered clips into a final reel.
 Plain concatenation uses FFmpeg's concat demuxer (fast, no re-encode of the
 joins). Passing ``transitions`` switches to a ``xfade``/``acrossfade``
 filter-graph chain instead, crossfading video and audio across each gap.
+
+When ``from`` merges several channels, ``transitions_at: boundaries`` places the
+transition only where one channel hands off to the next (a single crossfade at
+the viral→montage join), leaving the within-channel gaps as hard cuts. The
+default, ``transitions_at: all``, applies to every gap.
 """
 
 from __future__ import annotations
@@ -34,19 +39,27 @@ class ConcatBlock(Block):
         self, params: dict[str, Any], items: list[dict[str, Any]], ctx: RunContext, step_id: str
     ) -> BlockResult:
         ordered = sorted(items, key=lambda it: it.get("index", 0))
-        # Prefer the exported file; fall back to the cut/captioned clip.
+        # Prefer the exported file; fall back to the cut/captioned clip. Keep the
+        # item alongside its file so channel boundaries stay aligned after filtering.
+        ordered = [it for it in ordered if it.get("file") or it.get("clip")]
         files = [it.get("file") or it.get("clip") for it in ordered]
-        files = [f for f in files if f]
         if not files:
             return BlockResult(outputs={})
         out = _output_path(params, ctx)
-        transitions = _resolve_transitions(params, len(files))
+        boundary_gaps = _boundary_gaps(ordered)
+        transitions = _resolve_transitions(params, len(files), boundary_gaps)
         if transitions is None:
             _concat(files, out, ctx.work_dir() / f"{step_id}-list.txt")
         else:
             duration = parse_seconds(params.get("duration", _DEFAULT_TRANSITION_DURATION))
             _concat_with_transitions(files, transitions, duration, out)
-        return BlockResult(outputs={"file": str(out), "parts": files})
+        # Also expose the reel as a single-item channel: a step with `emit:` can
+        # hand its finished clip to a parent concat (nested sub-pipelines).
+        reel = str(out)
+        return BlockResult(
+            outputs={"file": reel, "parts": files},
+            channel_items=[{"index": 0, "file": reel, "clip": reel}],
+        )
 
 
 def _output_path(params: dict[str, Any], ctx: RunContext) -> Path:
@@ -66,8 +79,30 @@ def _output_path(params: dict[str, Any], ctx: RunContext) -> Path:
     return out
 
 
-def _resolve_transitions(params: dict[str, Any], n_files: int) -> list[str] | None:
-    """Return one transition name per gap between clips, or None for a plain concat."""
+def _boundary_gaps(ordered: list[dict[str, Any]]) -> list[int]:
+    """Gap indices where the source channel changes (a channel-merge boundary).
+
+    Gap ``i`` sits between clip ``i`` and clip ``i + 1``. Items are tagged with
+    ``_channel`` by the executor when it merges a list of channels; a single
+    channel (or untagged items) yields no boundaries.
+    """
+    channels = [it.get("_channel") for it in ordered]
+    return [
+        i
+        for i in range(len(channels) - 1)
+        if channels[i] is not None and channels[i] != channels[i + 1]
+    ]
+
+
+def _resolve_transitions(
+    params: dict[str, Any], n_files: int, boundary_gaps: list[int] | None = None
+) -> list[str] | None:
+    """Return one transition name per gap between clips, or None for a plain concat.
+
+    ``transitions_at`` scopes where the transition(s) apply: ``all`` (default) is
+    one per gap; ``boundaries`` places them only at channel-merge boundaries and
+    leaves within-channel gaps as hard cuts.
+    """
     raw = params.get("transitions")
     if raw is None:
         return None
@@ -75,17 +110,14 @@ def _resolve_transitions(params: dict[str, Any], n_files: int) -> list[str] | No
     if n_gaps <= 0:
         raise ValueError("concat: 'transitions' given but there is only 1 clip to join")
 
-    if isinstance(raw, str):
-        names = [raw] * n_gaps
-    elif isinstance(raw, list):
-        if len(raw) != n_gaps:
-            raise ValueError(
-                f"concat: 'transitions' has {len(raw)} entrie(s) but {n_files} clips need "
-                f"{n_gaps} (one per gap between consecutive clips)"
-            )
-        names = [str(t) for t in raw]
+    scope = params.get("transitions_at", "all")
+    if scope not in ("all", "boundaries"):
+        raise ValueError("concat: 'transitions_at' must be 'all' or 'boundaries'")
+
+    if scope == "boundaries":
+        names = _boundary_transition_names(raw, n_gaps, boundary_gaps or [])
     else:
-        raise ValueError("concat: 'transitions' must be a string or a list of strings")
+        names = _per_gap_transition_names(raw, n_files, n_gaps)
 
     for name in names:
         if name not in CONCAT_TRANSITIONS:
@@ -94,6 +126,44 @@ def _resolve_transitions(params: dict[str, Any], n_files: int) -> list[str] | No
 
     if all(name == "none" for name in names):
         return None
+    return names
+
+
+def _per_gap_transition_names(raw: object, n_files: int, n_gaps: int) -> list[str]:
+    """`transitions_at: all` — a name for every gap (string fills all; list is per-gap)."""
+    if isinstance(raw, str):
+        return [raw] * n_gaps
+    if isinstance(raw, list):
+        if len(raw) != n_gaps:
+            raise ValueError(
+                f"concat: 'transitions' has {len(raw)} entrie(s) but {n_files} clips need "
+                f"{n_gaps} (one per gap between consecutive clips)"
+            )
+        return [str(t) for t in raw]
+    raise ValueError("concat: 'transitions' must be a string or a list of strings")
+
+
+def _boundary_transition_names(raw: object, n_gaps: int, boundary_gaps: list[int]) -> list[str]:
+    """`transitions_at: boundaries` — transition only at channel joins, else a hard cut."""
+    n_bounds = len(boundary_gaps)
+    if n_bounds == 0:
+        # Nothing to place transitions on (single channel): fall back to a plain cut.
+        return ["none"] * n_gaps
+    if isinstance(raw, str):
+        at_boundary = [raw] * n_bounds
+    elif isinstance(raw, list):
+        if len(raw) != n_bounds:
+            raise ValueError(
+                f"concat: 'transitions_at: boundaries' needs one transition per channel join "
+                f"({n_bounds}), got {len(raw)}"
+            )
+        at_boundary = [str(t) for t in raw]
+    else:
+        raise ValueError("concat: 'transitions' must be a string or a list of strings")
+
+    names = ["none"] * n_gaps
+    for gap, name in zip(boundary_gaps, at_boundary, strict=True):
+        names[gap] = name
     return names
 
 

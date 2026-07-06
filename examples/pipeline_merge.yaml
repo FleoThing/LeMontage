@@ -1,0 +1,59 @@
+lemontage: "1.0"
+name: merge
+description: "Two independent sub-pipelines — each concatenated into its own clip with its own transitions — joined into one video with a crossfade between them"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # === Sub-pipeline A: the loudest moments -> ONE finished clip =============
+  # Detect, cut and export each moment, then concat them into a single reel
+  # (with A's own transition), emitted as the channel `reel_a`.
+  - id: a-detect
+    detect_clips:
+      method: loudness
+      max_clips: 10
+      min_duration: 3s
+      max_duration: 8s
+      emit: a_clips
+  - cut:
+      from: a_clips
+  - export:
+      from: a_clips
+  - id: a-reel
+    concat:
+      from: a_clips
+      transitions: fade
+      emit: reel_a          # A's finished clip, exposed as a channel
+
+  # === Sub-pipeline B: a scene-change montage -> ONE finished clip ==========
+  # A different logic and a different transition, emitted as `reel_b`.
+  - id: b-detect
+    detect_clips:
+      method: scene_change
+      max_clips: 6
+      min_duration: 2s
+      max_duration: 5s
+      emit: b_clips
+  - cut:
+      from: b_clips
+  - export:
+      from: b_clips
+  - id: b-reel
+    concat:
+      from: b_clips
+      transitions: wipeleft
+      emit: reel_b
+
+  # === Join the two finished clips, one crossfade at the seam ===============
+  # The final concat sees just two items (the two reels). Drop `transitions`
+  # here for a hard cut instead of a crossfade.
+  - id: final
+    concat:
+      from: [reel_a, reel_b]
+      transitions: fade
+      output: "./output/{{ name }}.mp4"
+
+output:
+  dir: ./output

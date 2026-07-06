@@ -9,6 +9,12 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `concat` can merge several channels: `from: [viral, montage]` joins channels
+  in listed order into one reel. `transitions_at: boundaries` places a single
+  transition at each channel join (default `all` crossfades every gap).
+- `concat` can `emit:` its reel as a channel, so branches nest: each is a
+  self-contained sub-pipeline concatenating (with its own transitions) into one
+  clip, and a parent `concat` joins those clips — with or without a transition.
 - `export` author label: persistent corner credit for the clip's source channel
   or the editor's own handle (`author`, `author_position`, `author_size`,
   `author_margin`, `author_font`).

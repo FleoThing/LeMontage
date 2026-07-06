@@ -57,3 +57,44 @@ def test_emit_and_consume_recorded():
     nodes = {n.step_id: n for n in build_dag(steps)}
     assert nodes["clips"].emits == "ch"
     assert nodes["cut"].consumes == "ch"
+    assert nodes["cut"].consumes_list == ["ch"]
+
+
+# --- multi-channel `from` (channel operators) -------------------------------
+
+
+def test_merge_step_depends_on_all_listed_producers():
+    steps = [
+        {"id": "va", "detect_clips": {"method": "loudness", "emit": "viral"}},
+        {"id": "mo", "detect_clips": {"method": "random", "emit": "montage"}},
+        {"id": "reel", "concat": {"from": ["viral", "montage"]}},
+    ]
+    result = order(steps)
+    assert result.index("va") < result.index("reel")
+    assert result.index("mo") < result.index("reel")
+    nodes = {n.step_id: n for n in build_dag(steps)}
+    assert nodes["reel"].consumes_list == ["viral", "montage"]
+    assert nodes["reel"].consumes is None  # multi-channel -> no single consumes
+
+
+def test_merge_runs_after_each_channels_last_consumer():
+    # concat must run after BOTH export steps (it prefers the exported file).
+    steps = [
+        {"id": "va", "detect_clips": {"method": "loudness", "emit": "viral"}},
+        {"id": "eva", "export": {"from": "viral"}},
+        {"id": "mo", "detect_clips": {"method": "silence", "emit": "montage"}},
+        {"id": "emo", "export": {"from": "montage"}},
+        {"id": "reel", "concat": {"from": ["viral", "montage"]}},
+    ]
+    result = order(steps)
+    assert result.index("eva") < result.index("reel")
+    assert result.index("emo") < result.index("reel")
+
+
+def test_unknown_channel_in_list_raises():
+    steps = [
+        {"id": "va", "detect_clips": {"emit": "viral"}},
+        {"id": "reel", "concat": {"from": ["viral", "ghost"]}},
+    ]
+    with pytest.raises(DagError, match="ghost"):
+        build_dag(steps)

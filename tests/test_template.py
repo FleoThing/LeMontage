@@ -37,9 +37,9 @@ def test_nested_structures_are_resolved():
 
 
 def test_name_placeholder_resolves_to_pipeline_name():
-    ctx = make_ctx(pipeline_name="ufc-highlights")
+    ctx = make_ctx(pipeline_name="my-reel")
     assert template.resolve("./out/{{ name }}-{{ index }}.mp4", ctx) == (
-        "./out/ufc-highlights-{{ index }}.mp4"
+        "./out/my-reel-{{ index }}.mp4"
     )
 
 

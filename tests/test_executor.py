@@ -220,6 +220,101 @@ def test_channel_aggregator_receives_all_items(patch_registry, tmp_path):
     assert result.cells[0].outputs["reel"]["count"] == 3
 
 
+class RecordingAggregator(Block):
+    """A concat-like aggregator that records the items it received."""
+
+    name = "concat"
+    maps = False
+
+    def __init__(self):
+        self.items = None
+
+    def execute(self, params, ctx, step_id):  # pragma: no cover - must aggregate
+        raise AssertionError("should aggregate, not run single")
+
+    def execute_channel(self, params, items, ctx, step_id):
+        self.items = items
+        return BlockResult(outputs={"count": len(items)})
+
+
+def test_merge_channels_orders_in_listed_order_and_reindexes(patch_registry, tmp_path):
+    patch_registry["detect_clips"] = Producer()
+    agg = RecordingAggregator()
+    patch_registry["concat"] = agg
+    doc = base_doc(
+        [
+            {"id": "va", "detect_clips": {"n": 1, "emit": "viral"}},
+            {"id": "mo", "detect_clips": {"n": 3, "emit": "montage"}},
+            {"id": "reel", "concat": {"from": ["viral", "montage"]}},
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+    assert result.cells[0].outputs["reel"]["count"] == 4
+    # viral (1 item) then montage (3 items); Producer sets start=i per channel.
+    assert [it["start"] for it in agg.items] == [0, 0, 1, 2]
+    # merged items are re-indexed sequentially so a sort-by-index keeps this order.
+    assert [it["index"] for it in agg.items] == [0, 1, 2, 3]
+
+
+class NestingConcat(Block):
+    """A concat-like aggregator that collapses its input to one reel and emits it."""
+
+    name = "concat"
+    maps = False
+
+    def __init__(self):
+        self.seen = {}  # step_id -> the files it received
+
+    def execute(self, params, ctx, step_id):  # pragma: no cover - must aggregate
+        raise AssertionError("should aggregate, not run single")
+
+    def execute_channel(self, params, items, ctx, step_id):
+        self.seen[step_id] = [it.get("file") for it in items]
+        reel = f"{step_id}.mp4"
+        return BlockResult(
+            outputs={"file": reel},
+            channel_items=[{"index": 0, "file": reel}],
+        )
+
+
+def test_nested_concat_reels_become_items_of_final_concat(patch_registry, tmp_path):
+    """Each branch concats into one reel, emitted as a channel the final concat joins."""
+    patch_registry["detect_clips"] = Producer()
+    concat = NestingConcat()
+    patch_registry["concat"] = concat
+    doc = base_doc(
+        [
+            {"id": "ca", "detect_clips": {"n": 3, "emit": "a_clips"}},
+            {"id": "ra", "concat": {"from": "a_clips", "emit": "reelA"}},
+            {"id": "cb", "detect_clips": {"n": 2, "emit": "b_clips"}},
+            {"id": "rb", "concat": {"from": "b_clips", "emit": "reelB"}},
+            {"id": "final", "concat": {"from": ["reelA", "reelB"]}},
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+    assert result.ok
+    # The final concat saw exactly the two finished reels — one item per branch.
+    assert concat.seen["final"] == ["ra.mp4", "rb.mp4"]
+
+
+def test_merge_skips_empty_channel(patch_registry, tmp_path):
+    patch_registry["detect_clips"] = Producer()
+    agg = RecordingAggregator()
+    patch_registry["concat"] = agg
+    doc = base_doc(
+        [
+            {"id": "va", "detect_clips": {"n": 0, "emit": "viral"}},
+            {"id": "mo", "detect_clips": {"n": 2, "emit": "montage"}},
+            {"id": "reel", "concat": {"from": ["viral", "montage"]}},
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+    assert result.cells[0].outputs["reel"]["count"] == 2  # empty 'viral' drops out
+
+
 def test_matrix_fans_out_runs(patch_registry, tmp_path):
     block = RecordingBlock("stt")
     patch_registry["stt"] = block
