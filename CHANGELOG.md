@@ -7,6 +7,17 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- Image-folder input (`input.type: images`): build a slideshow / photo montage
+  from a folder of `.jpg` / `.jpeg` / `.png` / `.webp` files.
+- `stills` built-in block: emit a channel with one item per image of a folder
+  (natural sort, optional seeded `shuffle`, `max`, per-image `duration`).
+- `still` built-in block: render an image into a short video-only H.264 clip so
+  `export` and `concat` (transitions) can treat it like any other clip.
+- `concat` tolerates video-only clips: when a clip has no audio track, the join
+  is rendered without audio instead of failing.
+
 ## [0.2.0] - 2026-07-06
 
 ### Added

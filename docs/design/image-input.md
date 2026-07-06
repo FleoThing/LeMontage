@@ -1,7 +1,7 @@
 # Design note — image folder input (slideshow / photo montage)
 
-> **Status:** design only, not implemented. Branch `feat/image-input`.
-> Captures what to build later so we don't lose the context.
+> **Status:** implemented on branch `feat/image-input` (`stills` + `still`
+> blocks, `input.type: images`). See SPEC §6.10–6.11. Kept for design context.
 
 ## Goal / use case
 
