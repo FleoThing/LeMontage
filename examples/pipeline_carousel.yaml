@@ -1,6 +1,6 @@
 lemontage: "1.0"
 name: carousel
-description: "A loudness highlight from a video, then a photo carousel (a transition between each image) — joined into one vertical video"
+description: "A loudness highlight then a photo carousel (slide transitions) joined into one vertical video, with a persistent title + author burned once over the whole reel"
 
 # The pipeline input is the video the highlight branch works on. The carousel
 # branch reads a folder of images via a per-step `input:` override on `stills`.
@@ -10,8 +10,12 @@ input:
 
 steps:
   # === Sub-pipeline A: the loudness highlight -> one clip ===================
+  # Per-clip export only normalises size/framing (fit: cover); the title/author
+  # are added later, once, over the final reel — so they don't travel with the
+  # clips during slide transitions.
   - id: hl-detect
     detect_clips:
+      input: ./video-example.mp4
       method: loudness
       max_clips: 1
       min_duration: 6s
@@ -22,10 +26,12 @@ steps:
   - export:
       from: highlight
       format: vertical
+      fit: cover
   - id: hl-reel
     concat:
       from: highlight
-      emit: intro          # A's finished clip (keeps the video's audio)
+      output: "./output/intro.mp4"   # distinct output (else it collides with the carousel reel)
+      emit: intro
 
   # === Sub-pipeline B: the photo carousel -> one clip ======================
   - id: shots
@@ -38,19 +44,31 @@ steps:
   - export:
       from: carousel
       format: vertical
+      fit: cover           # crop each photo to fill the vertical frame
   - id: carousel-reel
     concat:
       from: carousel
-      transitions: fade    # a crossfade between every photo
-      emit: slideshow      # B's finished clip (video-only)
+      # 5 photos -> 4 gaps: alternate slide directions between the photos.
+      transitions: [slideleft, slideright, slideleft, slideright]
+      duration: 0.2s        # quick slide (default is 0.5s)
+      output: "./output/slideshow.mp4"
+      emit: slideshow
 
-  # === Join: highlight first, then the carousel ============================
-  # A single fade at the highlight -> carousel seam. The carousel is silent, so
-  # concat renders the join video-only (no audio is synthesised).
+  # === Join the two clips, then title the whole reel once ==================
   - id: final
     concat:
       from: [intro, slideshow]
       transitions: fade
+      emit: reel           # the assembled reel, as a channel
+  - id: titled
+    export:
+      from: reel           # title + author burned ONCE, over everything —
+      title: "Good Title"  # so it stays fixed while the images slide beneath
+      title_position: top
+      title_box: true
+      author: fillouxdev
+      author_position: bottom-center
+      author_size: 60
       output: "./output/{{ name }}.mp4"
 
 output:
