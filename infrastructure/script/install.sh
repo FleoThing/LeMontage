@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
 # LeMontage - install from source on Linux (apt) or macOS (Homebrew).
-# Run from the repo root:  ./install.sh
+# Run from the repo root:  ./infrastructure/script/install.sh
 #
 # Installs the system prerequisites, creates a venv, installs LeMontage + its
 # engine, and installs the man page. FFmpeg is bundled via imageio-ffmpeg, so no
-# system ffmpeg is required.  (Windows: use install.ps1.)
+# system ffmpeg is required.  (Windows: use infrastructure/script/install.ps1.)
 
 set -euo pipefail
 

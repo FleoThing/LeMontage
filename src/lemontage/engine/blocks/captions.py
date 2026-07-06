@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import ffmpeg, fonts
+from ..assformat import escape_text
 from ..context import RunContext
 from ..timecode import to_timecode
 from .base import Block, BlockResult, ItemResult
@@ -188,12 +189,14 @@ def _dialogue(line: dict[str, Any]) -> str:
     start, end = _ass_time(line["start"]), _ass_time(line["end"])
     words = line["words"]
     if not words:  # segment fallback: plain text, no karaoke
-        return f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{line['text']}"
+        return f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{escape_text(line['text'])}"
     parts = []
     for i, w in enumerate(words):
         nxt = words[i + 1]["start"] if i + 1 < len(words) else w["end"]
         cs = max(1, round((nxt - w["start"]) * 100))  # absorb the gap to the next word
-        parts.append(f"{{\\k{cs}}}{w['text']} ")
+        # Escape the word text, then wrap it with our own karaoke tag: user text
+        # (from the transcript) can never inject an ASS override block.
+        parts.append(f"{{\\k{cs}}}{escape_text(w['text'])} ")
     return f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{''.join(parts).rstrip()}"
 
 

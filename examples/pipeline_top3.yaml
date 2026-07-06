@@ -1,0 +1,57 @@
+lemontage: "1.0"
+name: top3
+description: "Keep the 3 loudest moments of a video as vertical clips, each with a numbered title and captions"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Transcribe for captions (VAD trims non-speech: silence, music, noise)
+  - id: transcript
+    stt:
+      model: small
+      lang: auto
+      vad_filter: true
+      beam_size: 5
+    cache: true
+    on_failure: retry
+    retries: 2
+
+  # 2. The loudest windows = the strongest moments. Keep the top 3; each clip's
+  #    boundaries are found automatically around its peak (min/max bound length).
+  - id: moments
+    detect_clips:
+      method: loudness
+      min_duration: 12s
+      max_duration: 40s
+      max_clips: 3
+      emit: highlights
+
+  # 3. Cut each moment out of the source, in parallel
+  - cut:
+      from: highlights
+
+  # 4. Word-by-word karaoke captions (TikTok / CapCut style)
+  - captions:
+      from: highlights
+      words: "{{ steps.transcript.words }}"
+      style: tiktok
+      position: bottom
+      max_chars: 32
+    requires: transcript.success
+
+  # 5. Vertical export + a numbered title per clip ({{ part }} is 1-based)
+  - export:
+      from: highlights
+      format: vertical
+      resolution: 1080x1920
+      fps: 30
+      title: "Top {{ part }}"
+      title_font: font2      # font1..font5 (social presets) or an installed font name
+      title_size: 62
+      title_margin: 330
+      output: "./output/{{ name }}-{{ part }}.mp4"
+
+output:
+  dir: ./output

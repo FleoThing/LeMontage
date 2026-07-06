@@ -172,12 +172,35 @@ def _check_block_params(
         if method in spec.RESERVED_DETECT_METHODS:
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
 
+    if block == "concat":
+        _check_concat_transitions(params.get("transitions"), label, errors)
+        scope = params.get("transitions_at")
+        if scope is not None and scope not in ("all", "boundaries"):
+            errors.append(f"{label}: concat.transitions_at must be 'all' or 'boundaries'")
+
     emit = params.get("emit")
     if emit is not None:
         if not isinstance(emit, str):
             errors.append(f"{label}: emit must be a channel name (string)")
         else:
             emitted.add(emit)
+
+
+def _check_concat_transitions(transitions: object, label: str, errors: list[str]) -> None:
+    """Validate concat's `transitions` names (its per-gap count is a runtime check)."""
+    if transitions is None:
+        return
+    if isinstance(transitions, str):
+        names = [transitions]
+    elif isinstance(transitions, list):
+        names = [t for t in transitions]
+    else:
+        errors.append(f"{label}: concat.transitions must be a string or a list of strings")
+        return
+    valid = ", ".join(sorted(spec.CONCAT_TRANSITIONS))
+    for name in names:
+        if not isinstance(name, str) or name not in spec.CONCAT_TRANSITIONS:
+            errors.append(f"{label}: unknown transition '{name}' (choose from: {valid})")
 
 
 def _check_channel_refs(doc: dict, errors: list[str], emitted: set[str]) -> None:
@@ -192,10 +215,35 @@ def _check_channel_refs(doc: dict, errors: list[str], emitted: set[str]) -> None
         block_keys = [k for k in step if k not in spec.COMMON_STEP_FIELDS]
         if len(block_keys) != 1:
             continue
-        params = step.get(block_keys[0])
+        block = block_keys[0]
+        params = step.get(block)
         if not isinstance(params, dict):
             continue
-        channel = params.get("from")
-        if isinstance(channel, str) and channel not in emitted:
-            label = f"step '{step['id']}'" if "id" in step else f"step #{index + 1}"
-            errors.append(f"{label}: 'from: {channel}' references an unknown channel")
+        label = f"step '{step['id']}'" if "id" in step else f"step #{index + 1}"
+        _check_from(params.get("from"), block, label, errors, emitted)
+
+
+def _check_from(
+    channel: object, block: str, label: str, errors: list[str], emitted: set[str]
+) -> None:
+    """Validate a `from:` — a single channel name, or a list for aggregators."""
+    if channel is None:
+        return
+    if isinstance(channel, str):
+        names = [channel]
+    elif isinstance(channel, list):
+        # Only channel aggregators may merge several channels; a mapped block
+        # (cut/captions/export) reads exactly one.
+        if block not in spec.CHANNEL_MERGERS:
+            errors.append(f"{label}: block '{block}' does not support a list of channels in 'from'")
+            return
+        names = channel
+    else:
+        errors.append(f"{label}: 'from' must be a channel name or a list of channel names")
+        return
+
+    for name in names:
+        if not isinstance(name, str):
+            errors.append(f"{label}: 'from' entries must be channel names (strings)")
+        elif name not in emitted:
+            errors.append(f"{label}: 'from: {name}' references an unknown channel")

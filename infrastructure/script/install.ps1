@@ -1,5 +1,5 @@
 # LeMontage - install from source on Windows (PowerShell).
-# Run from the repo root:  ./install.ps1
+# Run from the repo root:  ./infrastructure/script/install.ps1
 #
 # Creates a venv and installs LeMontage + its engine. FFmpeg is bundled via
 # imageio-ffmpeg, so no system ffmpeg is required.

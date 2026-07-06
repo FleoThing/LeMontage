@@ -1,0 +1,37 @@
+lemontage: "1.0"
+name: reverse
+description: "Play a moment backwards for a rewind effect, then export vertical"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Pick a moment to rewind (the loudest window here)
+  - id: moments
+    detect_clips:
+      method: loudness
+      min_duration: 4s
+      max_duration: 10s
+      max_clips: 1
+      emit: clips
+
+  # 2. Cut it out of the source
+  - cut:
+      from: clips
+
+  # 3. Play it backwards (video + audio). Mapped over the channel; meant for
+  #    short clips, since reverse buffers the whole stream in memory.
+  - reverse:
+      from: clips
+
+  # 4. Vertical export
+  - export:
+      from: clips
+      format: vertical
+      resolution: 1080x1920
+      fps: 30
+      output: "./output/{{ name }}-{{ index }}.mp4"
+
+output:
+  dir: ./output
