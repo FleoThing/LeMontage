@@ -1,4 +1,4 @@
-.TH LEMONTAGE 1 "2026-06-30" "lemontage 0.1.4" "LeMontage Manual"
+.TH LEMONTAGE 1 "2026-07-06" "lemontage 0.2.0" "LeMontage Manual"
 .SH NAME
 lemontage \- declarative YAML pipelines for automated social video creation
 .SH SYNOPSIS
@@ -18,6 +18,9 @@ lemontage \- declarative YAML pipelines for automated social video creation
 .B lemontage init
 .RB [ \-\-force ]
 .RI [ file ]
+.br
+.B lemontage completion
+.IR shell
 .SH DESCRIPTION
 .B LeMontage
 turns a single declarative YAML file into produced media. A pipeline describes
@@ -48,6 +51,12 @@ exits non\-zero if any are found. Dependency\-light: needs no models or FFmpeg.
 .B init \fR[\fIfile\fR]
 Write a starter pipeline to \fIfile\fR (default \fBpipeline.yaml\fR). Refuses to
 overwrite an existing file unless \fB\-\-force\fR is given.
+.TP
+.B completion \fIshell\fR
+Print a shell completion script for \fIshell\fR (\fBbash\fR, \fBzsh\fR or
+\fBfish\fR) to stdout. It completes sub\-commands, their options, and pipeline
+\fB.yaml\fR files. Install with, e.g., \fBeval "$(lemontage completion bash)"\fR
+in \fB~/.bashrc\fR, or write it to your shell's completions directory.
 .SH OPTIONS
 .TP
 .B \-\-version
@@ -98,7 +107,7 @@ Fan the whole pipeline out over every combination of the listed values
 Global output settings, e.g. \fBdir: ./output\fR (optional).
 .PP
 Built\-in blocks: \fBstt\fR, \fBdetect_clips\fR, \fBcut\fR,
-\fBcaptions\fR, \fBexport\fR, \fBconcat\fR. Common per\-step fields: \fBid\fR, \fBcache\fR,
+\fBcaptions\fR, \fBexport\fR, \fBconcat\fR, \fBspeed\fR, \fBreverse\fR. Common per\-step fields: \fBid\fR, \fBcache\fR,
 \fBon_failure\fR (\fBabort\fR|\fBskip\fR|\fBretry\fR), \fBretries\fR,
 \fBrequires\fR.
 .SS Templating

@@ -1,6 +1,6 @@
 lemontage: "1.0"
-name: podcast-to-clips
-description: "Turn a long podcast into short captioned vertical clips"
+name: clips
+description: "Split a long video into short captioned vertical clips"
 
 input:
   type: video
@@ -10,7 +10,7 @@ steps:
   - id: transcript
     stt:
       model: base
-      lang: fr
+      lang: auto
 
   - id: clips
     detect_clips:

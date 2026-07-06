@@ -201,7 +201,7 @@ more accurate but slower and heavier to download (cached after first use):
 |---|---|---|---|
 | `tiny` | ~75 MB | fastest | quick tests |
 | `base` | ~140 MB | fast | default, decent |
-| `small` | ~460 MB | medium | good quality (used by the UFC example) |
+| `small` | ~460 MB | medium | good quality (used by the top3 example) |
 | `medium` | ~1.5 GB | slow | high accuracy |
 | `large` / `large-v3` | ~3 GB | slowest | best accuracy |
 
@@ -357,11 +357,28 @@ Renders the final video(s) to disk.
 | `title_shadow` | bool \| number | — | Drop shadow behind the title: `true` (visible), `false` (none), or a px offset. Absent keeps a subtle 1px shadow. |
 | `title_margin` | int | `120` | Title distance from the top edge (into the letterbox band). |
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
+| `author` | string | — | Small persistent credit label: the clip's source channel (e.g. `Extrait de @Chaine`) or the editor's own handle. Same tokens as `title`. |
+| `author_position` | enum | `top-left` | `top-left` \| `top-center` \| `top-right` \| `bottom-left` \| `bottom-center` \| `bottom-right`. The default stays clear of the Shorts/TikTok player UI (right edge and bottom are covered). `top-center` shares the title band and `bottom-center` the captions band — bump `author_margin` if both are in play. |
+| `author_size` | int | `26` | Author label font size, in pixels of the export resolution. |
+| `author_margin` | int | `60` | Author label distance from the frame edges. |
+| `author_font` | string | `font1` | Same presets/family rules as `title_font`. |
 | `output` | path | `output.dir` | Output path; supports `{{ part }}`, `{{ index }}` and `{{ name }}` when mapping a channel. |
 
-**Title tokens.** Inside `title`, `output` and overlays you can use `{{ part }}`
-(1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and `{{ name }}`
-(pipeline name).
+**Title tokens.** Inside `title`, `author`, `output` and overlays you can use
+`{{ part }}` (1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and
+`{{ name }}` (pipeline name).
+
+**Author label.** `author` burns a discreet always-on credit in a corner of the
+frame — slightly transparent white with a thin outline, sized to stay readable
+without competing with the captions or the title. Use it to credit the channel
+a clip was extracted from, or to sign your own edits:
+
+```yaml
+- export:
+    from: clip_channel
+    format: vertical
+    author: "Extrait de @CercleAristote"
+```
 
 **Title fonts.** The presets are bundled-by-download: on first use the (OFL)
 font is fetched to `~/.lemontage/fonts/` and given to libass via `fontsdir`, so
@@ -386,14 +403,112 @@ unlike mapped consumers it receives the whole channel at once. Place it after
 - concat:
     from: clip_channel
     output: "./output/{{ name }}-reel.mp4"
+
+# with a crossfade between every clip
+- concat:
+    from: clip_channel
+    transitions: fade
+    duration: 0.5s
+
+# a different transition per gap (N clips → N-1 gaps)
+- concat:
+    from: clip_channel
+    transitions: [fade, wipeleft, slideright, none]
+
+# merge several channels into one reel (viral moment, then a montage)
+- concat:
+    from: [viral, montage]
+    transitions: fade
+
+# ...with a single crossfade at the viral -> montage join only
+- concat:
+    from: [viral, montage]
+    transitions: fade
+    transitions_at: boundaries
+```
+
+**Nesting (sub-pipelines).** A `concat` may itself `emit:` its reel as a
+single-item channel, so a parent `concat` can join it with other reels. This
+lets each branch be an independent sub-pipeline that concatenates on its own —
+with its own transitions — into one finished clip; the final `concat` then joins
+those clips (with, or without, a transition between them):
+
+```yaml
+# Branch A: top moments -> one reel (its own transitions), emitted as `top10`
+- concat: { from: top_clips, transitions: fade, emit: top10 }
+# Branch B: a montage -> one reel (different transitions), emitted as `montage`
+- concat: { from: mtg_clips, transitions: wipeleft, emit: montage }
+# Join the two finished clips, one crossfade between them
+- concat: { from: [top10, montage], transitions: fade }
+```
+
+`from` may be a **list of channels**: they are joined in the order listed, and
+within each channel the existing clip order is kept. The clips are re-indexed
+sequentially, so with `[viral, montage]` the viral clips play first and the
+montage follows — with a transition available at the boundary like any other
+gap. Empty channels contribute nothing. Only aggregators (`concat`) accept a
+list here; mapped blocks (`cut`/`captions`/`export`) read a single channel.
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel \| list | — | Channel, or list of channels merged in order, whose clips are concatenated (required). |
+| `output` | path | `<name>-reel.mp4` | Output path; supports `{{ name }}`. |
+| `transitions` | string \| list | — | Play a transition between clips. A single name applies to the targeted gaps; a list gives one per gap. Omit for a plain cut. |
+| `transitions_at` | string | `all` | Where transitions apply: `all` (every gap; a `transitions` list must be **clips − 1** long) or `boundaries` (only at channel-merge joins; a list must be **channels − 1** long, and within-channel gaps stay hard cuts). |
+| `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
+
+**Transitions:** `fade`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`,
+`slideleft`, `slideright`, `slideup`, `slidedown`, and `none` (a hard cut for
+that gap). Any transition re-encodes the join (via FFmpeg's `xfade`/`acrossfade`);
+a plain concat without `transitions` is faster. Place `concat` after `export` so
+all clips share the same resolution and frame rate.
+
+**Outputs:** `file` (the joined video), `parts` (the source clips, in order).
+
+---
+
+### 6.8 `speed` — slow-motion / fast-forward
+
+Retimes a clip by a playback `factor`. Operates on the pipeline input, or maps
+over a channel of clips. Audio is retimed in step with the video.
+
+```yaml
+# half-speed slow-motion of every clip in a channel
+- speed:
+    from: clip_channel
+    factor: 0.5
+
+# 2x fast-forward of a single video
+- speed:
+    factor: 2
 ```
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `from` | channel | — | Channel whose clips are concatenated (required). |
-| `output` | path | `<name>-reel.mp4` | Output path; supports `{{ name }}`. |
+| `factor` | float | `1.0` | Playback multiplier: `>1` faster, `<1` slow-motion (must be `> 0`). |
+| `from` | channel | — | Channel of clips to map over. |
+| `input` | path | pipeline input | Source video (single mode). |
 
-**Outputs:** `file` (the joined video), `parts` (the source clips, in order).
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
+### 6.9 `reverse` — play backwards
+
+Reverses video and audio. Operates on the pipeline input, or maps over a
+channel of clips. Intended for short clips (it buffers the stream in memory).
+
+```yaml
+- reverse:
+    from: clip_channel
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel | — | Channel of clips to map over. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
 ---
 
@@ -434,6 +549,17 @@ steps:
 
 This is what lets one source video fan out into N captioned, exported clips
 without writing a loop.
+
+**Merging channels.** An aggregator (`concat`) may consume a **list** of
+channels — `from: [viral, montage]` — joining them in listed order into one
+output. This is how independent branches (e.g. the single most viral moment plus
+a separate montage) become a single reel. Mapped consumers still read exactly
+one channel.
+
+**Sub-pipelines.** Because `concat` can also `emit:` its reel as a one-item
+channel, each branch can be a self-contained sub-pipeline — cut, caption, export
+and concat on its own — that produces one finished clip; a parent `concat` then
+joins those clips. Branches with no dependency between them run concurrently.
 
 ---
 
@@ -496,19 +622,19 @@ not implemented in v1 — using them is a validation error:
 
 ## 12. Full example
 
-A complete, valid v1 pipeline: long podcast → 5 captioned vertical clips.
+A complete, valid v1 pipeline: a long video → 5 captioned vertical clips.
 
 ```yaml
 lemontage: "1.0"
-name: podcast-to-clips
-description: "Turn a long podcast into short captioned clips"
+name: clips
+description: "Split a long video into short captioned clips"
 
 vars:
-  lang: fr
+  lang: auto
 
 input:
   type: video
-  source: ./episode.mp4
+  source: ./video.mp4
 
 steps:
   - id: transcript

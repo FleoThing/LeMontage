@@ -8,7 +8,7 @@ from lemontage.validator import validate_doc, validate_file
 
 VALID_PIPELINE = {
     "lemontage": "1.0",
-    "name": "podcast-to-clips",
+    "name": "clips",
     "input": {"type": "video", "source": "./video-example.mp4"},
     "steps": [
         {"id": "transcript", "stt": {"model": "base", "lang": "fr"}},
@@ -142,11 +142,78 @@ def test_export_bad_mute_type_rejected():
     assert any("mute must be a boolean" in e for e in errors)
 
 
+def test_concat_valid_transitions_pass():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"concat": {"from": "clip_channel", "transitions": ["fade", "wipeleft"]}}]
+    assert validate_doc(d) == []
+
+
+def test_concat_unknown_transition_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"concat": {"from": "clip_channel", "transitions": "zoom"}}]
+    errors = validate_doc(d)
+    assert any("unknown transition" in e and "zoom" in e for e in errors)
+
+
 def test_unknown_channel_reference_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [{"cut": {"from": "ghost_channel"}}]
     errors = validate_doc(d)
     assert any("unknown channel" in e for e in errors)
+
+
+def test_concat_accepts_channel_list():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {"concat": {"from": ["viral", "montage"]}},
+    ]
+    assert validate_doc(d) == []
+
+
+def test_concat_channel_list_reports_unknown_entry():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"concat": {"from": ["viral", "ghost"]}},
+    ]
+    errors = validate_doc(d)
+    assert any("ghost" in e and "unknown channel" in e for e in errors)
+
+
+def test_concat_transitions_at_boundaries_accepted():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {
+            "concat": {
+                "from": ["viral", "montage"],
+                "transitions": "fade",
+                "transitions_at": "boundaries",
+            }
+        },
+    ]
+    assert validate_doc(d) == []
+
+
+def test_concat_transitions_at_invalid_value_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [{"concat": {"from": "clip_channel", "transitions_at": "sometimes"}}]
+    errors = validate_doc(d)
+    assert any("transitions_at" in e for e in errors)
+
+
+def test_mapped_block_rejects_channel_list():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"emit": "viral"}},
+        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {"cut": {"from": ["viral", "montage"]}},
+    ]
+    errors = validate_doc(d)
+    assert any("does not support a list of channels" in e for e in errors)
 
 
 def test_invalid_on_failure():
@@ -172,5 +239,13 @@ def test_example_pipeline_is_valid():
     """The shipped example must validate."""
     from pathlib import Path
 
-    example = Path(__file__).resolve().parents[1] / "examples" / "podcast-to-clips.yaml"
+    example = Path(__file__).resolve().parents[1] / "examples" / "pipeline_clips.yaml"
+    assert validate_file(example) == []
+
+
+def test_multi_channel_example_is_valid():
+    """The channel-merge example (concat over a list of channels) must validate."""
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[1] / "examples" / "pipeline_merge.yaml"
     assert validate_file(example) == []

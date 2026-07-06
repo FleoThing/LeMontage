@@ -1,0 +1,55 @@
+lemontage: "1.0"
+name: slowmo
+description: "Find the peak moment and slow it to half-speed for a dramatic replay, captioned and vertical"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Transcribe the audio (used later for captions)
+  - id: transcript
+    stt:
+      model: small
+      lang: auto
+      vad_filter: true
+    cache: true
+
+  # 2. The loudest window = the moment to replay. Keep only the single peak.
+  - id: moments
+    detect_clips:
+      method: loudness
+      min_duration: 6s
+      max_duration: 15s
+      max_clips: 1
+      emit: highlights
+
+  # 3. Cut the moment out of the source
+  - cut:
+      from: highlights
+
+  # 4. Slow it to half-speed for a dramatic replay. Mapped over the channel, so
+  #    captions and export below run on the slowed clip. factor < 1 = slow-motion,
+  #    factor > 1 = fast-forward (e.g. factor: 2 for a 2x speed-up).
+  - speed:
+      from: highlights
+      factor: 0.5
+
+  # 5. Karaoke captions on the slowed clip
+  - captions:
+      from: highlights
+      words: "{{ steps.transcript.words }}"
+      style: tiktok
+      position: bottom
+    requires: transcript.success
+
+  # 6. Vertical export
+  - export:
+      from: highlights
+      format: vertical
+      resolution: 1080x1920
+      fps: 30
+      output: "./output/{{ name }}-{{ index }}.mp4"
+
+output:
+  dir: ./output

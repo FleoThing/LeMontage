@@ -29,7 +29,7 @@ repos:
     hooks:
       - id: hadolint
         name: hadolint
-        entry: hadolint
+        entry: hadolint/hadolint:v2.14.0 hadolint
         args: [--config, .hadolint.yaml]
-        language: system
+        language: docker_image
         files: (^|/)Dockerfile(\..*)?$

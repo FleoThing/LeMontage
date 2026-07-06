@@ -37,9 +37,9 @@ def test_nested_structures_are_resolved():
 
 
 def test_name_placeholder_resolves_to_pipeline_name():
-    ctx = make_ctx(pipeline_name="ufc-highlights")
+    ctx = make_ctx(pipeline_name="my-reel")
     assert template.resolve("./out/{{ name }}-{{ index }}.mp4", ctx) == (
-        "./out/ufc-highlights-{{ index }}.mp4"
+        "./out/my-reel-{{ index }}.mp4"
     )
 
 
@@ -67,3 +67,15 @@ def test_missing_key_raises():
     ctx = make_ctx(vars={"a": {"b": 1}})
     with pytest.raises(template.TemplateError):
         template.resolve("{{ vars.a.c }}", ctx)
+
+
+def test_steps_reference_without_id_raises():
+    with pytest.raises(template.TemplateError, match="needs a step id"):
+        template.resolve("{{ steps }}", make_ctx())
+
+
+def test_walk_into_non_dict_raises():
+    # Indexing into a list value ({{ steps.t.items.0 }}) is not supported.
+    ctx = make_ctx(step_outputs={"t": {"items": [1, 2, 3]}})
+    with pytest.raises(template.TemplateError, match="no key '0'"):
+        template.resolve("{{ steps.t.items.0 }}", ctx)
