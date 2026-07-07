@@ -117,8 +117,7 @@ def _download(url: str) -> bool:
             digest = hashlib.sha256(data).hexdigest()
             if digest != expected:
                 raise OSError(
-                    f"font checksum mismatch (sha256 {digest[:16]}…, "
-                    f"expected {expected[:16]}…)"
+                    f"font checksum mismatch (sha256 {digest[:16]}…, expected {expected[:16]}…)"
                 )
         # `export` maps over clips in parallel, so several threads can fetch the
         # same font at once. Write to a UNIQUE temp file (not a shared
