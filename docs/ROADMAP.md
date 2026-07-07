@@ -1,40 +1,70 @@
 # Roadmap
 
 This roadmap is a planning document. It is not a compatibility promise.
+Shipped versions are kept for the record; details live in the CHANGELOG.
 
-## v0.2.0
+## v0.2.0 — shipped
 
 Goal: make LeMontage easier to install, deploy and use for real creator workflows.
 
+Delivered:
+
+- Package and release hardening; `lemontage completion` for bash/zsh/fish.
+- Docker and Compose workflows for local runs.
+- Production-ready examples under `examples/` (`pipeline_*.yaml`).
+- `concat` transitions (crossfade / wipe / slide), `speed` and `reverse` blocks.
+- Channel merging and nesting in `concat` (multi-channel `from`,
+  `transitions_at`, `emit`); `export` author label.
+- Stronger validation messages; documentation split across README,
+  contributing, support, security and docs files.
+
+## v0.3.0 / v0.3.1 — shipped
+
+Goal (revised): richer editing primitives, staying local-first.
+
+Delivered:
+
+- Image-folder input (`input.type: images`) with the `stills` / `still`
+  blocks: photo slideshows and montages through the existing
+  `export`/`concat` chain; audio-tolerant `concat` for video-only clips.
+- `export` title styling, `fit: contain|cover`, per-clip `mute`, and a
+  `random` method for `detect_clips`.
+- Hardened paths and FFmpeg inputs (`safepath`, input validation).
+- Captions vertical-crop safe area: lines stay readable after a
+  `format: vertical, fit: cover` export (0.3.1).
+- Documentation site on GitHub Pages (HTML manual for users without `man`).
+
+## v0.4.0 — planned: engine depth
+
+Goal: deepen the local editing engine and make longer projects practical.
+
 Expected work:
 
-- Package and release hardening.
-- Better Docker and Compose workflows for local runs.
-- More production-ready examples under `examples/`.
-- Export presets and transition primitives.
-- Stronger validation messages for common YAML mistakes.
-- Documentation cleanup around install, security and the spec.
+- Local TTS behind optional extras (`kokoro-onnx` + `soundfile`), with the
+  audio muxing story (voiceover / faceless content) it requires.
+- Mixed media pipelines: images and video clips in the same montage.
+- Ken Burns (slow zoom/pan) on stills via `zoompan`.
+- Better run observability: structured logs, run summaries, cache reporting.
+- More robust long-video workflows (memory-friendly `reverse`, resumable runs).
 
 Definition of done:
 
-- A new user can install and run an example without reading source code.
-- CI covers changed behavior.
-- Docs and examples match the current CLI and YAML spec.
-
-## v0.3.0
-
-Goal: prepare the ecosystem layer while keeping the core engine local-first.
-
-Expected work:
-
-- Community pipeline metadata and contribution rules.
-- Optional provider interfaces for cloud STT, TTS and LLM services.
-- Local TTS exploration behind optional extras.
-- Better run observability: structured logs, summaries and cache reporting.
-- More robust long-video workflows.
-
-Definition of done:
-
-- Provider additions remain optional and do not make the core install heavy.
-- Pipeline files stay portable and reviewable.
+- Optional features do not make the core install heavy.
 - New features have examples, spec updates and focused tests.
+
+## v0.5.0 — planned: ecosystem
+
+Goal: open the ecosystem layer while keeping the core engine local-first.
+
+Expected work:
+
+- Optional provider interfaces for cloud STT, TTS and LLM services.
+- Community pipeline metadata and contribution rules.
+- Remote inputs (URLs / YouTube) and audio-only input, currently reserved
+  in the spec.
+- Multiple inputs per pipeline.
+
+Definition of done:
+
+- Provider additions remain optional; pipelines stay portable and reviewable.
+- Reserved spec keys are either implemented or explicitly re-scoped.
