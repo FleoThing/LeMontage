@@ -54,6 +54,8 @@ jobs:
               -o "_site/$2"
             # point cross-links at the rendered pages instead of the .md files
             sed -i -E 's#href="(\./)?(docs/)?([A-Za-z]+)\.md"#href="\L\3\E.html"#g' "_site/$2"
+            # images: the repo path docs/assets/ is served as assets/ on the site
+            sed -i -E 's#(src|href)="(\./)?docs/assets/#\1="assets/#g' "_site/$2"
           }
 
           render_md README.md            index.html        "LeMontage"
