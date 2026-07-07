@@ -45,7 +45,7 @@ _DEFAULT_TITLE_OUTLINE = 2
 # Shadow depth when `title_shadow: true` (px offset of the drop shadow).
 _TITLE_SHADOW_ON = 4
 
-_DEFAULT_AUTHOR_SIZE = 26
+_DEFAULT_AUTHOR_SIZE = 44
 _DEFAULT_AUTHOR_MARGIN = 60  # distance from the frame edges
 
 # ASS numpad alignments for the author label positions.

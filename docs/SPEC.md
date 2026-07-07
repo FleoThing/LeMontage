@@ -371,7 +371,7 @@ Renders the final video(s) to disk.
 | `title_font` | string | `font1` | Title font: a preset `font1`–`font5`, or any installed family name (e.g. `Impact`). |
 | `author` | string | — | Small persistent credit label: the clip's source channel (e.g. `Extrait de @Chaine`) or the editor's own handle. Same tokens as `title`. |
 | `author_position` | enum | `top-left` | `top-left` \| `top-center` \| `top-right` \| `bottom-left` \| `bottom-center` \| `bottom-right`. The default stays clear of the Shorts/TikTok player UI (right edge and bottom are covered). `top-center` shares the title band and `bottom-center` the captions band — bump `author_margin` if both are in play. |
-| `author_size` | int | `26` | Author label font size, in pixels of the export resolution. |
+| `author_size` | int | `44` | Author label font size, in pixels of the export resolution. |
 | `author_margin` | int | `60` | Author label distance from the frame edges. |
 | `author_font` | string | `font1` | Same presets/family rules as `title_font`. |
 | `output` | path | `output.dir` | Output path; supports `{{ part }}`, `{{ index }}` and `{{ name }}` when mapping a channel. |
