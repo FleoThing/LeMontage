@@ -1,0 +1,84 @@
+# Publish the documentation as a small HTML site on GitHub Pages, so users
+# without man/a POSIX shell (Windows) can read the manual in a browser.
+name: Docs site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pandoc
+
+      - name: Build HTML pages
+        run: |
+          mkdir -p _site
+          cp docs/site/style.css _site/
+          [ -d docs/assets ] && cp -r docs/assets _site/assets
+
+          nav='<nav class="site">
+            <a href="index.html">Home</a>
+            <a href="man.html">Manual (man)</a>
+            <a href="spec.html">YAML Spec</a>
+            <a href="install.html">Install</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="roadmap.html">Roadmap</a>
+            <a href="changelog.html">Changelog</a>
+            <a href="https://github.com/FleoThing/LeMontage">GitHub</a>
+          </nav>'
+          echo "$nav" > /tmp/nav.html
+
+          render_md () { # <src.md> <out.html> <title>
+            pandoc "$1" --standalone --toc --css=style.css \
+              --metadata title="$3" --include-before-body=/tmp/nav.html \
+              -o "_site/$2"
+            # point cross-links at the rendered pages instead of the .md files
+            sed -i -E 's#href="(\./)?(docs/)?([A-Za-z]+)\.md"#href="\L\3\E.html"#g' "_site/$2"
+          }
+
+          render_md README.md            index.html        "LeMontage"
+          render_md docs/SPEC.md         spec.html         "LeMontage — YAML Specification"
+          render_md docs/INSTALL.md      install.html      "LeMontage — Install"
+          render_md docs/ARCHITECTURE.md architecture.html "LeMontage — Architecture"
+          render_md docs/ROADMAP.md      roadmap.html      "LeMontage — Roadmap"
+          render_md CHANGELOG.md         changelog.html    "LeMontage — Changelog"
+
+          # The man page, for everyone without `man` (Windows users): same
+          # content as `man lemontage`, rendered from docs/lemontage.1.
+          pandoc -f man docs/lemontage.1 --standalone --css=style.css \
+            --metadata title="lemontage(1) — manual" \
+            --include-before-body=/tmp/nav.html -o _site/man.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
