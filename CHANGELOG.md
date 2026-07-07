@@ -7,6 +7,13 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Security
+
+- Preset title fonts (`font1`-`font5`) are now verified against pinned SHA-256
+  digests at download time: a substituted TTF (MITM, compromised upstream) is
+  rejected before ever reaching libass (audit S6, #35).
+
+
 ### Added
 
 - Documentation site on GitHub Pages: the man page and the Markdown docs are

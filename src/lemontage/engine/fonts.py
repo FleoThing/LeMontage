@@ -11,6 +11,7 @@ and is only called at render time.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 import tempfile
@@ -28,6 +29,19 @@ PRESETS: dict[str, tuple[str, str]] = {
     "font5": ("Fjalla One", f"{_GF}/fjallaone/FjallaOne-Regular.ttf"),
 }
 _DEFAULT_ALIAS = "font1"
+
+# Pinned SHA-256 of each preset (security audit S6): magic bytes only prove the
+# payload *looks like* a font; the digest proves it is the expected one, so a
+# MITM or a compromised google/fonts branch can't feed libass an arbitrary TTF.
+# To refresh after a deliberate font update:
+#   curl -fsSL <url> | sha256sum        # for each URL in PRESETS
+_FONT_SHA256: dict[str, str] = {
+    "Anton-Regular.ttf": "a4ba3a92350ebb031da0cb47630ac49eb265082ca1bc0450442f4a83ab947cab",
+    "BebasNeue-Regular.ttf": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73",
+    "Bangers-Regular.ttf": "4160a7311de9342674cce9160cde9fcbb30f48190397d86ff1b70b455af65824",
+    "ArchivoBlack-Regular.ttf": "dd9a89a019b4849f66ab75455fe7bdf931311042cbb0f0f97acc061539703180",
+    "FjallaOne-Regular.ttf": "ce3b299625abe3c76f8acd235b57b3e07ac6ee2d550e106a4b4e4d60095ae2ba",
+}
 
 
 def fonts_dir() -> Path:
@@ -98,6 +112,14 @@ def _download(url: str) -> bool:
             data = resp.read()
         if not data.startswith(_FONT_MAGIC):
             raise OSError("server did not return a font file")
+        expected = _FONT_SHA256.get(target.name)
+        if expected is not None:
+            digest = hashlib.sha256(data).hexdigest()
+            if digest != expected:
+                raise OSError(
+                    f"font checksum mismatch (sha256 {digest[:16]}…, "
+                    f"expected {expected[:16]}…)"
+                )
         # `export` maps over clips in parallel, so several threads can fetch the
         # same font at once. Write to a UNIQUE temp file (not a shared
         # "<name>.part") and atomically replace, so the writers never race on

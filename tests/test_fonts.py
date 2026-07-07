@@ -91,9 +91,39 @@ def test_download_accepts_real_font(tmp_path, monkeypatch):
     monkeypatch.setattr(
         fonts.urllib.request, "urlopen", lambda *_a, **_k: _FakeResp(b"\x00\x01\x00\x00FONTDATA")
     )
-    assert fonts._download("https://example.test/Anton-Regular.ttf") is True
-    saved = fonts.fonts_dir() / "Anton-Regular.ttf"
+    # A non-preset name has no pinned digest: magic bytes are the only gate.
+    assert fonts._download("https://example.test/Custom-Regular.ttf") is True
+    saved = fonts.fonts_dir() / "Custom-Regular.ttf"
     assert saved.read_bytes().startswith(b"\x00\x01\x00\x00")
+
+
+def test_download_rejects_wrong_checksum(tmp_path, monkeypatch, capsys):
+    # Right magic bytes, wrong SHA-256: a substituted preset font is refused
+    # (S6 — MITM or compromised upstream must not reach libass).
+    monkeypatch.setenv("LEMONTAGE_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        fonts.urllib.request, "urlopen", lambda *_a, **_k: _FakeResp(b"\x00\x01\x00\x00EVILFONT")
+    )
+    assert fonts._download("https://example.test/Anton-Regular.ttf") is False
+    assert "échoué" in capsys.readouterr().err
+    assert not (fonts.fonts_dir() / "Anton-Regular.ttf").exists()
+    assert not list(fonts.fonts_dir().glob("*.part"))
+
+
+def test_download_accepts_matching_checksum(tmp_path, monkeypatch):
+    import hashlib
+
+    data = b"\x00\x01\x00\x00FONTDATA"
+    monkeypatch.setenv("LEMONTAGE_HOME", str(tmp_path))
+    monkeypatch.setattr(fonts.urllib.request, "urlopen", lambda *_a, **_k: _FakeResp(data))
+    monkeypatch.setitem(fonts._FONT_SHA256, "Anton-Regular.ttf", hashlib.sha256(data).hexdigest())
+    assert fonts._download("https://example.test/Anton-Regular.ttf") is True
+    assert (fonts.fonts_dir() / "Anton-Regular.ttf").read_bytes() == data
+
+
+def test_all_presets_have_pinned_checksums():
+    preset_files = {url.rsplit("/", 1)[-1] for _fam, url in fonts.PRESETS.values()}
+    assert preset_files == set(fonts._FONT_SHA256)
 
 
 def test_download_is_concurrency_safe(tmp_path, monkeypatch, capsys):
@@ -105,13 +135,13 @@ def test_download_is_concurrency_safe(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         fonts.urllib.request, "urlopen", lambda *_a, **_k: _FakeResp(b"\x00\x01\x00\x00FONTDATA")
     )
-    url = "https://example.test/Bangers-Regular.ttf"
+    url = "https://example.test/Custom-Regular.ttf"
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda _i: fonts._download(url), range(16)))
 
     assert all(results)  # every concurrent caller succeeds
     assert capsys.readouterr().err == ""  # no spurious failure warning
-    saved = fonts.fonts_dir() / "Bangers-Regular.ttf"
+    saved = fonts.fonts_dir() / "Custom-Regular.ttf"
     assert saved.read_bytes().startswith(b"\x00\x01\x00\x00")
     # No stray temp files left behind.
     assert not list(fonts.fonts_dir().glob("*.part"))
