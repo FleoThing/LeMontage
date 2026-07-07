@@ -7,6 +7,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-07-07
+
 ### Security
 
 - Preset title fonts (`font1`-`font5`) are now verified against pinned SHA-256
