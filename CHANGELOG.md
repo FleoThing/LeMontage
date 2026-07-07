@@ -7,6 +7,12 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- Documentation site on GitHub Pages: the man page and the Markdown docs are
+  rendered to HTML on every docs push to main — for users without `man`
+  (Windows).
+
 ## [0.3.1] - 2026-07-07
 
 ### Fixed
