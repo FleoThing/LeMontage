@@ -7,6 +7,13 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `captions` on a landscape source no longer lose their line ends when the clip
+  is later exported vertical with `fit: cover`: lines are kept inside the centre
+  9:16 column (and wrap instead of overflowing). Opt out with `safe_area: false`
+  when the final export stays horizontal.
+
 ## [0.3.0] - 2026-07-07
 
 ### Added

@@ -27,6 +27,7 @@ _STYLES = {
 }
 
 _DEFAULT_MAX_CHARS = 24  # short lines read better word-by-word
+_DEFAULT_MARGIN_H = 80  # left/right margins when the whole width is usable
 _MAX_WORDS_PER_LINE = 5
 _LINE_GAP = 1.2  # start a new line after a silence longer than this (seconds)
 # ASS colours are &HAABBGGRR. Default: spoken word yellow, upcoming word white.
@@ -39,7 +40,7 @@ _KARAOKE_ASS = (
 ScriptType: v4.00+
 PlayResX: {w}
 PlayResY: {h}
-WrapStyle: 2
+WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
@@ -48,7 +49,7 @@ Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle,
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 """
     "Style: Cap,{font},{size},{hi},{base},&H00000000,&H64000000,{bold},0,0,0,"
-    "100,100,0,0,1,{outline},1,{align},80,80,{marginv},1\n"
+    "100,100,0,0,1,{outline},1,{align},{marginh},{marginh},{marginv},1\n"
     """\
 
 [Events]
@@ -156,12 +157,28 @@ def _line(words: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _safe_margin_h(params: dict[str, Any], width: int, height: int) -> int:
+    """Horizontal margins that keep caption lines inside the centre 9:16 column.
+
+    Captions are usually burned onto the landscape source and only exported to
+    vertical afterwards — where ``fit: cover`` keeps just the centre 9:16 crop,
+    so any text wider than that column ends up off-frame. ``safe_area: false``
+    restores the full-width margins (e.g. for a horizontal final export).
+    """
+    if width <= height or not params.get("safe_area", True):
+        return _DEFAULT_MARGIN_H
+    safe = height * 9 // 16
+    padding = round(safe * 0.05)
+    return max(_DEFAULT_MARGIN_H, (width - safe) // 2 + padding)
+
+
 def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
     width, height = ffmpeg.probe_resolution(media)
     outline, bold = _STYLES.get(params.get("style", "tiktok"), _STYLES["tiktok"])
     size = int(params.get("caption_size") or round(height * 0.07))
     align = _POSITION.get(params.get("position", "bottom"), 2)
     marginv = int(params.get("caption_margin", round(height * 0.08)))
+    marginh = _safe_margin_h(params, width, height)
     hi = params.get("highlight") or _HIGHLIGHT
     font = fonts.family(params.get("font"))
 
@@ -177,6 +194,7 @@ def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
             bold=bold,
             outline=outline,
             align=align,
+            marginh=marginh,
             marginv=marginv,
             events=events,
         ),

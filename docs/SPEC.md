@@ -326,6 +326,7 @@ segment-level cues.
 | `caption_margin` | int | ~8% of height | Distance from the edge (per `position`). |
 | `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
+| `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
 
 **Outputs:** `clips` (captioned paths) or `srt` (sidecar path when `burn: false`).
 

@@ -15,6 +15,8 @@ from lemontage.engine.blocks.captions import (
     _build_lines,
     _dialogue,
     _lines_from_words,
+    _safe_margin_h,
+    _write_karaoke_ass,
 )
 from lemontage.engine.blocks.detect_clips import (
     _random_clips,
@@ -311,6 +313,32 @@ def test_stt_forwards_vad_and_beam_options(tmp_path, monkeypatch):
 def test_captions_requires_words_or_segments(tmp_path):
     with pytest.raises(ValueError):
         CaptionsBlock().execute({}, ctx(tmp_path), "c")
+
+
+def test_safe_margin_h_keeps_lines_in_vertical_crop():
+    # landscape 1920x1080: the centre 9:16 column is 607px wide — margins must
+    # push the text inside it so a later `export format: vertical, fit: cover`
+    # doesn't crop the line ends off-frame.
+    margin = _safe_margin_h({}, 1920, 1080)
+    safe = 1080 * 9 // 16
+    assert margin >= (1920 - safe) // 2
+    usable = 1920 - 2 * margin
+    assert usable <= safe
+
+
+def test_safe_margin_h_full_width_for_portrait_or_opt_out():
+    assert _safe_margin_h({}, 1080, 1920) == 80  # already vertical: no shrink
+    assert _safe_margin_h({"safe_area": False}, 1920, 1080) == 80  # opt-out
+
+
+def test_karaoke_ass_wraps_and_applies_safe_margins(tmp_path, monkeypatch):
+    monkeypatch.setattr(ffmpeg, "probe_resolution", lambda m: (1920, 1080))
+    lines = [{"start": 0.0, "end": 1.0, "text": "hello world", "words": []}]
+    path = _write_karaoke_ass(lines, {}, "clip.mp4", tmp_path / "c.ass")
+    content = path.read_text()
+    assert "WrapStyle: 0" in content  # long lines wrap instead of overflowing
+    margin = _safe_margin_h({}, 1920, 1080)
+    assert f",2,{margin},{margin}," in content  # Style line: align 2, MarginL/R
 
 
 # --- export ----------------------------------------------------------------
