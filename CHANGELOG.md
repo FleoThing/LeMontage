@@ -7,6 +7,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-07
+
 ### Fixed
 
 - `captions` on a landscape source no longer lose their line ends when the clip
