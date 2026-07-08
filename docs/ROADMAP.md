@@ -18,7 +18,7 @@ Delivered:
 - Stronger validation messages; documentation split across README,
   contributing, support, security and docs files.
 
-## v0.3.0 / v0.3.1 — shipped
+## v0.3.0 – v0.3.2 — shipped
 
 Goal (revised): richer editing primitives, staying local-first.
 
@@ -27,12 +27,17 @@ Delivered:
 - Image-folder input (`input.type: images`) with the `stills` / `still`
   blocks: photo slideshows and montages through the existing
   `export`/`concat` chain; audio-tolerant `concat` for video-only clips.
+- Mixed media pipelines: images and video clips in the same montage, via
+  per-step `input:` overrides and multi-channel `concat`
+  (see `examples/pipeline_carousel.yaml`).
 - `export` title styling, `fit: contain|cover`, per-clip `mute`, and a
   `random` method for `detect_clips`.
 - Hardened paths and FFmpeg inputs (`safepath`, input validation).
 - Captions vertical-crop safe area: lines stay readable after a
   `format: vertical, fit: cover` export (0.3.1).
-- Documentation site on GitHub Pages (HTML manual for users without `man`).
+- Documentation site on GitHub Pages (HTML manual for users without `man`);
+  preset title fonts pinned to SHA-256 digests at download time; more legible
+  default `author_size` (0.3.2).
 
 ## v0.4.0 — planned: engine depth
 
@@ -42,7 +47,6 @@ Expected work:
 
 - Local TTS behind optional extras (`kokoro-onnx` + `soundfile`), with the
   audio muxing story (voiceover / faceless content) it requires.
-- Mixed media pipelines: images and video clips in the same montage.
 - Ken Burns (slow zoom/pan) on stills via `zoompan`.
 - Better run observability: structured logs, run summaries, cache reporting.
 - More robust long-video workflows (memory-friendly `reverse`, resumable runs).
