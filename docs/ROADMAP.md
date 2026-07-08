@@ -69,6 +69,13 @@ Expected work:
 - Remote inputs (URLs / YouTube) and audio-only input, currently reserved
   in the spec.
 - Multiple inputs per pipeline.
+- Hardware acceleration: detect the available FFmpeg hardware encoders at
+  run time (NVENC / QSV / VideoToolbox / VAAPI) and prefer them with a
+  silent `libx264` fallback, plus a global setting to force software or a
+  specific encoder (hardware encoders trade some compression efficiency
+  for speed). Route the encoder choice through one place in the engine
+  instead of the per-block `libx264` literals. Let the Whisper STT
+  provider run on CUDA when present (`device: auto`).
 
 Definition of done:
 
