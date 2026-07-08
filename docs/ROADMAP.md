@@ -49,7 +49,15 @@ Expected work:
 
 - Local TTS behind optional extras (`kokoro-onnx` + `soundfile`), with the
   audio muxing story (voiceover / faceless content) it requires.
-- Ken Burns (slow zoom/pan) on stills via `zoompan`.
+- Ken Burns (slow zoom/pan) on stills via `zoompan`. The eased punch-in/out
+  half (`still` `motion: zoomout | zoomin`, with `motion_amount` /
+  `motion_duration`) is in progress on `feat/more-transitions`; slow pan /
+  drift remains.
+- More `concat` transitions: `fadeblack` and `zoomin` (xfade), in progress
+  on `feat/more-transitions`.
+- A `filter` block for per-clip looks — first presets: black & white,
+  vignette, `eq` adjustments (brightness / contrast / saturation), film
+  grain, sharpen (`feat/filters`).
 - Better run observability: structured logs, run summaries, cache reporting.
 - More robust long-video workflows (memory-friendly `reverse`, resumable runs).
 
