@@ -71,7 +71,7 @@ jobs:
             --metadata title="lemontage(1) — manual" \
             --include-before-body=/tmp/nav.html -o _site/man.html
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
