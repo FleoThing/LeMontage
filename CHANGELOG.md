@@ -7,6 +7,15 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-07-08
+
+### Fixed
+
+- FFmpeg/ffprobe subprocess calls now redirect stdin to `/dev/null`: without
+  `-nostdin`, ffmpeg put the controlling terminal in raw/no-echo mode to
+  listen for keypresses and didn't reliably restore it, leaving the terminal
+  unresponsive after a pipeline run finished.
+
 ## [0.3.2] - 2026-07-07
 
 ### Changed
