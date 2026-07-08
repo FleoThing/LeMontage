@@ -13,6 +13,7 @@ from pathlib import Path
 import yaml
 
 from . import spec
+from .engine.timecode import parse_seconds
 
 
 def validate_file(path: str | Path) -> list[str]:
@@ -187,6 +188,26 @@ def _check_block_params(
         mute = params.get("mute")
         if mute is not None and not isinstance(mute, (bool, list)):
             errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
+
+    if block == "still":
+        motion = params.get("motion")
+        if motion is not None and (
+            not isinstance(motion, str) or motion not in spec.STILL_MOTIONS
+        ):
+            valid = ", ".join(sorted(spec.STILL_MOTIONS))
+            errors.append(f"{label}: unknown still motion '{motion}' (choose from: {valid})")
+        amount = params.get("motion_amount")
+        if amount is not None and (
+            isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount <= 1.0
+        ):
+            errors.append(f"{label}: still.motion_amount must be a number > 1.0")
+        motion_dur = params.get("motion_duration")
+        if motion_dur is not None:
+            try:
+                if parse_seconds(motion_dur) <= 0:
+                    errors.append(f"{label}: still.motion_duration must be > 0")
+            except (ValueError, TypeError):
+                errors.append(f"{label}: still.motion_duration must be a duration (e.g. 0.3s)")
 
     if block == "concat":
         _check_concat_transitions(params.get("transitions"), label, errors)
