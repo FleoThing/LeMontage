@@ -18,7 +18,7 @@ Delivered:
 - Stronger validation messages; documentation split across README,
   contributing, support, security and docs files.
 
-## v0.3.0 – v0.3.2 — shipped
+## v0.3.0 – v0.3.3 — shipped
 
 Goal (revised): richer editing primitives, staying local-first.
 
@@ -38,6 +38,8 @@ Delivered:
 - Documentation site on GitHub Pages (HTML manual for users without `man`);
   preset title fonts pinned to SHA-256 digests at download time; more legible
   default `author_size` (0.3.2).
+- FFmpeg/ffprobe subprocess calls no longer leave the terminal unresponsive
+  after a run (0.3.3).
 
 ## v0.4.0 — planned: engine depth
 
