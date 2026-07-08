@@ -5,9 +5,11 @@ the existing ``export`` (format/fit/title) and ``concat`` (transitions) blocks
 can treat it like any other clip. The clip is **video-only** — no audio track is
 synthesised — so a downstream ``concat`` must tolerate silent clips.
 
-An optional ``motion`` effect animates the image while it is on screen:
-``zoomout`` starts slightly punched-in and pulls back to the full frame (the
-classic shorts/reels look), driven by FFmpeg's ``zoompan``.
+An optional ``motion`` effect animates the image while it is on screen, driven
+by FFmpeg's ``zoompan``: ``zoomout`` starts slightly punched-in and pulls back
+to the full frame (the classic shorts/reels look); ``zoomin`` is the reverse,
+pushing from the full frame into the punch-in. Both move fast at first and
+brake just before landing.
 """
 
 from __future__ import annotations
@@ -86,7 +88,7 @@ def _render_still(
     # it broadly playable; the scale rounds to even dimensions (libx264 requires
     # even width/height). No audio track is added.
     if motion is not None:
-        _render_zoomout(image, duration, out, fps, motion[1], motion[2])
+        _render_zoom(image, duration, out, fps, *motion)
         return
     ffmpeg.run(
         [
@@ -111,21 +113,26 @@ def _render_still(
     )
 
 
-def _render_zoomout(
-    image: str, duration: float, out, fps: int, amount: float, motion_dur: float | None
+def _render_zoom(
+    image: str, duration: float, out, fps: int, name: str, amount: float,
+    motion_dur: float | None,
 ) -> None:
-    # zoompan eases the zoom from `amount` down to 1.0 over `motion_dur` seconds
-    # (the whole clip if unset), then holds the full frame; the quadratic ease-out
-    # pulls back fast at first and brakes just before landing. The 2x pre-upscale
-    # hides zoompan's integer-pan jitter on small zooms; `s=` brings the frame
-    # back to the image's own (even) size afterwards.
+    # zoompan eases the zoom between 1.0 and `amount` over `motion_dur` seconds
+    # (the whole clip if unset), then holds the landing frame; the quadratic
+    # ease-out moves fast at first and brakes just before landing. zoomout goes
+    # amount -> 1.0, zoomin goes 1.0 -> amount. The 2x pre-upscale hides
+    # zoompan's integer-pan jitter on small zooms; `s=` brings the frame back to
+    # the image's own (even) size afterwards.
     width, height = ffmpeg.probe_resolution(image)
     ow, oh = width - width % 2, height - height % 2
     frames = max(int(round(duration * fps)), 2)
     span = frames - 1
     if motion_dur is not None:
         span = min(max(int(round(motion_dur * fps)), 1), span)
-    zoom = f"1+({amount}-1)*pow(1-min(on/{span},1),2)"
+    if name == "zoomout":
+        zoom = f"1+({amount}-1)*pow(1-min(on/{span},1),2)"
+    else:
+        zoom = f"{amount}-({amount}-1)*pow(1-min(on/{span},1),2)"
     ffmpeg.run(
         [
             "-i",

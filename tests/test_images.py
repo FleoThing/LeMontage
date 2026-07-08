@@ -146,6 +146,19 @@ def test_still_zoomout_builds_zoompan(tmp_path, monkeypatch):
     assert "s=1080x1920" in graph  # odd source width rounded down to even
 
 
+def test_still_zoomin_reverses_the_curve(tmp_path, monkeypatch):
+    from lemontage.engine.blocks import still as still_mod
+
+    captured = {}
+    monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
+    monkeypatch.setattr(still_mod.ffmpeg, "probe_resolution", lambda _f: (1080, 1920))
+    item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
+    StillBlock().execute_item({"motion": "zoomin", "fps": 30}, item, ctx(tmp_path), "sc")
+
+    graph = captured["args"][captured["args"].index("-vf") + 1]
+    assert "zoompan=z='1.1-(1.1-1)*pow(1-min(on/59,1),2)'" in graph  # 1.0 -> amount
+
+
 def test_still_zoomout_motion_duration_shortens_span(tmp_path, monkeypatch):
     from lemontage.engine.blocks import still as still_mod
 

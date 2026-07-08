@@ -579,8 +579,8 @@ track); `concat` tolerates this and drops audio for the join.
 | `image` | path | — | Source image (single mode). |
 | `duration` | time | `3s` | Clip length. Channel items carry their own duration; this is the fallback. |
 | `fps` | int | `30` | Frame rate of the rendered clip. |
-| `motion` | string | — | Animate the image while it is on screen: `zoomout` starts slightly punched-in and pulls back to the full frame — fast at first, braking just before it lands (the classic shorts/reels look). Omit for a static clip. |
-| `motion_amount` | float | `1.1` | Starting zoom factor for `motion` (must be > 1.0; `1.1` = a 10% punch-in). |
+| `motion` | string | — | Animate the image while it is on screen: `zoomout` starts slightly punched-in and pulls back to the full frame; `zoomin` pushes from the full frame into the punch-in. Both move fast at first and brake just before landing (the classic shorts/reels look). Omit for a static clip. |
+| `motion_amount` | float | `1.1` | Punched-in zoom factor for `motion` (must be > 1.0; `1.1` = a 10% punch-in). |
 | `motion_duration` | time | clip length | How long the pull-back lasts; the image then holds the full frame for the rest of the clip. Shorter = snappier. |
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
