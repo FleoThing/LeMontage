@@ -7,6 +7,15 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- Two new `concat` transitions: `fadeblack` (fade through black, for a marked
+  scene break) and `zoomin` (dynamic push, needs FFmpeg >= 5.0).
+- `still` motion effects: `motion: zoomout | zoomin` animates each image with
+  an eased punch-out / punch-in (fast start, braking before it lands), tuned
+  via `motion_amount` (default 1.1) and `motion_duration` (default: the whole
+  clip). See `examples/pipeline_zoom_punch.yaml`.
+
 ## [0.3.3] - 2026-07-08
 
 ### Fixed
