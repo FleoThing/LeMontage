@@ -33,7 +33,7 @@ def ffmpeg_bin() -> str:
 def run(args: list[str]) -> None:
     """Run ``ffmpeg <args>``, raising :class:`FFmpegError` on failure."""
     cmd = [ffmpeg_bin(), "-y", "-loglevel", "error", *args]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if proc.returncode != 0:
         raise FFmpegError(f"ffmpeg failed ({proc.returncode}): {proc.stderr.strip()}")
 
@@ -45,7 +45,7 @@ def run_capture(args: list[str]) -> str:
     to stderr at the ``info`` log level, so we raise the verbosity here.
     """
     cmd = [ffmpeg_bin(), "-loglevel", "info", *args]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     return proc.stderr
 
 
@@ -66,17 +66,22 @@ def probe_duration(path: str | Path) -> float:
             ],
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return float(proc.stdout.strip())
     # Fallback: parse ffmpeg's stderr (no ffprobe in imageio-ffmpeg).
-    proc = subprocess.run([ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True)
+    proc = subprocess.run(
+        [ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
     return _parse_duration(proc.stderr)
 
 
 def probe_resolution(path: str | Path) -> tuple[int, int]:
     """Return (width, height) of the first video stream."""
-    proc = subprocess.run([ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True)
+    proc = subprocess.run(
+        [ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
     match = re.search(r",\s*(\d{2,5})x(\d{2,5})", proc.stderr)
     if not match:
         raise FFmpegError("could not determine video resolution")
@@ -106,10 +111,13 @@ def has_audio(path: str | Path) -> bool:
             ],
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
         )
         return bool(proc.stdout.strip())
     # No ffprobe (imageio-ffmpeg ships only ffmpeg): parse ffmpeg's stream dump.
-    proc = subprocess.run([ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True)
+    proc = subprocess.run(
+        [ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
     return "Audio:" in proc.stderr
 
 
@@ -136,6 +144,7 @@ def detect_content_crop(path: str | Path) -> str | None:
         ],
         capture_output=True,
         text=True,
+        stdin=subprocess.DEVNULL,
     )
     matches = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", proc.stderr)
     if not matches:
