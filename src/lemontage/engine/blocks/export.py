@@ -118,7 +118,7 @@ class ExportBlock(Block):
         media = params.get("input") or ctx.input.get("source")
         if media is None:
             raise ValueError("export: no input media")
-        out = _output_path(params, ctx, index=0)
+        out = _output_path(params, ctx, index=0, step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-title", index=0)
         author = _author_ass(params, ctx, f"{step_id}-author", index=0)
         _render(media, params, out, title, author, mute=_muted(params, 0))
@@ -130,7 +130,7 @@ class ExportBlock(Block):
         clip = item.get("clip")
         if clip is None:
             raise ValueError("export: channel item has no 'clip' to export")
-        out = _output_path(params, ctx, index=item["index"])
+        out = _output_path(params, ctx, index=item["index"], step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-{item['index']}-title", index=item["index"])
         author = _author_ass(params, ctx, f"{step_id}-{item['index']}-author", index=item["index"])
         _render(clip, params, out, title, author, mute=_muted(params, item["index"]))
@@ -160,7 +160,9 @@ def _target_size(params: dict[str, Any]) -> tuple[int, int]:
     return _RESOLUTIONS[fmt]
 
 
-def _output_path(params: dict[str, Any], ctx: RunContext, index: int) -> Path:
+def _output_path(
+    params: dict[str, Any], ctx: RunContext, index: int, step_id: str = "export"
+) -> Path:
     template = params.get("output")
     if template:
         # Same tokens as the title ({{ part }} / {{ index }} / {{ name }}). Without
@@ -168,8 +170,14 @@ def _output_path(params: dict[str, Any], ctx: RunContext, index: int) -> Path:
         # braces in the path, so every mapped clip wrote to the SAME file in
         # parallel and corrupted it (then concat failed reading it).
         out = Path(_fill_title_tokens(str(template), index, ctx.pipeline_name))
-    else:
+    elif step_id == "export":
+        # The implicit id of a pipeline's single export step: keep the historical
+        # <name>-<index>.mp4 naming.
         out = ctx.output_dir / f"{ctx.pipeline_name}-{index}.mp4"
+    else:
+        # Custom ids (required when a pipeline has several export steps): include
+        # the id so two mapped exports can't overwrite each other's clips.
+        out = ctx.output_dir / f"{ctx.pipeline_name}-{step_id}-{index}.mp4"
     # A pipeline-supplied path must not escape the output tree (path traversal).
     out = safepath.confine(out, safepath.allowed_roots(ctx.output_dir))
     out.parent.mkdir(parents=True, exist_ok=True)
