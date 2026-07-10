@@ -7,6 +7,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-10
+
 ### Added
 
 - Six new `concat` transitions: `fadeblack` (fade through black, for a marked
