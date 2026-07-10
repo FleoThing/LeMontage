@@ -21,6 +21,14 @@ may still introduce breaking changes, and those changes must be called out here.
   clip). See `examples/pipeline_zoom_punch.yaml` and
   `examples/pipeline_pan_scroll.yaml`.
 
+### Fixed
+
+- Two `export` steps in the same pipeline no longer overwrite each other's
+  clips: without an explicit `output:`, a custom-id export step now writes
+  `<name>-<step_id>-<index>.mp4` instead of the shared `<name>-<index>.mp4`.
+  Pipelines with a single (implicit-id) export step keep the historical
+  naming.
+
 ## [0.3.3] - 2026-07-08
 
 ### Fixed

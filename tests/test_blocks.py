@@ -380,6 +380,18 @@ def test_output_path_default(tmp_path):
     assert p == tmp_path / "demo-1.mp4"
 
 
+def test_output_path_custom_step_id_avoids_collision(tmp_path):
+    # Regression: two mapped export steps (distinct ids, no explicit output)
+    # used to share <name>-<index>.mp4 and overwrite each other's clips.
+    c = ctx(tmp_path)
+    a = _output_path({}, c, index=0, step_id="up-export")
+    b = _output_path({}, c, index=0, step_id="down-export")
+    assert a != b
+    assert a == tmp_path / "demo-up-export-0.mp4"
+    # The implicit "export" id keeps the historical naming.
+    assert _output_path({}, c, index=0, step_id="export") == tmp_path / "demo-0.mp4"
+
+
 def test_title_ass_none_without_title(tmp_path):
     assert _title_ass({}, ctx(tmp_path), "t") is None
 
