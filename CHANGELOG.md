@@ -14,9 +14,12 @@ may still introduce breaking changes, and those changes must be called out here.
   `circleclose` (spotlight iris), `dissolve` (noisy organic fade) and `radial`
   (clock-hand sweep).
 - `still` motion effects: `motion: zoomout | zoomin` animates each image with
-  an eased punch-out / punch-in (fast start, braking before it lands), tuned
-  via `motion_amount` (default 1.1) and `motion_duration` (default: the whole
-  clip). See `examples/pipeline_zoom_punch.yaml`.
+  an eased punch-out / punch-in (fast start, braking before it lands), and
+  `motion: panup | pandown` is a pure vertical scroll — a full-width band
+  slides across the image at constant speed, no zoom. Tuned via
+  `motion_amount` (default 1.1) and `motion_duration` (default: the whole
+  clip). See `examples/pipeline_zoom_punch.yaml` and
+  `examples/pipeline_pan_scroll.yaml`.
 
 ## [0.3.3] - 2026-07-08
 

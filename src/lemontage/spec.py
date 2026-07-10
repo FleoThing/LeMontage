@@ -62,7 +62,7 @@ CONCAT_TRANSITIONS = frozenset(
 EXPORT_FIT_MODES = frozenset({"contain", "cover"})
 
 # Motion effects `still` can apply while rendering an image to a clip (§6.11).
-STILL_MOTIONS = frozenset({"zoomout", "zoomin"})
+STILL_MOTIONS = frozenset({"zoomout", "zoomin", "panup", "pandown"})
 
 # Fields a step may carry alongside its single block key (see SPEC §5.1).
 COMMON_STEP_FIELDS = frozenset({"id", "cache", "on_failure", "retries", "requires"})

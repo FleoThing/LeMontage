@@ -49,10 +49,11 @@ Expected work:
 
 - Local TTS behind optional extras (`kokoro-onnx` + `soundfile`), with the
   audio muxing story (voiceover / faceless content) it requires.
-- Ken Burns (slow zoom/pan) on stills via `zoompan`. The eased punch-in/out
-  half (`still` `motion: zoomout | zoomin`, with `motion_amount` /
-  `motion_duration`) is in progress on `feat/more-transitions`; slow pan /
-  drift remains.
+- Ken Burns (slow zoom/pan) on stills via `zoompan`: `still`
+  `motion: zoomout | zoomin` (eased punch-in/out) and `panup | pandown`
+  (constant-speed vertical pan), with `motion_amount` / `motion_duration` —
+  in progress on `feat/more-transitions`. Horizontal pan / free drift could
+  follow.
 - More `concat` transitions (xfade): `fadeblack`, `zoomin`, `circleopen` /
   `circleclose`, `dissolve`, `radial` — in progress on
   `feat/more-transitions`.

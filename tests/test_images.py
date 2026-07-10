@@ -159,6 +159,35 @@ def test_still_zoomin_reverses_the_curve(tmp_path, monkeypatch):
     assert "zoompan=z='1.1-(1.1-1)*pow(1-min(on/59,1),2)'" in graph  # 1.0 -> amount
 
 
+def test_still_panup_is_a_pure_scroll(tmp_path, monkeypatch):
+    from lemontage.engine.blocks import still as still_mod
+
+    captured = {}
+    monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
+    item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
+    StillBlock().execute_item(
+        {"motion": "panup", "motion_amount": 1.3, "fps": 30}, item, ctx(tmp_path), "sc"
+    )
+
+    graph = captured["args"][captured["args"].index("-vf") + 1]
+    assert "zoompan" not in graph  # a moving crop, not a zoom
+    assert "crop=w=iw:h=ih/1.3:x=0:y='(min(t/2.000,1))*(ih-oh)'" in graph
+
+
+def test_still_pandown_reverses_the_scroll(tmp_path, monkeypatch):
+    from lemontage.engine.blocks import still as still_mod
+
+    captured = {}
+    monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
+    item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
+    StillBlock().execute_item(
+        {"motion": "pandown", "motion_duration": "1s", "fps": 30}, item, ctx(tmp_path), "sc"
+    )
+
+    graph = captured["args"][captured["args"].index("-vf") + 1]
+    assert ":y='(1-min(t/1.000,1))*(ih-oh)'" in graph  # starts at the bottom, 1s scroll
+
+
 def test_still_zoomout_motion_duration_shortens_span(tmp_path, monkeypatch):
     from lemontage.engine.blocks import still as still_mod
 

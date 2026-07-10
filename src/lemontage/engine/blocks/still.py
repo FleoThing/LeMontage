@@ -9,7 +9,9 @@ An optional ``motion`` effect animates the image while it is on screen, driven
 by FFmpeg's ``zoompan``: ``zoomout`` starts slightly punched-in and pulls back
 to the full frame (the classic shorts/reels look); ``zoomin`` is the reverse,
 pushing from the full frame into the punch-in. Both move fast at first and
-brake just before landing.
+brake just before landing. ``panup`` / ``pandown`` are a pure scroll: a
+full-width, native-resolution band slides vertically across the image at
+constant speed — no zoom involved.
 """
 
 from __future__ import annotations
@@ -88,7 +90,11 @@ def _render_still(
     # it broadly playable; the scale rounds to even dimensions (libx264 requires
     # even width/height). No audio track is added.
     if motion is not None:
-        _render_zoom(image, duration, out, fps, *motion)
+        name = motion[0]
+        if name in ("panup", "pandown"):
+            _render_pan(image, duration, out, fps, *motion)
+        else:
+            _render_zoom(image, duration, out, fps, *motion)
         return
     ffmpeg.run(
         [
@@ -101,6 +107,41 @@ def _render_still(
             "-r",
             str(fps),
             "-vf",
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            str(out),
+        ]
+    )
+
+
+def _render_pan(
+    image: str, duration: float, out, fps: int, name: str, amount: float,
+    motion_dur: float | None,
+) -> None:
+    # Slide a native-resolution horizontal band down (panup: the picture moves
+    # up) or up the image at constant speed over `motion_dur` seconds (the whole
+    # clip if unset), then hold. A moving `crop` — no zoom, no rescale: `amount`
+    # only sets the band height (ih/amount), i.e. how far the view can travel.
+    dur = motion_dur if motion_dur is not None else duration
+    progress = f"min(t/{dur:.3f},1)"
+    travel = f"({progress})" if name == "panup" else f"(1-{progress})"
+    ffmpeg.run(
+        [
+            "-loop",
+            "1",
+            "-t",
+            f"{duration:.3f}",
+            "-i",
+            str(image),
+            "-r",
+            str(fps),
+            "-vf",
+            f"crop=w=iw:h=ih/{amount}:x=0:y='{travel}*(ih-oh)',"
             "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             "-c:v",
             "libx264",
@@ -129,10 +170,12 @@ def _render_zoom(
     span = frames - 1
     if motion_dur is not None:
         span = min(max(int(round(motion_dur * fps)), 1), span)
+    progress = f"min(on/{span},1)"
+    x, y = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
     if name == "zoomout":
-        zoom = f"1+({amount}-1)*pow(1-min(on/{span},1),2)"
+        zoom = f"1+({amount}-1)*pow(1-{progress},2)"
     else:
-        zoom = f"{amount}-({amount}-1)*pow(1-min(on/{span},1),2)"
+        zoom = f"{amount}-({amount}-1)*pow(1-{progress},2)"
     ffmpeg.run(
         [
             "-i",
@@ -140,7 +183,7 @@ def _render_zoom(
             "-vf",
             f"scale=iw*2:ih*2,"
             f"zoompan=z='{zoom}'"
-            f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":x='{x}':y='{y}'"
             f":d={frames}:s={ow}x{oh}:fps={fps}",
             "-c:v",
             "libx264",
