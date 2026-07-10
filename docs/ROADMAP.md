@@ -53,8 +53,9 @@ Expected work:
   half (`still` `motion: zoomout | zoomin`, with `motion_amount` /
   `motion_duration`) is in progress on `feat/more-transitions`; slow pan /
   drift remains.
-- More `concat` transitions: `fadeblack` and `zoomin` (xfade), in progress
-  on `feat/more-transitions`.
+- More `concat` transitions (xfade): `fadeblack`, `zoomin`, `circleopen` /
+  `circleclose`, `dissolve`, `radial` — in progress on
+  `feat/more-transitions`.
 - A `filter` block for per-clip looks — first presets: black & white,
   vignette, `eq` adjustments (brightness / contrast / saturation), film
   grain, sharpen (`feat/filters`).

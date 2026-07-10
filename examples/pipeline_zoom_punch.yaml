@@ -23,9 +23,11 @@ steps:
       fit: cover             # crop each photo to fill the vertical frame
   - concat:
       from: carousel
-      # 6 photos -> 5 gaps. fadeblack marks a hard scene break; zoomin is the
-      # dynamic push (needs FFmpeg >= 5.0).
-      transitions: [fadeblack, zoomin, fadeblack, zoomin, fadeblack]
+      # 6 photos -> 5 gaps: one of each new transition. fadeblack marks a hard
+      # scene break; zoomin is the dynamic push (needs FFmpeg >= 5.0);
+      # circleopen is a spotlight iris, dissolve a noisy fade, radial a
+      # clock-hand sweep.
+      transitions: [fadeblack, zoomin, circleopen, dissolve, radial]
       duration: 0.3s
 
 output:

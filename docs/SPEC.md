@@ -472,8 +472,10 @@ list here; mapped blocks (`cut`/`captions`/`export`) read a single channel.
 | `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
 
 **Transitions:** `fade`, `fadeblack` (fade through black), `zoomin` (requires
-FFmpeg ≥ 5.0), `wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`,
-`slideright`, `slideup`, `slidedown`, and `none` (a hard cut for that gap). Any
+FFmpeg ≥ 5.0), `circleopen` / `circleclose` (spotlight iris out of / into the
+next clip), `dissolve` (noisy, organic fade), `radial` (clock-hand sweep),
+`wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`, `slideright`,
+`slideup`, `slidedown`, and `none` (a hard cut for that gap). Any
 transition re-encodes the join (via FFmpeg's `xfade`/`acrossfade`);
 a plain concat without `transitions` is faster. Place `concat` after `export` so
 all clips share the same resolution and frame rate.

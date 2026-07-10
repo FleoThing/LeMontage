@@ -145,7 +145,12 @@ def test_export_bad_mute_type_rejected():
 def test_concat_valid_transitions_pass():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] += [
-        {"concat": {"from": "clip_channel", "transitions": ["fade", "fadeblack", "zoomin"]}}
+        {
+            "concat": {
+                "from": "clip_channel",
+                "transitions": ["fade", "fadeblack", "zoomin", "circleopen", "dissolve", "radial"],
+            }
+        }
     ]
     assert validate_doc(d) == []
 
