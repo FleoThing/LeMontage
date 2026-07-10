@@ -144,8 +144,35 @@ def test_export_bad_mute_type_rejected():
 
 def test_concat_valid_transitions_pass():
     d = copy.deepcopy(VALID_PIPELINE)
-    d["steps"] += [{"concat": {"from": "clip_channel", "transitions": ["fade", "wipeleft"]}}]
+    d["steps"] += [
+        {
+            "concat": {
+                "from": "clip_channel",
+                "transitions": ["fade", "fadeblack", "zoomin", "circleopen", "dissolve", "radial"],
+            }
+        }
+    ]
     assert validate_doc(d) == []
+
+
+def test_still_valid_motion_passes():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"still": {"image": "./cover.png", "motion": "zoomout", "motion_amount": 1.2}}]
+    assert validate_doc(d) == []
+
+
+def test_still_unknown_motion_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"still": {"image": "./cover.png", "motion": "spin"}}]
+    errors = validate_doc(d)
+    assert any("unknown still motion" in e and "spin" in e for e in errors)
+
+
+def test_still_bad_motion_amount_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"still": {"image": "./cover.png", "motion": "zoomout", "motion_amount": 1}}]
+    errors = validate_doc(d)
+    assert any("motion_amount" in e for e in errors)
 
 
 def test_concat_unknown_transition_rejected():

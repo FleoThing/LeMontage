@@ -49,7 +49,17 @@ Expected work:
 
 - Local TTS behind optional extras (`kokoro-onnx` + `soundfile`), with the
   audio muxing story (voiceover / faceless content) it requires.
-- Ken Burns (slow zoom/pan) on stills via `zoompan`.
+- Ken Burns (slow zoom/pan) on stills via `zoompan`: `still`
+  `motion: zoomout | zoomin` (eased punch-in/out) and `panup | pandown`
+  (constant-speed vertical pan), with `motion_amount` / `motion_duration` —
+  in progress on `feat/more-transitions`. Horizontal pan / free drift could
+  follow.
+- More `concat` transitions (xfade): `fadeblack`, `zoomin`, `circleopen` /
+  `circleclose`, `dissolve`, `radial` — in progress on
+  `feat/more-transitions`.
+- A `filter` block for per-clip looks — first presets: black & white,
+  vignette, `eq` adjustments (brightness / contrast / saturation), film
+  grain, sharpen (`feat/filters`).
 - Better run observability: structured logs, run summaries, cache reporting.
 - More robust long-video workflows (memory-friendly `reverse`, resumable runs).
 
@@ -69,6 +79,13 @@ Expected work:
 - Remote inputs (URLs / YouTube) and audio-only input, currently reserved
   in the spec.
 - Multiple inputs per pipeline.
+- Hardware acceleration: detect the available FFmpeg hardware encoders at
+  run time (NVENC / QSV / VideoToolbox / VAAPI) and prefer them with a
+  silent `libx264` fallback, plus a global setting to force software or a
+  specific encoder (hardware encoders trade some compression efficiency
+  for speed). Route the encoder choice through one place in the engine
+  instead of the per-block `libx264` literals. Let the Whisper STT
+  provider run on CUDA when present (`device: auto`).
 
 Definition of done:
 

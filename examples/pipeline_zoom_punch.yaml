@@ -1,0 +1,34 @@
+lemontage: "1.0"
+name: zoom-punch
+description: "Photo montage with a punch-out on every image (still motion) and fadeblack / zoomin transitions"
+
+# A folder of images is the pipeline input; `stills` picks it up directly.
+input:
+  type: images
+  source: ./photos/
+
+steps:
+  - id: shots
+    stills:
+      duration: 1.5s
+      emit: carousel
+  - still:                   # each image -> a clip with a fast eased pull-back
+      from: carousel
+      motion: zoomout        # or zoomin to push into the image instead
+      motion_amount: 1.2     # 20% punch-in at the tightest point
+      motion_duration: 0.3s  # the pull-back plays out fast, then holds
+  - export:
+      from: carousel
+      format: vertical
+      fit: cover             # crop each photo to fill the vertical frame
+  - concat:
+      from: carousel
+      # 6 photos -> 5 gaps: one of each new transition. fadeblack marks a hard
+      # scene break; zoomin is the dynamic push (needs FFmpeg >= 5.0);
+      # circleopen is a spotlight iris, dissolve a noisy fade, radial a
+      # clock-hand sweep.
+      transitions: [fadeblack, zoomin, circleopen, dissolve, radial]
+      duration: 0.3s
+
+output:
+  dir: ./output/zoom-punch
