@@ -1,0 +1,31 @@
+lemontage: "1.0"
+name: pan-scroll
+description: "Photo montage with a pure vertical scroll on each image: 3 photos panning up, then 3 panning down"
+
+# A folder of images is the pipeline input; `stills` picks it up directly.
+input:
+  type: images
+  source: ./photos/
+
+steps:
+  - id: up-shots
+    stills: { duration: 3s, max: 3, emit: up }
+  - id: up-still
+    # panup / pandown are a pure scroll — a full-width band slides across the
+    # image at constant speed, no zoom. motion_amount sets the band height
+    # (image height / 1.25 here), i.e. how far the view travels.
+    still: { from: up, motion: panup, motion_amount: 1.25 }
+  - id: up-export
+    # Explicit outputs: two mapped exports in one pipeline share the default
+    # <name>-<index>.mp4 naming and would overwrite each other.
+    export: { from: up, format: vertical, fit: cover, output: "./output/pan-scroll/up-{{ index }}.mp4" }
+  - id: down-shots
+    stills: { duration: 3s, max: 3, shuffle: true, seed: 3, emit: down }
+  - id: down-still
+    still: { from: down, motion: pandown, motion_amount: 1.25 }
+  - id: down-export
+    export: { from: down, format: vertical, fit: cover, output: "./output/pan-scroll/down-{{ index }}.mp4" }
+  - concat: { from: [up, down], transitions: fade, duration: 0.3s }
+
+output:
+  dir: ./output/pan-scroll

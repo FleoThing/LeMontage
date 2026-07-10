@@ -471,9 +471,12 @@ list here; mapped blocks (`cut`/`captions`/`export`) read a single channel.
 | `transitions_at` | string | `all` | Where transitions apply: `all` (every gap; a `transitions` list must be **clips − 1** long) or `boundaries` (only at channel-merge joins; a list must be **channels − 1** long, and within-channel gaps stay hard cuts). |
 | `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
 
-**Transitions:** `fade`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`,
-`slideleft`, `slideright`, `slideup`, `slidedown`, and `none` (a hard cut for
-that gap). Any transition re-encodes the join (via FFmpeg's `xfade`/`acrossfade`);
+**Transitions:** `fade`, `fadeblack` (fade through black), `zoomin` (requires
+FFmpeg ≥ 5.0), `circleopen` / `circleclose` (spotlight iris out of / into the
+next clip), `dissolve` (noisy, organic fade), `radial` (clock-hand sweep),
+`wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`, `slideright`,
+`slideup`, `slidedown`, and `none` (a hard cut for that gap). Any
+transition re-encodes the join (via FFmpeg's `xfade`/`acrossfade`);
 a plain concat without `transitions` is faster. Place `concat` after `export` so
 all clips share the same resolution and frame rate.
 
@@ -564,6 +567,7 @@ track); `concat` tolerates this and drops audio for the join.
 - still:
     from: photos
     fps: 30
+    motion: zoomout      # subtle pull-back while each photo is on screen
 
 # single mode: one image, one clip
 - still:
@@ -577,6 +581,9 @@ track); `concat` tolerates this and drops audio for the join.
 | `image` | path | — | Source image (single mode). |
 | `duration` | time | `3s` | Clip length. Channel items carry their own duration; this is the fallback. |
 | `fps` | int | `30` | Frame rate of the rendered clip. |
+| `motion` | string | — | Animate the image while it is on screen: `zoomout` starts slightly punched-in and pulls back to the full frame; `zoomin` pushes from the full frame into the punch-in (both fast at first, braking just before landing — the classic shorts/reels look). `panup` / `pandown` are a pure vertical scroll — a full-width band slides across the image at constant speed, no zoom. Omit for a static clip. |
+| `motion_amount` | float | `1.1` | For the zooms: the punched-in zoom factor (must be > 1.0; `1.1` = a 10% punch-in). For the pans: the crop ratio — the visible band is `height / motion_amount` tall, so a larger value scrolls further. |
+| `motion_duration` | time | clip length | How long the motion lasts; the image then holds the landing frame for the rest of the clip. Shorter = snappier zoom / faster scroll. |
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
