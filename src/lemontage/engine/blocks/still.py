@@ -39,7 +39,10 @@ class StillBlock(Block):
         duration = parse_seconds(params.get("duration", _DEFAULT_DURATION))
         out = ctx.work_dir() / f"{step_id}.mp4"
         _render_still(
-            str(image), duration, out, int(params.get("fps", _DEFAULT_FPS)),
+            str(image),
+            duration,
+            out,
+            int(params.get("fps", _DEFAULT_FPS)),
             _resolve_motion(params),
         )
         return BlockResult(outputs={"clip": str(out)})
@@ -53,7 +56,10 @@ class StillBlock(Block):
         duration = parse_seconds(item.get("duration", params.get("duration", _DEFAULT_DURATION)))
         out = ctx.work_dir() / f"{step_id}-{item['index']}.mp4"
         _render_still(
-            str(image), duration, out, int(params.get("fps", _DEFAULT_FPS)),
+            str(image),
+            duration,
+            out,
+            int(params.get("fps", _DEFAULT_FPS)),
             _resolve_motion(params),
         )
         return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
@@ -83,7 +89,10 @@ def _resolve_motion(params: dict[str, Any]) -> tuple[str, float, float | None] |
 
 
 def _render_still(
-    image: str, duration: float, out, fps: int,
+    image: str,
+    duration: float,
+    out,
+    fps: int,
     motion: tuple[str, float, float | None] | None = None,
 ) -> None:
     # Loop a single image for `duration` seconds into an H.264 clip. yuv420p keeps
@@ -120,7 +129,12 @@ def _render_still(
 
 
 def _render_pan(
-    image: str, duration: float, out, fps: int, name: str, amount: float,
+    image: str,
+    duration: float,
+    out,
+    fps: int,
+    name: str,
+    amount: float,
     motion_dur: float | None,
 ) -> None:
     # Slide a native-resolution horizontal band down (panup: the picture moves
@@ -141,8 +155,7 @@ def _render_pan(
             "-r",
             str(fps),
             "-vf",
-            f"crop=w=iw:h=ih/{amount}:x=0:y='{travel}*(ih-oh)',"
-            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            f"crop=w=iw:h=ih/{amount}:x=0:y='{travel}*(ih-oh)',scale=trunc(iw/2)*2:trunc(ih/2)*2",
             "-c:v",
             "libx264",
             "-preset",
@@ -155,7 +168,12 @@ def _render_pan(
 
 
 def _render_zoom(
-    image: str, duration: float, out, fps: int, name: str, amount: float,
+    image: str,
+    duration: float,
+    out,
+    fps: int,
+    name: str,
+    amount: float,
     motion_dur: float | None,
 ) -> None:
     # zoompan eases the zoom between 1.0 and `amount` over `motion_dur` seconds
@@ -181,10 +199,7 @@ def _render_zoom(
             "-i",
             str(image),
             "-vf",
-            f"scale=iw*2:ih*2,"
-            f"zoompan=z='{zoom}'"
-            f":x='{x}':y='{y}'"
-            f":d={frames}:s={ow}x{oh}:fps={fps}",
+            f"scale=iw*2:ih*2,zoompan=z='{zoom}':x='{x}':y='{y}':d={frames}:s={ow}x{oh}:fps={fps}",
             "-c:v",
             "libx264",
             "-preset",

@@ -191,9 +191,7 @@ def _check_block_params(
 
     if block == "still":
         motion = params.get("motion")
-        if motion is not None and (
-            not isinstance(motion, str) or motion not in spec.STILL_MOTIONS
-        ):
+        if motion is not None and (not isinstance(motion, str) or motion not in spec.STILL_MOTIONS):
             valid = ", ".join(sorted(spec.STILL_MOTIONS))
             errors.append(f"{label}: unknown still motion '{motion}' (choose from: {valid})")
         amount = params.get("motion_amount")
