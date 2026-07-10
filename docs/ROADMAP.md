@@ -41,7 +41,22 @@ Delivered:
 - FFmpeg/ffprobe subprocess calls no longer leave the terminal unresponsive
   after a run (0.3.3).
 
-## v0.4.0 — planned: engine depth
+## v0.4.0 — shipped
+
+Goal (revised): richer motion and transition primitives for stills-heavy
+montages; the rest of the "engine depth" work moved to v0.4.x below.
+
+Delivered:
+
+- Six new `concat` transitions (xfade): `fadeblack`, `zoomin` (FFmpeg ≥ 5.0),
+  `circleopen` / `circleclose`, `dissolve`, `radial`.
+- Ken Burns motion on stills: `still` `motion: zoomout | zoomin` (eased
+  punch-in/out via `zoompan`) and `panup | pandown` (pure vertical scroll via
+  a moving crop — no zoom), tuned with `motion_amount` / `motion_duration`.
+- Two mapped `export` steps no longer overwrite each other's default outputs
+  (custom-id steps now write `<name>-<step_id>-<index>.mp4`).
+
+## v0.4.x — planned: engine depth (continued)
 
 Goal: deepen the local editing engine and make longer projects practical.
 
@@ -49,14 +64,7 @@ Expected work:
 
 - Local TTS behind optional extras (`kokoro-onnx` + `soundfile`), with the
   audio muxing story (voiceover / faceless content) it requires.
-- Ken Burns (slow zoom/pan) on stills via `zoompan`: `still`
-  `motion: zoomout | zoomin` (eased punch-in/out) and `panup | pandown`
-  (constant-speed vertical pan), with `motion_amount` / `motion_duration` —
-  in progress on `feat/more-transitions`. Horizontal pan / free drift could
-  follow.
-- More `concat` transitions (xfade): `fadeblack`, `zoomin`, `circleopen` /
-  `circleclose`, `dissolve`, `radial` — in progress on
-  `feat/more-transitions`.
+- Horizontal pan / free drift on stills (completing the Ken Burns set).
 - A `filter` block for per-clip looks — first presets: black & white,
   vignette, `eq` adjustments (brightness / contrast / saturation), film
   grain, sharpen (`feat/filters`).
