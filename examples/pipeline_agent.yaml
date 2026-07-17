@@ -1,0 +1,43 @@
+lemontage: "1.0"
+name: agent
+description: "AI-agent mode: the agent reads the transcript and picks the exact clip boundaries itself"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Transcribe so the agent can read what is said, with word-level timings.
+  - id: transcript
+    stt:
+      model: base
+      lang: auto
+
+  # 2. The agent chose these start/end from the transcript (method: agent).
+  #    No detection heuristic runs — the boundaries are used verbatim. `words`
+  #    attaches each clip's spoken text back onto the channel item.
+  - id: picks
+    detect_clips:
+      method: agent
+      clips:
+        - { start: "1:04", end: "1:39" }
+        - { start: 210, end: 255 }
+      words: "{{ steps.transcript.words }}"
+      emit: clip_channel
+
+  - cut:
+      from: clip_channel
+
+  - captions:
+      from: clip_channel
+      words: "{{ steps.transcript.words }}"
+      style: tiktok
+      burn: true
+
+  - export:
+      from: clip_channel
+      format: vertical
+      resolution: 1080x1920
+
+output:
+  dir: ./output

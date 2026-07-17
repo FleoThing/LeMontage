@@ -246,11 +246,13 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `agent`. |
+| `clips` | list | — | (`agent` only) The boundaries chosen by the AI agent: `[{start, end}, …]`. Used verbatim (clamped to the media); `min/max_duration` and `max_clips` do not apply. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
 | `seed` | int/string | — | (`random` only) Seed for reproducible picks; omit for a different set each run. |
+| `words` | list | — | Transcript words (e.g. `{{ steps.transcript.words }}`). When set, each clip's start/end snaps to whole-word boundaries and the item carries `text`/`words` for the spoken span. |
 | `emit` | string | — | Channel name to emit clips into. |
 
 **Methods.** `silence` keeps the spoken spans (best for talking-head / podcast).
@@ -264,8 +266,35 @@ the resulting length (no manual offset). `random` picks `max_clips` random,
 non-overlapping moments (each of a random length in the min/max window) with no
 analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
 
+**Transcript-aware boundaries.** Pass `words:` (from an earlier `stt` step) to
+make detection transcript-aware: boundaries snap to whole words (no clip starts
+or ends mid-sentence) and each emitted item gains `text` and `words` for the
+spoken span. An AI agent reading the channel then sees *what is said* in every
+candidate clip and can choose a precise start/end, instead of guessing from
+audio/scene boundaries alone.
+
+**`agent` method — the AI picks the clips.** A dedicated mode for AI agents (e.g.
+a YouTube-montage bot): the other methods are unchanged and keep working as-is.
+The agent reads the transcript, decides the exact `start`/`end` of each clip and
+passes them as `clips:`; `detect_clips` emits them as a channel like any other
+method (still honouring `words:` for text attachment). This gives the agent full
+control over the cut points instead of any built-in heuristic:
+
+```yaml
+- id: transcript
+  stt: { model: base }
+- id: picks
+  detect_clips:
+    method: agent
+    clips:                       # boundaries the agent chose from the transcript
+      - { start: "1:04", end: "1:39" }
+      - { start: 210, end: 255 }
+    words: "{{ steps.transcript.words }}"   # optional: attach text per clip
+    emit: clip_channel
+```
+
 **Outputs:** `count`, `timestamps` (list of `{start, end}`), plus the named
-channel.
+channel (each item: `index`, `start`, `end`, and — with `words:` — `text`, `words`).
 
 > Out of scope for v1: `method: engagement` (LLM-scored). Reserved keyword.
 

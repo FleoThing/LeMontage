@@ -176,6 +176,8 @@ def _check_block_params(
         method = params.get("method")
         if method in spec.RESERVED_DETECT_METHODS:
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
+        if method == "agent" and not isinstance(params.get("clips"), list):
+            errors.append(f"{label}: detect_clips.method 'agent' requires a 'clips' list")
 
     if block == "export":
         fit = params.get("fit")
