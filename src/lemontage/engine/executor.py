@@ -155,6 +155,10 @@ def _run_cell(
         output_dir=output_dir,
         pipeline_name=str(doc.get("name", "pipeline")),
     )
+    # Resolve templates in the input against vars/matrix (steps haven't run yet),
+    # so a reusable pipeline can take its source via `--var` (e.g.
+    # `input.source: "{{ vars.source }}"`).
+    ctx.input = template.resolve(ctx.input, ctx)
     cell = CellResult(matrix=matrix)
     for node in nodes:
         ctx.state[node.step_id] = PENDING

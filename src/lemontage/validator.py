@@ -94,6 +94,11 @@ def _check_input(doc: dict, errors: list[str]) -> None:
         errors.append("input is missing 'source'")
     elif not isinstance(source, str):
         errors.append("input.source must be a string path")
+    elif "{{" in source:
+        # Templated (e.g. "{{ vars.source }}"): resolved at runtime, so the
+        # extension can't be checked here. A reusable pipeline sets the source
+        # via --var; existence/extension are enforced when the file is read.
+        pass
     elif itype == "images":
         # A folder (or glob) of images — not a .mp4. Existence is a runtime check.
         if source.lower().endswith(spec.SUPPORTED_INPUT_EXTENSIONS):
