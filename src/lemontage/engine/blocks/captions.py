@@ -15,6 +15,7 @@ from ..assformat import escape_text
 from ..context import RunContext
 from ..timecode import to_timecode
 from .base import Block, BlockResult, ItemResult
+from .export import _output_path
 
 # ASS Alignment is numpad-style: 2=bottom-centre, 5=middle, 8=top.
 _POSITION = {"bottom": 2, "center": 5, "top": 8}
@@ -73,25 +74,31 @@ class CaptionsBlock(Block):
     def execute_item(
         self, params: dict[str, Any], item: dict[str, Any], ctx: RunContext, step_id: str
     ) -> ItemResult:
-        clip = item.get("clip")
-        if clip is None:
-            raise ValueError("captions: channel item has no 'clip' (run 'cut' first)")
+        # Prefer the exported file: placing `captions` *after* `export` burns the
+        # captions on the already-reframed (e.g. vertical) clip, so their size is
+        # relative to the final frame instead of being shrunk by the reframe.
+        # Otherwise fall back to the cut clip (the classic cut→captions→export).
+        key = "file" if item.get("file") else "clip"
+        media = item.get("file") or item.get("clip")
+        if media is None:
+            raise ValueError("captions: channel item has no 'clip'/'file' (run 'cut' or 'export' first)")
         offset = float(item.get("start", 0.0))
-        out = self._caption(clip, params, ctx, f"{step_id}-{item['index']}", offset)
+        dest = _output_path(params, ctx, item["index"]) if params.get("output") else None
+        out = self._caption(media, params, ctx, f"{step_id}-{item['index']}", offset, dest)
         if out is None:  # nothing in this clip's window — leave it unchanged
-            return ItemResult(item={"clip": str(clip)}, outputs={"clips": str(clip)})
+            return ItemResult(item={key: str(media)}, outputs={"clips": str(media)})
         if not params.get("burn", True):
             return ItemResult(item={"srt": str(out)}, outputs={"srt": str(out)})
-        return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
+        return ItemResult(item={key: str(out)}, outputs={"clips": str(out)})
 
-    def _caption(self, media, params, ctx, name, offset) -> Path | None:
+    def _caption(self, media, params, ctx, name, offset, dest: Path | None = None) -> Path | None:
         lines = _build_lines(params, offset)
         if not lines:
             return None
         if not params.get("burn", True):
             return _write_srt(lines, ctx.work_dir() / f"{name}.srt")
         ass = _write_karaoke_ass(lines, params, media, ctx.work_dir() / f"{name}.ass")
-        out = ctx.work_dir() / f"{name}-captioned.mp4"
+        out = dest or ctx.work_dir() / f"{name}-captioned.mp4"
         _burn(media, ass, params, out)
         return out
 

@@ -349,7 +349,8 @@ segment-level cues.
 |---|---|---|---|
 | `words` | ref | — | Per-word timing (`steps.<stt>.words`). Enables karaoke; preferred. |
 | `segments` | ref | — | Segment timing (`steps.<stt>.segments`). Used if `words` is absent. |
-| `from` | channel | — | Channel of clips to caption. |
+| `from` | channel | — | Channel of clips to caption. Reads the exported `file` if the step runs **after** `export`, else the cut `clip` (see note). |
+| `output` | path | — | Final file path (supports `{{ name }}`/`{{ part }}`). Set it when `captions` is the last step so the captioned clip lands at a known path. |
 | `style` | enum | `tiktok` | `default` \| `tiktok` \| `minimal` (outline/weight). |
 | `font` | string | `font1` | Caption font: a preset `font1`–`font5` or an installed family. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
@@ -359,6 +360,15 @@ segment-level cues.
 | `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
+
+**Order matters — caption before *or* after reframing.** `caption_size`/`caption_margin`
+are relative to the **height of the clip being captioned**. Placing `captions`
+*before* `export` (the classic `cut → captions → export`) burns them on the
+source-shaped clip; a later reframe to vertical then *shrinks* them (and, with
+`fit: contain`, leaves them at the bottom of the video band, not the frame). To
+get full-size captions pinned to the final frame, put `captions` **after**
+`export` (`cut → export → captions`): it then burns on the reframed clip and, with
+an `output:`, writes the finished file.
 
 **Outputs:** `clips` (captioned paths) or `srt` (sidecar path when `burn: false`).
 
