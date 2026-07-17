@@ -354,8 +354,8 @@ segment-level cues.
 | `font` | string | `font1` | Caption font: a preset `font1`–`font5` or an installed family. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
 | `max_chars` | int | `24` | Max characters per line (lines stay short for word-by-word reading). |
-| `caption_size` | int | ~7% of height | Font size in pixels of the clip. |
-| `caption_margin` | int | ~8% of height | Distance from the edge (per `position`). |
+| `caption_size` | int | ~10% of height | Font size in pixels of the clip. |
+| `caption_margin` | int | ~5% of height | Distance from the edge (per `position`). |
 | `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |

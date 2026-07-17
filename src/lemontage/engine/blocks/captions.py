@@ -175,9 +175,9 @@ def _safe_margin_h(params: dict[str, Any], width: int, height: int) -> int:
 def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
     width, height = ffmpeg.probe_resolution(media)
     outline, bold = _STYLES.get(params.get("style", "tiktok"), _STYLES["tiktok"])
-    size = int(params.get("caption_size") or round(height * 0.07))
+    size = int(params.get("caption_size") or round(height * 0.10))
     align = _POSITION.get(params.get("position", "bottom"), 2)
-    marginv = int(params.get("caption_margin", round(height * 0.08)))
+    marginv = int(params.get("caption_margin", round(height * 0.05)))
     marginh = _safe_margin_h(params, width, height)
     hi = params.get("highlight") or _HIGHLIGHT
     font = fonts.family(params.get("font"))
