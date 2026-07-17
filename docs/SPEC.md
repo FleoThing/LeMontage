@@ -787,11 +787,34 @@ output:
 ```bash
 lemontage run pipeline.yaml --var lang=en   # override a vars entry (repeatable)
 lemontage run pipeline.yaml --clean         # delete temp files after a successful run
+lemontage run pipeline.yaml --json          # print step outputs (transcript…) on stdout
 ```
 
 `--clean` removes `output/.lemontage/` (work files + checkpoint cache) once the run
 succeeds, plus any per-clip files a `concat` merged (keeping the final reel). Omit
 it to keep the cache so a re-run can resume from checkpoints.
+
+`--json` prints `{"ok", "cells": [{"matrix", "states", "outputs"}]}` on stdout
+(status lines stay on stderr). `outputs` maps each step id to its outputs — so an
+AI agent can run an `stt`-only pipeline, read `cells[0].outputs.<id>.words`, decide
+which spans are worth clipping, and feed them back via `detect_clips` `method: agent`.
+
+### 13.0 AI-agent loop
+
+The transcript-aware boundaries (§6.3) and `--json` compose into a two-pass loop
+for an agent that decides clips from the transcript:
+
+```bash
+# 1. Transcribe only; the agent reads the words + timings from stdout.
+lemontage run transcribe.yaml --json > transcript.json
+
+# 2. The agent picks the viral spans and writes them into a method: agent
+#    pipeline, then renders.
+lemontage run agent-clips.yaml
+```
+
+LeMontage stays deterministic — it transcribes, cuts and exports; the editorial
+call (*which* moment is viral) lives in the agent.
 
 ### 13.1 Time values
 

@@ -107,6 +107,37 @@ def test_run_executes_pipeline(tmp_path, monkeypatch):
     assert main(["run", str(target), "--var", "k=v"]) == 0
 
 
+def test_run_json_prints_step_outputs(tmp_path, monkeypatch, capsys):
+    """--json dumps each step's outputs (the transcript) to stdout for an agent."""
+    import json
+
+    from lemontage.engine import executor
+    from lemontage.engine.blocks.base import Block, BlockResult
+
+    class SttStub(Block):
+        name = "stt"
+
+        def execute(self, params, ctx, step_id):
+            return BlockResult(outputs={"text": "hi there", "words": [{"start": 0.0, "end": 0.4}]})
+
+    monkeypatch.setattr(executor, "REGISTRY", {"stt": SttStub()})
+
+    pipeline = (
+        'lemontage: "1.0"\n'
+        "name: t\n"
+        "input:\n  type: video\n  source: ./x.mp4\n"
+        "steps:\n  - id: transcript\n    stt: {}\n"
+        "output:\n  dir: " + str(tmp_path) + "\n"
+    )
+    target = tmp_path / "p.yaml"
+    target.write_text(pipeline, encoding="utf-8")
+    assert main(["run", str(target), "--json"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["cells"][0]["outputs"]["transcript"]["text"] == "hi there"
+
+
 def _noop_pipeline(tmp_path):
     """A valid pipeline with one stubbed step writing under tmp_path."""
     from lemontage.engine.blocks.base import Block, BlockResult
