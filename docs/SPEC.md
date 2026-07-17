@@ -277,8 +277,9 @@ audio/scene boundaries alone.
 a YouTube-montage bot): the other methods are unchanged and keep working as-is.
 The agent reads the transcript, decides the exact `start`/`end` of each clip and
 passes them as `clips:`; `detect_clips` emits them as a channel like any other
-method (still honouring `words:` for text attachment). This gives the agent full
-control over the cut points instead of any built-in heuristic:
+method. The boundaries are used **verbatim** (only clamped to the media) — unlike
+the detected methods, `words:` here *does not* snap them, it only attaches each
+clip's `text`/`words`, since the agent already chose the exact cut points:
 
 ```yaml
 - id: transcript
@@ -293,8 +294,10 @@ control over the cut points instead of any built-in heuristic:
     emit: clip_channel
 ```
 
-**Outputs:** `count`, `timestamps` (list of `{start, end}`), plus the named
-channel (each item: `index`, `start`, `end`, and — with `words:` — `text`, `words`).
+**Outputs:** `count`, `timestamps` (list of `{start, end}`), `clips` (the full
+items, incl. `text`/`words` when `words:` was given — readable via `run --json`),
+plus the named channel (each item: `index`, `start`, `end`, and — with `words:` —
+`text`, `words`).
 
 > Out of scope for v1: `method: engagement` (LLM-scored). Reserved keyword.
 

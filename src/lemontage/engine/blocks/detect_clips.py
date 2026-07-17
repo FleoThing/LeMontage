@@ -73,8 +73,12 @@ class DetectClipsBlock(Block):
             raise ValueError(f"detect_clips: unsupported method '{method}'")
 
         words = params.get("words") or []
+        # In agent mode the boundaries are the agent's decision — attach the
+        # transcript for context but never snap them. For detected methods,
+        # snapping trims machine-guessed boundaries to whole words.
+        snap = method != "agent"
         items = [
-            _clip_item(i, start, end, words)
+            _clip_item(i, start, end, words, snap=snap)
             for i, (start, end) in enumerate(clips)
         ]
 
@@ -82,6 +86,9 @@ class DetectClipsBlock(Block):
             outputs={
                 "count": len(items),
                 "timestamps": [{"start": it["start"], "end": it["end"]} for it in items],
+                # Full items (with per-clip `text`/`words` when a transcript was
+                # given) so an AI agent reading `--json` can refine boundaries.
+                "clips": items,
             },
             channel_items=items,
         )
@@ -107,16 +114,17 @@ def _agent_clips(clips: Any, total: float) -> list[tuple[float, float]]:
 
 
 def _clip_item(
-    index: int, start: float, end: float, words: list[dict[str, Any]]
+    index: int, start: float, end: float, words: list[dict[str, Any]], snap: bool = True
 ) -> dict[str, Any]:
-    """Build a channel item, snapping boundaries to whole words and attaching
-    the spoken text — so an AI agent can pick precise start/end from the clip's
-    own transcript instead of guessing off audio/scene boundaries alone."""
+    """Build a channel item, attaching the spoken text and (when ``snap``)
+    trimming boundaries to whole words — so an AI agent can pick precise
+    start/end from the clip's own transcript instead of guessing off audio/scene
+    boundaries alone. ``snap=False`` keeps the given boundaries verbatim."""
     inside = [w for w in words if w.get("end", 0) > start and w.get("start", 0) < end]
     # Trim inward to whole words: begin at the first word onset >= start, end at
     # the last word offset <= end. Never cut a word in half.
     whole = [w for w in inside if w["start"] >= start and w["end"] <= end]
-    if whole:
+    if snap and whole:
         start, end = whole[0]["start"], whole[-1]["end"]
     item: dict[str, Any] = {"index": index, "start": round(start, 3), "end": round(end, 3)}
     if inside:

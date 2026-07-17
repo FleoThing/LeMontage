@@ -124,6 +124,14 @@ def test_clip_item_without_words_is_plain():
     assert _clip_item(2, 1.0, 5.0, []) == {"index": 2, "start": 1.0, "end": 5.0}
 
 
+def test_clip_item_no_snap_keeps_boundaries_verbatim():
+    # Agent mode: boundaries are the agent's decision — attach text, never snap.
+    words = [{"start": 2.0, "end": 2.5, "text": "hi"}]
+    item = _clip_item(0, 0.0, 6.0, words, snap=False)
+    assert (item["start"], item["end"]) == (0.0, 6.0)
+    assert item["text"] == "hi"
+
+
 # --- detect_clips agent mode -----------------------------------------------
 
 
