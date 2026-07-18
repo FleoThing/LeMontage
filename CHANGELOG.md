@@ -7,9 +7,21 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
-## [0.4.5] - 2026-07-18
+## [0.4.0] - 2026-07-18
 
 ### Added
+
+- Six new `concat` transitions: `fadeblack` (fade through black, for a marked
+  scene break), `zoomin` (dynamic push, needs FFmpeg >= 5.0), `circleopen` /
+  `circleclose` (spotlight iris), `dissolve` (noisy organic fade) and `radial`
+  (clock-hand sweep).
+- `still` motion effects: `motion: zoomout | zoomin` animates each image with
+  an eased punch-out / punch-in (fast start, braking before it lands), and
+  `motion: panup | pandown` is a pure vertical scroll — a full-width band
+  slides across the image at constant speed, no zoom. Tuned via
+  `motion_amount` (default 1.1) and `motion_duration` (default: the whole
+  clip). See `examples/pipeline_zoom_punch.yaml` and
+  `examples/pipeline_pan_scroll.yaml`.
 
 - `detect_clips` `method: agent`: an AI agent reads the transcript
   (`words` from `stt`) and supplies exact `clips: [{start, end}]` itself,
@@ -37,24 +49,6 @@ may still introduce breaking changes, and those changes must be called out here.
 - Checkpoint signatures now include `input.source`, so two different
   input videos with identical step params no longer collide on the same
   cache entry.
-
-## [0.4.0] - 2026-07-10
-
-### Added
-
-- Six new `concat` transitions: `fadeblack` (fade through black, for a marked
-  scene break), `zoomin` (dynamic push, needs FFmpeg >= 5.0), `circleopen` /
-  `circleclose` (spotlight iris), `dissolve` (noisy organic fade) and `radial`
-  (clock-hand sweep).
-- `still` motion effects: `motion: zoomout | zoomin` animates each image with
-  an eased punch-out / punch-in (fast start, braking before it lands), and
-  `motion: panup | pandown` is a pure vertical scroll — a full-width band
-  slides across the image at constant speed, no zoom. Tuned via
-  `motion_amount` (default 1.1) and `motion_duration` (default: the whole
-  clip). See `examples/pipeline_zoom_punch.yaml` and
-  `examples/pipeline_pan_scroll.yaml`.
-
-### Fixed
 
 - Two `export` steps in the same pipeline no longer overwrite each other's
   clips: without an explicit `output:`, a custom-id export step now writes

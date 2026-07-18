@@ -55,13 +55,6 @@ Delivered:
   a moving crop — no zoom), tuned with `motion_amount` / `motion_duration`.
 - Two mapped `export` steps no longer overwrite each other's default outputs
   (custom-id steps now write `<name>-<step_id>-<index>.mp4`).
-
-## v0.4.5 — shipped
-
-Goal: close the AI-agent editing loop, and polish captions/pipeline reuse.
-
-Delivered:
-
 - `detect_clips` `method: agent`: an AI agent reads the transcript and
   supplies exact clip boundaries itself, used verbatim.
 - `lemontage run --json`: every step's outputs (notably the `stt`
