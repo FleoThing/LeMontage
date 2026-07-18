@@ -360,10 +360,14 @@ def test_cache_isolates_by_input_source(patch_registry, tmp_path):
     block = RecordingBlock("stt")
     patch_registry["stt"] = block
     steps = [{"id": "a", "stt": {"model": "tiny"}}]
-    run(base_doc(steps, input={"source": "one.mp4"}, output={"dir": str(tmp_path)}),
-        reporter=lambda m: None)
-    run(base_doc(steps, input={"source": "two.mp4"}, output={"dir": str(tmp_path)}),
-        reporter=lambda m: None)
+    run(
+        base_doc(steps, input={"source": "one.mp4"}, output={"dir": str(tmp_path)}),
+        reporter=lambda m: None,
+    )
+    run(
+        base_doc(steps, input={"source": "two.mp4"}, output={"dir": str(tmp_path)}),
+        reporter=lambda m: None,
+    )
     assert block.calls == 2  # different sources must not share a cache entry
 
 

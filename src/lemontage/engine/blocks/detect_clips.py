@@ -78,8 +78,7 @@ class DetectClipsBlock(Block):
         # snapping trims machine-guessed boundaries to whole words.
         snap = method != "agent"
         items = [
-            _clip_item(i, start, end, words, snap=snap)
-            for i, (start, end) in enumerate(clips)
+            _clip_item(i, start, end, words, snap=snap) for i, (start, end) in enumerate(clips)
         ]
 
         return BlockResult(

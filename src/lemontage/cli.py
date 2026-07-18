@@ -167,8 +167,7 @@ def _cmd_run(file: str, var_args: list[str], clean: bool = False, as_json: bool 
         payload = {
             "ok": result.ok,
             "cells": [
-                {"matrix": c.matrix, "states": c.states, "outputs": c.outputs}
-                for c in result.cells
+                {"matrix": c.matrix, "states": c.states, "outputs": c.outputs} for c in result.cells
             ],
         }
         print(json.dumps(payload, default=str))
