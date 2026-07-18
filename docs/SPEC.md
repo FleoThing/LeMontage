@@ -246,11 +246,13 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `agent`. |
+| `clips` | list | — | (`agent` only) The boundaries chosen by the AI agent: `[{start, end}, …]`. Used verbatim (clamped to the media); `min/max_duration` and `max_clips` do not apply. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
 | `seed` | int/string | — | (`random` only) Seed for reproducible picks; omit for a different set each run. |
+| `words` | list | — | Transcript words (e.g. `{{ steps.transcript.words }}`). When set, each clip's start/end snaps to whole-word boundaries and the item carries `text`/`words` for the spoken span. |
 | `emit` | string | — | Channel name to emit clips into. |
 
 **Methods.** `silence` keeps the spoken spans (best for talking-head / podcast).
@@ -264,8 +266,38 @@ the resulting length (no manual offset). `random` picks `max_clips` random,
 non-overlapping moments (each of a random length in the min/max window) with no
 analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
 
-**Outputs:** `count`, `timestamps` (list of `{start, end}`), plus the named
-channel.
+**Transcript-aware boundaries.** Pass `words:` (from an earlier `stt` step) to
+make detection transcript-aware: boundaries snap to whole words (no clip starts
+or ends mid-sentence) and each emitted item gains `text` and `words` for the
+spoken span. An AI agent reading the channel then sees *what is said* in every
+candidate clip and can choose a precise start/end, instead of guessing from
+audio/scene boundaries alone.
+
+**`agent` method — the AI picks the clips.** A dedicated mode for AI agents (e.g.
+a YouTube-montage bot): the other methods are unchanged and keep working as-is.
+The agent reads the transcript, decides the exact `start`/`end` of each clip and
+passes them as `clips:`; `detect_clips` emits them as a channel like any other
+method. The boundaries are used **verbatim** (only clamped to the media) — unlike
+the detected methods, `words:` here *does not* snap them, it only attaches each
+clip's `text`/`words`, since the agent already chose the exact cut points:
+
+```yaml
+- id: transcript
+  stt: { model: base }
+- id: picks
+  detect_clips:
+    method: agent
+    clips:                       # boundaries the agent chose from the transcript
+      - { start: "1:04", end: "1:39" }
+      - { start: 210, end: 255 }
+    words: "{{ steps.transcript.words }}"   # optional: attach text per clip
+    emit: clip_channel
+```
+
+**Outputs:** `count`, `timestamps` (list of `{start, end}`), `clips` (the full
+items, incl. `text`/`words` when `words:` was given — readable via `run --json`),
+plus the named channel (each item: `index`, `start`, `end`, and — with `words:` —
+`text`, `words`).
 
 > Out of scope for v1: `method: engagement` (LLM-scored). Reserved keyword.
 
@@ -317,16 +349,26 @@ segment-level cues.
 |---|---|---|---|
 | `words` | ref | — | Per-word timing (`steps.<stt>.words`). Enables karaoke; preferred. |
 | `segments` | ref | — | Segment timing (`steps.<stt>.segments`). Used if `words` is absent. |
-| `from` | channel | — | Channel of clips to caption. |
+| `from` | channel | — | Channel of clips to caption. Reads the exported `file` if the step runs **after** `export`, else the cut `clip` (see note). |
+| `output` | path | — | Final file path (supports `{{ name }}`/`{{ part }}`). Set it when `captions` is the last step so the captioned clip lands at a known path. |
 | `style` | enum | `tiktok` | `default` \| `tiktok` \| `minimal` (outline/weight). |
 | `font` | string | `font1` | Caption font: a preset `font1`–`font5` or an installed family. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
 | `max_chars` | int | `24` | Max characters per line (lines stay short for word-by-word reading). |
-| `caption_size` | int | ~7% of height | Font size in pixels of the clip. |
-| `caption_margin` | int | ~8% of height | Distance from the edge (per `position`). |
+| `caption_size` | int | `100` | Font size in pixels of the clip. |
+| `caption_margin` | int | ~5% of height | Distance from the edge (per `position`). |
 | `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
+
+**Order matters — caption before *or* after reframing.** `caption_size`/`caption_margin`
+are relative to the **height of the clip being captioned**. Placing `captions`
+*before* `export` (the classic `cut → captions → export`) burns them on the
+source-shaped clip; a later reframe to vertical then *shrinks* them (and, with
+`fit: contain`, leaves them at the bottom of the video band, not the frame). To
+get full-size captions pinned to the final frame, put `captions` **after**
+`export` (`cut → export → captions`): it then burns on the reframed clip and, with
+an `output:`, writes the finished file.
 
 **Outputs:** `clips` (captioned paths) or `srt` (sidecar path when `burn: false`).
 
@@ -765,11 +807,34 @@ output:
 ```bash
 lemontage run pipeline.yaml --var lang=en   # override a vars entry (repeatable)
 lemontage run pipeline.yaml --clean         # delete temp files after a successful run
+lemontage run pipeline.yaml --json          # print step outputs (transcript…) on stdout
 ```
 
 `--clean` removes `output/.lemontage/` (work files + checkpoint cache) once the run
 succeeds, plus any per-clip files a `concat` merged (keeping the final reel). Omit
 it to keep the cache so a re-run can resume from checkpoints.
+
+`--json` prints `{"ok", "cells": [{"matrix", "states", "outputs"}]}` on stdout
+(status lines stay on stderr). `outputs` maps each step id to its outputs — so an
+AI agent can run an `stt`-only pipeline, read `cells[0].outputs.<id>.words`, decide
+which spans are worth clipping, and feed them back via `detect_clips` `method: agent`.
+
+### 13.0 AI-agent loop
+
+The transcript-aware boundaries (§6.3) and `--json` compose into a two-pass loop
+for an agent that decides clips from the transcript:
+
+```bash
+# 1. Transcribe only; the agent reads the words + timings from stdout.
+lemontage run transcribe.yaml --json > transcript.json
+
+# 2. The agent picks the viral spans and writes them into a method: agent
+#    pipeline, then renders.
+lemontage run agent-clips.yaml
+```
+
+LeMontage stays deterministic — it transcribes, cuts and exports; the editorial
+call (*which* moment is viral) lives in the agent.
 
 ### 13.1 Time values
 

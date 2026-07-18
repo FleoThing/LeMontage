@@ -67,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="delete intermediate/temp files (output/.lemontage) after a successful run",
     )
+    p_run.add_argument(
+        "--json",
+        action="store_true",
+        help="print every step's outputs (e.g. the stt transcript) as JSON on stdout, "
+        "so an AI agent can read them and choose clips",
+    )
 
     p_validate = sub.add_parser("validate", help="validate a pipeline without running it")
     p_validate.add_argument("file", help="pipeline YAML file")
@@ -92,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "init":
         return _cmd_init(args.file, args.force)
     if args.command == "run":
-        return _cmd_run(args.file, args.var, args.clean)
+        return _cmd_run(args.file, args.var, args.clean, args.json)
     if args.command == "completion":
         return _cmd_completion(args.shell)
     parser.print_help()
@@ -127,7 +133,7 @@ def _cmd_init(file: str, force: bool) -> int:
     return 0
 
 
-def _cmd_run(file: str, var_args: list[str], clean: bool = False) -> int:
+def _cmd_run(file: str, var_args: list[str], clean: bool = False, as_json: bool = False) -> int:
     import yaml
 
     from .engine import run_pipeline
@@ -154,6 +160,17 @@ def _cmd_run(file: str, var_args: list[str], clean: bool = False) -> int:
     except Exception as exc:  # noqa: BLE001 - surface engine errors to the user
         print(f"✗ {exc}", file=sys.stderr)
         return 1
+
+    if as_json:
+        import json
+
+        payload = {
+            "ok": result.ok,
+            "cells": [
+                {"matrix": c.matrix, "states": c.states, "outputs": c.outputs} for c in result.cells
+            ],
+        }
+        print(json.dumps(payload, default=str))
 
     if result.ok:
         print(f"✓ {file}: done ({len(result.cells)} run(s))", file=sys.stderr)

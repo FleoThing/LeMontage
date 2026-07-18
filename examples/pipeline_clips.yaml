@@ -18,6 +18,9 @@ steps:
       min_duration: 30s
       max_duration: 60s
       max_clips: 5
+      # Snap clip boundaries to whole words and attach each clip's spoken text,
+      # so an AI agent can pick a precise start/end from the transcript.
+      words: "{{ steps.transcript.words }}"
       emit: clip_channel
 
   - cut:

@@ -155,6 +155,10 @@ def _run_cell(
         output_dir=output_dir,
         pipeline_name=str(doc.get("name", "pipeline")),
     )
+    # Resolve templates in the input against vars/matrix (steps haven't run yet),
+    # so a reusable pipeline can take its source via `--var` (e.g.
+    # `input.source: "{{ vars.source }}"`).
+    ctx.input = template.resolve(ctx.input, ctx)
     cell = CellResult(matrix=matrix)
     for node in nodes:
         ctx.state[node.step_id] = PENDING
@@ -178,7 +182,7 @@ def _run_node(node: Node, ctx: RunContext, cache: _Cache, report: Reporter) -> N
         return
 
     params = template.resolve(node.params, ctx)
-    signature = cache.signature(node, params)
+    signature = cache.signature(node, params, ctx.input.get("source"))
 
     if node.common.get("cache", True) and cache.load(node, signature, ctx):
         # A cache hit reused a prior successful result, so it counts as success
@@ -314,8 +318,11 @@ class _Cache:
     def _path(self, node: Node) -> Path:
         return self._dir / f"{self._cell_key}-{node.step_id}.json"
 
-    def signature(self, node: Node, params: dict[str, Any]) -> str:
-        return _signature_str({"block": node.block, "params": params})
+    def signature(self, node: Node, params: dict[str, Any], source: Any = None) -> str:
+        # Include the pipeline input source: a block that reads it (e.g. `stt`)
+        # keeps `source` out of its params, so without this two different input
+        # videos with identical params would collide on one cache entry.
+        return _signature_str({"block": node.block, "params": params, "source": source})
 
     def load(self, node: Node, signature: str, ctx: RunContext) -> bool:
         path = self._path(node)

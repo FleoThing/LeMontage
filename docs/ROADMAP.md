@@ -71,6 +71,13 @@ Expected work:
 - Better run observability: structured logs, run summaries, cache reporting.
 - More robust long-video workflows (memory-friendly `reverse`, resumable runs).
 
+Delivered ahead of schedule:
+
+- Bigger, lower default subtitles; captions burned after reframe for
+  full-size captions; default `caption_size` 100px.
+- Parameterizable `input.source` (via `vars`/`matrix`) for reusable
+  pipelines, with checkpoint signatures that account for it.
+
 Definition of done:
 
 - Optional features do not make the core install heavy.

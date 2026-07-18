@@ -55,7 +55,9 @@ class DetectClipsBlock(Block):
         max_clips = int(params.get("max_clips", 5))
 
         total = ffmpeg.probe_duration(media)
-        if method == "loudness":
+        if method == "agent":
+            clips = _agent_clips(params.get("clips"), total)
+        elif method == "loudness":
             timeline = _loudness_timeline(media)
             clips = _select_loud_clips(timeline, total, min_dur, max_dur, max_clips)
         elif method == "silence":
@@ -70,18 +72,64 @@ class DetectClipsBlock(Block):
         else:
             raise ValueError(f"detect_clips: unsupported method '{method}'")
 
+        words = params.get("words") or []
+        # In agent mode the boundaries are the agent's decision — attach the
+        # transcript for context but never snap them. For detected methods,
+        # snapping trims machine-guessed boundaries to whole words.
+        snap = method != "agent"
         items = [
-            {"index": i, "start": round(start, 3), "end": round(end, 3)}
-            for i, (start, end) in enumerate(clips)
+            _clip_item(i, start, end, words, snap=snap) for i, (start, end) in enumerate(clips)
         ]
 
         return BlockResult(
             outputs={
                 "count": len(items),
                 "timestamps": [{"start": it["start"], "end": it["end"]} for it in items],
+                # Full items (with per-clip `text`/`words` when a transcript was
+                # given) so an AI agent reading `--json` can refine boundaries.
+                "clips": items,
             },
             channel_items=items,
         )
+
+
+def _agent_clips(clips: Any, total: float) -> list[tuple[float, float]]:
+    """``method: agent`` — the AI agent supplies the boundaries itself.
+
+    Each entry is ``{start, end}`` (any time value: ``"1:05"``, ``65``, ``"65s"``).
+    The agent has already read the transcript, so its picks are used verbatim —
+    only clamped to the media and dropped if empty. No detection, no min/max, no
+    ``max_clips`` cap: full control stays with the agent.
+    """
+    if not isinstance(clips, list) or not clips:
+        raise ValueError("detect_clips: method 'agent' requires a non-empty 'clips' list")
+    out: list[tuple[float, float]] = []
+    for c in clips:
+        start = max(0.0, parse_seconds(c["start"]))
+        end = min(total, parse_seconds(c["end"]))
+        if end > start:
+            out.append((start, end))
+    return out
+
+
+def _clip_item(
+    index: int, start: float, end: float, words: list[dict[str, Any]], snap: bool = True
+) -> dict[str, Any]:
+    """Build a channel item, attaching the spoken text and (when ``snap``)
+    trimming boundaries to whole words — so an AI agent can pick precise
+    start/end from the clip's own transcript instead of guessing off audio/scene
+    boundaries alone. ``snap=False`` keeps the given boundaries verbatim."""
+    inside = [w for w in words if w.get("end", 0) > start and w.get("start", 0) < end]
+    # Trim inward to whole words: begin at the first word onset >= start, end at
+    # the last word offset <= end. Never cut a word in half.
+    whole = [w for w in inside if w["start"] >= start and w["end"] <= end]
+    if snap and whole:
+        start, end = whole[0]["start"], whole[-1]["end"]
+    item: dict[str, Any] = {"index": index, "start": round(start, 3), "end": round(end, 3)}
+    if inside:
+        item["text"] = " ".join(w.get("text", "") for w in inside).strip()
+        item["words"] = inside
+    return item
 
 
 def _speech_spans_from_silence(media: str, total: float) -> list[tuple[float, float]]:

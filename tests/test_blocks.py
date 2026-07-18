@@ -19,6 +19,8 @@ from lemontage.engine.blocks.captions import (
     _write_karaoke_ass,
 )
 from lemontage.engine.blocks.detect_clips import (
+    _agent_clips,
+    _clip_item,
     _random_clips,
     _select_loud_clips,
     _windowed_clips,
@@ -101,6 +103,50 @@ def test_windowed_clips_respects_max_clips():
 def test_windowed_clips_drops_short_spans():
     clips = _windowed_clips([(0.0, 5.0), (10.0, 40.0)], min_dur=15, max_dur=60, max_clips=5)
     assert clips == [(10.0, 40.0)]
+
+
+# --- detect_clips transcript snapping --------------------------------------
+
+
+def test_clip_item_snaps_to_words_and_attaches_text():
+    words = [
+        {"start": 0.4, "end": 0.9, "text": "hello"},
+        {"start": 1.0, "end": 1.6, "text": "world"},
+        {"start": 9.5, "end": 10.2, "text": "later"},  # spills past end
+    ]
+    item = _clip_item(0, 0.0, 10.0, words)
+    assert (item["start"], item["end"]) == (0.4, 1.6)  # snapped to whole words
+    assert item["text"] == "hello world later"  # every overlapping word kept
+    assert len(item["words"]) == 3
+
+
+def test_clip_item_without_words_is_plain():
+    assert _clip_item(2, 1.0, 5.0, []) == {"index": 2, "start": 1.0, "end": 5.0}
+
+
+def test_clip_item_no_snap_keeps_boundaries_verbatim():
+    # Agent mode: boundaries are the agent's decision — attach text, never snap.
+    words = [{"start": 2.0, "end": 2.5, "text": "hi"}]
+    item = _clip_item(0, 0.0, 6.0, words, snap=False)
+    assert (item["start"], item["end"]) == (0.0, 6.0)
+    assert item["text"] == "hi"
+
+
+# --- detect_clips agent mode -----------------------------------------------
+
+
+def test_agent_clips_uses_boundaries_verbatim_and_clamps():
+    clips = _agent_clips(
+        [{"start": "1:04", "end": "1:39"}, {"start": 210, "end": 999}],
+        total=300.0,
+    )
+    assert clips == [(64.0, 99.0), (210.0, 300.0)]  # second end clamped to total
+
+
+def test_agent_clips_drops_empty_and_requires_list():
+    assert _agent_clips([{"start": 5, "end": 5}, {"start": 10, "end": 20}], 100.0) == [(10.0, 20.0)]
+    with pytest.raises(ValueError):
+        _agent_clips(None, 100.0)
 
 
 # --- detect_clips scene_change ---------------------------------------------

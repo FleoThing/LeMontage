@@ -74,6 +74,12 @@ takes precedence over values declared in the file.
 \fB<output>/.lemontage\fR (work files + checkpoint cache) and any per-clip files a
 \fBconcat\fR merged, keeping only the final media.
 .TP
+.B \-\-json
+(\fBrun\fR only) Print every step's outputs (notably the \fBstt\fR transcript with
+word timings) to stdout as JSON \(em status lines stay on stderr. Lets an AI agent
+read the transcript, choose clip boundaries, and feed them back through
+\fBdetect_clips\fR \fBmethod: agent\fR.
+.TP
 .B \-\-force
 (\fBinit\fR only) Overwrite the target file if it already exists.
 .SH PIPELINE FORMAT
