@@ -7,6 +7,37 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-07-18
+
+### Added
+
+- `detect_clips` `method: agent`: an AI agent reads the transcript
+  (`words` from `stt`) and supplies exact `clips: [{start, end}]` itself,
+  used verbatim — no heuristic. Every method now attaches spoken
+  `text`/`words` to each candidate so an agent sees what is said.
+- `lemontage run --json`: prints every step's outputs (notably the `stt`
+  transcript with word timings) to stdout as JSON, status lines stay on
+  stderr. Closes the AI-agent loop: transcribe, read the transcript,
+  decide which spans are viral, feed them back through
+  `detect_clips: method: agent`.
+- Bigger, lower default subtitles (`caption_size` 100px, lower
+  `caption_margin`); `captions` prefers the exported `file` over the cut
+  `clip`, so placing it after `export` burns captions at full size on the
+  reframed (e.g. vertical) clip. Adds an `output:` param so `captions`
+  can be the last step.
+- Parameterizable `input.source` (via `vars`/`matrix`): a single pipeline
+  can take its source via `--var` instead of duplicating the file per
+  video.
+
+### Fixed
+
+- `detect_clips` agent boundaries are used verbatim instead of snapping
+  to `words:`, and are exposed via a `clips` output so the
+  refine-detected-clips agent loop works end to end.
+- Checkpoint signatures now include `input.source`, so two different
+  input videos with identical step params no longer collide on the same
+  cache entry.
+
 ## [0.4.0] - 2026-07-10
 
 ### Added
