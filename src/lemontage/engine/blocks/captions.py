@@ -81,7 +81,9 @@ class CaptionsBlock(Block):
         key = "file" if item.get("file") else "clip"
         media = item.get("file") or item.get("clip")
         if media is None:
-            raise ValueError("captions: channel item has no 'clip'/'file' (run 'cut' or 'export' first)")
+            raise ValueError(
+                "captions: channel item has no 'clip'/'file' (run 'cut' or 'export' first)"
+            )
         offset = float(item.get("start", 0.0))
         dest = _output_path(params, ctx, item["index"]) if params.get("output") else None
         out = self._caption(media, params, ctx, f"{step_id}-{item['index']}", offset, dest)
