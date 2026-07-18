@@ -56,6 +56,22 @@ Delivered:
 - Two mapped `export` steps no longer overwrite each other's default outputs
   (custom-id steps now write `<name>-<step_id>-<index>.mp4`).
 
+## v0.4.5 — shipped
+
+Goal: close the AI-agent editing loop, and polish captions/pipeline reuse.
+
+Delivered:
+
+- `detect_clips` `method: agent`: an AI agent reads the transcript and
+  supplies exact clip boundaries itself, used verbatim.
+- `lemontage run --json`: every step's outputs (notably the `stt`
+  transcript) on stdout as JSON, so an agent can transcribe, decide,
+  and feed spans back through `detect_clips: method: agent`.
+- Bigger, lower default subtitles; captions burned after reframe for
+  full-size captions; default `caption_size` 100px.
+- Parameterizable `input.source` (via `vars`/`matrix`) for reusable
+  pipelines, with checkpoint signatures that account for it.
+
 ## v0.4.x — planned: engine depth (continued)
 
 Goal: deepen the local editing engine and make longer projects practical.
@@ -70,13 +86,6 @@ Expected work:
   grain, sharpen (`feat/filters`).
 - Better run observability: structured logs, run summaries, cache reporting.
 - More robust long-video workflows (memory-friendly `reverse`, resumable runs).
-
-Delivered ahead of schedule:
-
-- Bigger, lower default subtitles; captions burned after reframe for
-  full-size captions; default `caption_size` 100px.
-- Parameterizable `input.source` (via `vars`/`matrix`) for reusable
-  pipelines, with checkpoint signatures that account for it.
 
 Definition of done:
 
