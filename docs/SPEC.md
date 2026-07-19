@@ -146,7 +146,7 @@ Every step accepts these fields alongside its block-specific params:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `id` | string | block name | Identifier for referencing this step's outputs. Required if two steps use the same block. |
-| `cache` | bool | `true` | Skip the step if its output already exists (checkpoint). |
+| `cache` | bool | `true` | Skip the step if its output already exists (checkpoint). The cache key hashes the step's resolved params, the input source and its upstream steps' keys — changing a param reruns the step *and* every step downstream of it. |
 | `on_failure` | enum | `abort` | `abort` \| `skip` \| `retry`. |
 | `retries` | int | `0` | Number of retries when `on_failure: retry`. |
 | `requires` | string | — | Gate the step on another step's state, e.g. `transcript.success`. |

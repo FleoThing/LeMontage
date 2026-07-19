@@ -184,13 +184,18 @@ def _run_node(node: Node, ctx: RunContext, cache: _Cache, report: Reporter) -> N
     params = template.resolve(node.params, ctx)
     signature = cache.signature(node, params, ctx.input.get("source"))
 
-    if node.common.get("cache", True) and cache.load(node, signature, ctx):
+    if (
+        node.common.get("cache", True)
+        and not (node.deps & cache.reran)  # an upstream re-ran -> our inputs changed
+        and cache.load(node, signature, ctx)
+    ):
         # A cache hit reused a prior successful result, so it counts as success
         # for downstream `requires` gates — only the recompute is skipped.
         ctx.state[node.step_id] = SUCCESS
         report(f"  ⊙ {node.step_id} ({node.block}) — cached")
         return
 
+    cache.reran.add(node.index)
     ctx.state[node.step_id] = RUNNING
     block = REGISTRY[node.block]
     attempts = _max_attempts(node)
@@ -314,6 +319,10 @@ class _Cache:
     def __init__(self, output_dir: Path, matrix: dict[str, Any]) -> None:
         self._dir = output_dir / ".lemontage" / "cache"
         self._cell_key = _signature_str(matrix) if matrix else "default"
+        # Signatures computed this run (by node index) and the nodes that
+        # actually re-executed, so invalidation propagates downstream.
+        self._sigs: dict[int, str] = {}
+        self.reran: set[int] = set()
 
     def _path(self, node: Node) -> Path:
         return self._dir / f"{self._cell_key}-{node.step_id}.json"
@@ -322,7 +331,14 @@ class _Cache:
         # Include the pipeline input source: a block that reads it (e.g. `stt`)
         # keeps `source` out of its params, so without this two different input
         # videos with identical params would collide on one cache entry.
-        return _signature_str({"block": node.block, "params": params, "source": source})
+        # Also chain in the parents' signatures, so a param change anywhere
+        # upstream invalidates every dependent step's cache entry.
+        parents = [self._sigs[i] for i in sorted(node.deps) if i in self._sigs]
+        sig = _signature_str(
+            {"block": node.block, "params": params, "source": source, "parents": parents}
+        )
+        self._sigs[node.index] = sig
+        return sig
 
     def load(self, node: Node, signature: str, ctx: RunContext) -> bool:
         path = self._path(node)

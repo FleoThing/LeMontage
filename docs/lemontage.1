@@ -154,7 +154,9 @@ Default directory for produced media (overridable via \fBoutput.dir\fR).
 Intermediate artifacts (cut clips, SRT files, captioned clips).
 .TP
 .B ./output/.lemontage/cache/
-Per\-step checkpoints used to skip work whose output already exists.
+Per\-step checkpoints used to skip work whose output already exists. Keyed on
+the step's resolved params, the input source and its upstream steps, so a param
+change reruns the step and everything downstream.
 .TP
 .B ~/.lemontage/fonts/
 Cached title fonts (the \fBexport.title_font\fR presets). Drop your own

@@ -112,8 +112,10 @@ Intermediate work is written under:
 <output.dir>/.lemontage/
 ```
 
-Cache signatures include the step and resolved parameters. On cache hit, the step
-is marked as `success` so downstream `requires` gates continue to work.
+Cache signatures include the step, its resolved parameters, the input source and
+the signatures of its upstream steps, so a param change invalidates the step and
+everything downstream of it. On cache hit, the step is marked as `success` so
+downstream `requires` gates continue to work.
 
 The CLI `--clean` flag removes temporary files after a successful run.
 
