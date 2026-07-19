@@ -1,0 +1,48 @@
+lemontage: "1.0"
+name: transition
+description: "Chain two sub-pipelines with a single typed assembly-level transition (fadewhite) placed at a precise offset in the final timeline"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # === Part 1: the loudest moments -> ONE finished clip =====================
+  - detect_clips:
+      method: loudness
+      max_clips: 4
+      min_duration: 3s
+      max_duration: 6s
+      emit: p1_clips
+  - cut:
+      from: p1_clips
+  - export:
+      from: p1_clips
+  - concat:
+      from: p1_clips
+      emit: part1
+
+  # === Part 2: a scene-change montage -> ONE finished clip ==================
+  - detect_clips:
+      method: scene
+      max_clips: 4
+      min_duration: 2s
+      max_duration: 5s
+      emit: p2_clips
+  - cut:
+      from: p2_clips
+  - export:
+      from: p2_clips
+  - concat:
+      from: p2_clips
+      emit: part2
+
+  # === Assembly: chain part1 -> part2 with one typed transition =============
+  # `transition:` (singular) places ONE crossfade at the join between the two
+  # parts. `at` starts the fade at an absolute offset in the final timeline
+  # (default: the natural boundary between the parts); anything after `at` in
+  # part1 is truncated by the crossfade.
+  - concat:
+      from: [part1, part2]
+      transition: { type: fadewhite, duration: 0.5s, at: 11s }
+      output: "./output/{{ name }}-final.mp4"

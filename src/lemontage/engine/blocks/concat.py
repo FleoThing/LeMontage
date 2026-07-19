@@ -47,12 +47,16 @@ class ConcatBlock(Block):
             return BlockResult(outputs={})
         out = _output_path(params, ctx)
         boundary_gaps = _boundary_gaps(ordered)
-        transitions = _resolve_transitions(params, len(files), boundary_gaps)
-        if transitions is None:
-            _concat(files, out, ctx.work_dir() / f"{step_id}-list.txt")
+        if params.get("transition") is not None:
+            names, offsets, duration = _resolve_single_transition(params, len(files), boundary_gaps)
+            _concat_with_transitions(files, names, duration, out, offsets)
         else:
-            duration = parse_seconds(params.get("duration", _DEFAULT_TRANSITION_DURATION))
-            _concat_with_transitions(files, transitions, duration, out)
+            transitions = _resolve_transitions(params, len(files), boundary_gaps)
+            if transitions is None:
+                _concat(files, out, ctx.work_dir() / f"{step_id}-list.txt")
+            else:
+                duration = parse_seconds(params.get("duration", _DEFAULT_TRANSITION_DURATION))
+                _concat_with_transitions(files, transitions, duration, out)
         # Also expose the reel as a single-item channel: a step with `emit:` can
         # hand its finished clip to a parent concat (nested sub-pipelines).
         reel = str(out)
@@ -167,32 +171,66 @@ def _boundary_transition_names(raw: object, n_gaps: int, boundary_gaps: list[int
     return names
 
 
-def _concat_with_transitions(
-    files: list[str], transitions: list[str], duration: float, out: Path
-) -> None:
-    """Join clips with a per-gap crossfade (xfade + acrossfade), chained pairwise.
+def _resolve_single_transition(
+    params: dict[str, Any], n_files: int, boundary_gaps: list[int]
+) -> tuple[list[str], list[float | None], float]:
+    """Resolve the assembly-level ``transition:`` mapping (SPEC §6.7).
+
+    One typed transition placed at the channel-merge boundaries when ``from``
+    merges several channels (the part1 → part2 join), or at every gap for a
+    single channel. Returns per-gap ``(names, offsets, duration)``; ``offsets``
+    carries the optional absolute ``at`` (None = the default clip boundary).
+    """
+    raw = params.get("transition")
+    if not isinstance(raw, dict):
+        raise ValueError("concat: 'transition' must be a mapping (type/duration/at)")
+    if params.get("transitions") is not None:
+        raise ValueError("concat: use either 'transition' or 'transitions', not both")
+    n_gaps = n_files - 1
+    if n_gaps <= 0:
+        raise ValueError("concat: 'transition' given but there is only 1 clip to join")
+
+    name = raw.get("type")
+    if not isinstance(name, str) or name not in CONCAT_TRANSITIONS or name == "none":
+        valid = ", ".join(sorted(CONCAT_TRANSITIONS - {"none"}))
+        raise ValueError(f"concat: unknown transition type '{name}' (choose from: {valid})")
+    duration = parse_seconds(raw.get("duration", _DEFAULT_TRANSITION_DURATION))
+
+    gaps = boundary_gaps or list(range(n_gaps))
+    names: list[str] = ["none"] * n_gaps
+    offsets: list[float | None] = [None] * n_gaps
+    for gap in gaps:
+        names[gap] = name
+
+    at = raw.get("at")
+    if at is not None:
+        if len(gaps) != 1:
+            raise ValueError(
+                "concat: 'transition.at' needs exactly one join (two parts / one boundary), "
+                f"got {len(gaps)}"
+            )
+        offsets[gaps[0]] = parse_seconds(at)
+    return names, offsets, duration
+
+
+def _build_transition_filters(
+    durations: list[float],
+    transitions: list[str],
+    duration: float,
+    keep_audio: bool,
+    offsets: list[float | None] | None = None,
+) -> tuple[list[str], str, str]:
+    """Build the pairwise xfade/acrossfade filter chain; returns (filters, out_v, out_a).
 
     Each xfade/acrossfade pair overlaps `duration` seconds of the merged stream
     so far with the next clip; a "none" gap uses the `concat` filter instead (a
-    hard cut, no overlap). Requires re-encoding (unlike the plain concat
-    demuxer), since xfade operates on decoded frames.
+    hard cut, no overlap). An explicit per-gap offset (`transition.at`) starts
+    the crossfade at that absolute time in the merged stream instead of at the
+    clip boundary, truncating whatever follows it in the left-hand stream.
     """
     if duration <= 0:
         raise ValueError("concat: transition 'duration' must be > 0")
-    durations = [ffmpeg.probe_duration(f) for f in files]
-    for i, name in enumerate(transitions):
-        if name == "none":
-            continue
-        left, right = durations[i], durations[i + 1]
-        if duration >= left or duration >= right:
-            raise ValueError(
-                f"concat: transition duration ({duration}s) must be shorter than both clips "
-                f"it joins (clip #{i + 1}: {left:.2f}s, clip #{i + 2}: {right:.2f}s)"
-            )
-
-    # Audio is crossfaded only when EVERY clip has a track; a single silent clip
-    # (e.g. a rendered still) drops audio for the whole join rather than failing.
-    keep_audio = all(ffmpeg.has_audio(f) for f in files)
+    offsets = offsets or [None] * len(transitions)
 
     filters: list[str] = []
     cur_v, cur_a = "0:v:0", "0:a:0"
@@ -209,15 +247,55 @@ def _concat_with_transitions(
                 filters.append(f"[{cur_v}][{nxt_v}]concat=n=2:v=1:a=0[{out_v}]")
             cur_dur += durations[i + 1]
         else:
-            offset = max(cur_dur - duration, 0.0)
+            right = durations[i + 1]
+            if duration >= right:
+                raise ValueError(
+                    f"concat: transition duration ({duration}s) must be shorter than clip "
+                    f"#{i + 2} ({right:.2f}s)"
+                )
+            at = offsets[i]
+            if at is None:
+                if duration >= durations[i]:
+                    raise ValueError(
+                        f"concat: transition duration ({duration}s) must be shorter than clip "
+                        f"#{i + 1} ({durations[i]:.2f}s)"
+                    )
+                offset = max(cur_dur - duration, 0.0)
+            else:
+                if at < 0 or at + duration > cur_dur:
+                    raise ValueError(
+                        f"concat: transition 'at' ({at}s) + duration ({duration}s) must fit "
+                        f"inside the first part ({cur_dur:.2f}s)"
+                    )
+                offset = at
             filters.append(
                 f"[{cur_v}][{nxt_v}]xfade=transition={name}:duration={duration}:"
                 f"offset={offset:.3f}[{out_v}]"
             )
             if keep_audio:
                 filters.append(f"[{cur_a}][{nxt_a}]acrossfade=d={duration}[{out_a}]")
-            cur_dur += durations[i + 1] - duration
+            cur_dur = offset + durations[i + 1]
         cur_v, cur_a = out_v, out_a
+    return filters, cur_v, cur_a
+
+
+def _concat_with_transitions(
+    files: list[str],
+    transitions: list[str],
+    duration: float,
+    out: Path,
+    offsets: list[float | None] | None = None,
+) -> None:
+    """Join clips with a per-gap crossfade; re-encodes (xfade needs decoded frames)."""
+    if duration <= 0:
+        raise ValueError("concat: transition 'duration' must be > 0")
+    durations = [ffmpeg.probe_duration(f) for f in files]
+    # Audio is crossfaded only when EVERY clip has a track; a single silent clip
+    # (e.g. a rendered still) drops audio for the whole join rather than failing.
+    keep_audio = all(ffmpeg.has_audio(f) for f in files)
+    filters, cur_v, cur_a = _build_transition_filters(
+        durations, transitions, duration, keep_audio, offsets
+    )
 
     args: list[str] = []
     for f in files:

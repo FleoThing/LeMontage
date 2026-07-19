@@ -941,10 +941,11 @@ def test_concat_with_transitions_duration_too_long_raises(tmp_path, monkeypatch)
     from lemontage.engine.blocks.concat import _concat_with_transitions
 
     monkeypatch.setattr(ff, "probe_duration", lambda _f: 1.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     monkeypatch.setattr(ff, "run", lambda args: None)
 
     files = [str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")]
-    with pytest.raises(ValueError, match="shorter than both clips"):
+    with pytest.raises(ValueError, match="shorter than clip"):
         _concat_with_transitions(files, ["fade"], 2.0, tmp_path / "reel.mp4")
 
 
@@ -1075,3 +1076,109 @@ def test_export_renders_and_lists_file(tmp_path, monkeypatch):
     )
     assert out["files"] == [str(tmp_path / "o.mp4")]
     assert (tmp_path / "o.mp4").exists()
+
+
+# --- concat single `transition:` (assembly-level, SPEC §6.7) -----------------
+
+
+def test_single_transition_at_boundary_only():
+    from lemontage.engine.blocks.concat import _resolve_single_transition
+
+    names, offsets, duration = _resolve_single_transition(
+        {"transition": {"type": "fadewhite", "duration": "0.5s"}}, 4, boundary_gaps=[1]
+    )
+    assert names == ["none", "fadewhite", "none"]
+    assert offsets == [None, None, None]
+    assert duration == 0.5
+
+
+def test_single_transition_no_boundaries_fills_every_gap():
+    from lemontage.engine.blocks.concat import _resolve_single_transition
+
+    names, offsets, _ = _resolve_single_transition(
+        {"transition": {"type": "pixelize"}}, 3, boundary_gaps=[]
+    )
+    assert names == ["pixelize", "pixelize"]
+    assert offsets == [None, None]
+
+
+def test_single_transition_at_absolute_offset():
+    from lemontage.engine.blocks.concat import _resolve_single_transition
+
+    names, offsets, duration = _resolve_single_transition(
+        {"transition": {"type": "fadewhite", "duration": "0.5s", "at": "11s"}},
+        2,
+        boundary_gaps=[0],
+    )
+    assert names == ["fadewhite"]
+    assert offsets == [11.0]
+    assert duration == 0.5
+
+
+def test_single_transition_at_needs_single_join():
+    from lemontage.engine.blocks.concat import _resolve_single_transition
+
+    with pytest.raises(ValueError, match="exactly one join"):
+        _resolve_single_transition(
+            {"transition": {"type": "fade", "at": "5s"}}, 3, boundary_gaps=[]
+        )
+
+
+def test_single_transition_unknown_type_raises():
+    from lemontage.engine.blocks.concat import _resolve_single_transition
+
+    with pytest.raises(ValueError, match="unknown transition type"):
+        _resolve_single_transition({"transition": {"type": "swirl"}}, 2, boundary_gaps=[0])
+
+
+def test_single_transition_conflicts_with_transitions():
+    from lemontage.engine.blocks.concat import _resolve_single_transition
+
+    with pytest.raises(ValueError, match="not both"):
+        _resolve_single_transition(
+            {"transition": {"type": "fade"}, "transitions": "fade"}, 2, boundary_gaps=[0]
+        )
+
+
+# --- transition filter-graph construction ------------------------------------
+
+
+def test_build_transition_filters_default_offset_is_clip_boundary():
+    from lemontage.engine.blocks.concat import _build_transition_filters
+
+    filters, out_v, out_a = _build_transition_filters([10.0, 8.0], ["fade"], 0.5, keep_audio=True)
+    assert filters == [
+        "[0:v:0][1:v:0]xfade=transition=fade:duration=0.5:offset=9.500[vs0]",
+        "[0:a:0][1:a:0]acrossfade=d=0.5[as0]",
+    ]
+    assert (out_v, out_a) == ("vs0", "as0")
+
+
+def test_build_transition_filters_explicit_at_overrides_offset():
+    from lemontage.engine.blocks.concat import _build_transition_filters
+
+    filters, _, _ = _build_transition_filters(
+        [15.0, 8.0], ["fadewhite"], 0.5, keep_audio=False, offsets=[11.0]
+    )
+    assert filters == ["[0:v:0][1:v:0]xfade=transition=fadewhite:duration=0.5:offset=11.000[vs0]"]
+
+
+def test_build_transition_filters_at_past_end_raises():
+    from lemontage.engine.blocks.concat import _build_transition_filters
+
+    with pytest.raises(ValueError, match="must fit inside the first part"):
+        _build_transition_filters([10.0, 8.0], ["fade"], 0.5, keep_audio=False, offsets=[9.8])
+
+
+def test_build_transition_filters_chains_after_hard_cut():
+    from lemontage.engine.blocks.concat import _build_transition_filters
+
+    # gap 0 is a hard cut, gap 1 crossfades at the merged 10+10 boundary.
+    filters, out_v, _ = _build_transition_filters(
+        [10.0, 10.0, 8.0], ["none", "fade"], 0.5, keep_audio=False
+    )
+    assert filters == [
+        "[0:v:0][1:v:0]concat=n=2:v=1:a=0[vs0]",
+        "[vs0][2:v:0]xfade=transition=fade:duration=0.5:offset=19.500[vs1]",
+    ]
+    assert out_v == "vs1"
