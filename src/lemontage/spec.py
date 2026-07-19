@@ -61,6 +61,9 @@ CONCAT_TRANSITIONS = frozenset(
 # How `export` fits the source into the target frame (see SPEC §6.6).
 EXPORT_FIT_MODES = frozenset({"contain", "cover"})
 
+# Where `export` places the frame inside a larger `canvas` (see SPEC §6.6).
+EXPORT_CANVAS_POSITIONS = frozenset({"center", "top", "bottom", "left", "right"})
+
 # Motion effects `still` can apply while rendering an image to a clip (§6.11).
 STILL_MOTIONS = frozenset({"zoomout", "zoomin", "panup", "pandown"})
 

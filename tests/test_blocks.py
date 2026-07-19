@@ -696,6 +696,47 @@ def test_bg_blur_builds_split_overlay():
     assert "pad=" not in graph  # no black bars
 
 
+def test_canvas_pads_to_larger_frame_centered():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    pad = _canvas_pad({"resolution": "720x720", "canvas": "1080x1920"})
+    assert pad == "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black"
+
+
+def test_canvas_positions_and_bg():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    top = _canvas_pad({"resolution": "720x720", "canvas": "1080x1920", "position": "top"})
+    assert ":(ow-iw)/2:0:" in top
+    bottom = _canvas_pad(
+        {"resolution": "720x720", "canvas": "1080x1920", "position": "bottom", "bg": "#101010"}
+    )
+    assert ":(ow-iw)/2:oh-ih:" in bottom and "color=0x101010" in bottom
+    # bg: blur only fills the fit bars; the canvas falls back to black
+    blur = _canvas_pad({"resolution": "720x720", "canvas": "1080x1920", "bg": "blur"})
+    assert "color=black" in blur
+
+
+def test_canvas_absent_is_noop():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    assert _canvas_pad({"resolution": "720x720"}) is None
+
+
+def test_canvas_smaller_than_export_raises():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    with pytest.raises(ValueError, match="smaller than the export frame"):
+        _canvas_pad({"resolution": "1080x1920", "canvas": "720x720"})
+
+
+def test_canvas_unknown_position_raises():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    with pytest.raises(ValueError, match="unknown position"):
+        _canvas_pad({"resolution": "720x720", "canvas": "1080x1920", "position": "corner"})
+
+
 def test_title_position_maps_to_alignment():
     assert _title_align({}) == 8  # top (default)
     assert _title_align({"title_position": "center"}) == 5

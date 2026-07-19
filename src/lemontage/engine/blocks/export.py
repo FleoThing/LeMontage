@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...spec import EXPORT_FIT_MODES
+from ...spec import EXPORT_CANVAS_POSITIONS, EXPORT_FIT_MODES
 from .. import ffmpeg, fonts, safepath
 from ..assformat import escape_text
 from ..context import RunContext
@@ -137,23 +137,26 @@ class ExportBlock(Block):
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
 
 
+def _parse_size(value: object, field: str) -> tuple[int, int]:
+    """Parse a ``WIDTHxHEIGHT`` string with the export sanity bounds."""
+    raw = str(value).lower()
+    try:
+        width_s, height_s = raw.split("x")
+        width, height = int(width_s), int(height_s)
+    except ValueError as exc:
+        raise ValueError(f"export: invalid {field} '{value}' (expected WIDTHxHEIGHT)") from exc
+    for dim in (width, height):
+        if not 0 < dim <= _MAX_DIMENSION:
+            raise ValueError(
+                f"export: {field} {width}x{height} out of range "
+                f"(each side must be 1..{_MAX_DIMENSION})"
+            )
+    return width, height
+
+
 def _target_size(params: dict[str, Any]) -> tuple[int, int]:
     if params.get("resolution"):
-        raw = str(params["resolution"]).lower()
-        try:
-            width_s, height_s = raw.split("x")
-            width, height = int(width_s), int(height_s)
-        except ValueError as exc:
-            raise ValueError(
-                f"export: invalid resolution '{params['resolution']}' (expected WIDTHxHEIGHT)"
-            ) from exc
-        for dim in (width, height):
-            if not 0 < dim <= _MAX_DIMENSION:
-                raise ValueError(
-                    f"export: resolution {width}x{height} out of range "
-                    f"(each side must be 1..{_MAX_DIMENSION})"
-                )
-        return width, height
+        return _parse_size(params["resolution"], "resolution")
     fmt = params.get("format", "vertical")
     if fmt not in _RESOLUTIONS:
         raise ValueError(f"export: unknown format '{fmt}'")
@@ -477,6 +480,43 @@ def _scale_chain(
     ]
 
 
+# pad x:y expressions for each `position` inside the canvas.
+_CANVAS_XY = {
+    "center": "(ow-iw)/2:(oh-ih)/2",
+    "top": "(ow-iw)/2:0",
+    "bottom": "(ow-iw)/2:oh-ih",
+    "left": "0:(oh-ih)/2",
+    "right": "ow-iw:(oh-ih)/2",
+}
+assert set(_CANVAS_XY) == EXPORT_CANVAS_POSITIONS
+
+
+def _canvas_pad(params: dict[str, Any]) -> str | None:
+    """A ``pad`` filter placing the export frame inside a larger ``canvas``.
+
+    ``canvas: WxH`` sets the final frame size; ``position`` (default ``center``)
+    picks where the export sits in it. The empty area is filled with ``bg``
+    (a colour, default black — ``bg: blur`` only fills the fit bars, so the
+    canvas falls back to black).
+    """
+    canvas = params.get("canvas")
+    if not canvas:
+        return None
+    cw, ch = _parse_size(canvas, "canvas")
+    width, height = _target_size(params)
+    if cw < width or ch < height:
+        raise ValueError(
+            f"export: canvas {cw}x{ch} is smaller than the export frame {width}x{height}"
+        )
+    position = str(params.get("position", "center")).lower()
+    if position not in _CANVAS_XY:
+        valid = ", ".join(sorted(_CANVAS_XY))
+        raise ValueError(f"export: unknown position '{position}' (choose from: {valid})")
+    bg = params.get("bg")
+    color = "black" if str(bg).lower() == "blur" else _bg_pad_color(bg)
+    return f"pad={cw}:{ch}:{_CANVAS_XY[position]}:color={color}"
+
+
 def _bg_pad_color(bg: object) -> str:
     """FFmpeg colour for the letterbox pad (default black); '#RRGGBB' -> '0xRRGGBB'."""
     if not bg:
@@ -527,6 +567,11 @@ def _render(
     if author is not None:
         fonts.ensure(params.get("author_font"))
         chain.append(fonts.libass_filter(author))
+    # Canvas padding goes last so titles/captions stay on the export frame,
+    # then the whole frame is placed inside the larger canvas.
+    canvas_pad = _canvas_pad(params)
+    if canvas_pad:
+        chain.append(canvas_pad)
     args = ["-i", str(media), "-vf", ",".join(chain)]
     # Keep a (silent) audio stream rather than dropping it (-an), so a later
     # concat / crossfade still finds audio on every clip.
