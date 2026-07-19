@@ -119,6 +119,7 @@ def _check_steps(doc: dict, errors: list[str]) -> set[str]:
         errors.append("'steps' must be a non-empty list")
         return emitted
 
+    seen_ids: dict[str, str] = {}
     for index, step in enumerate(steps):
         label = f"step #{index + 1}"
         if not isinstance(step, dict):
@@ -136,6 +137,18 @@ def _check_steps(doc: dict, errors: list[str]) -> set[str]:
         block = block_keys[0]
         if "id" in step:
             label = f"step '{step['id']}'"
+
+        # A step without an explicit id defaults to its block name (see
+        # engine/dag.py); two steps sharing an effective id would silently
+        # overwrite each other's cache entries, so it's a hard error.
+        effective_id = step["id"] if isinstance(step.get("id"), str) else block
+        if effective_id in seen_ids:
+            errors.append(
+                f"{label}: duplicate step id '{effective_id}' (already used by "
+                f"{seen_ids[effective_id]}); give each step a distinct 'id:'"
+            )
+        else:
+            seen_ids[effective_id] = label
 
         if block in spec.RESERVED_BLOCKS:
             errors.append(f"{label}: block '{block}' is reserved and not supported in v1")

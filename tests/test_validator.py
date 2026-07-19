@@ -87,6 +87,45 @@ def test_step_with_two_blocks_rejected():
     assert any("exactly one block" in e for e in errors)
 
 
+def test_duplicate_explicit_ids_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"id": "same", "stt": {}},
+        {"id": "same", "cut": {"start": "0s", "end": "1s"}},
+    ]
+    errors = validate_doc(d)
+    assert any("duplicate step id 'same'" in e for e in errors)
+
+
+def test_duplicate_anonymous_same_block_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"cut": {"start": "0s", "end": "1s"}},
+        {"cut": {"start": "1s", "end": "2s"}},
+    ]
+    errors = validate_doc(d)
+    assert any("duplicate step id 'cut'" in e and "distinct 'id:'" in e for e in errors)
+
+
+def test_anonymous_step_colliding_with_explicit_id_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"id": "cut", "stt": {}},
+        {"cut": {"start": "0s", "end": "1s"}},
+    ]
+    errors = validate_doc(d)
+    assert any("duplicate step id 'cut'" in e for e in errors)
+
+
+def test_distinct_ids_pass():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"id": "intro", "cut": {"start": "0s", "end": "1s"}},
+        {"id": "outro", "cut": {"start": "1s", "end": "2s"}},
+    ]
+    assert validate_doc(d) == []
+
+
 def test_unknown_block_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [{"transmogrify": {}}]
@@ -234,8 +273,8 @@ def test_unknown_channel_reference_rejected():
 def test_concat_accepts_channel_list():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [
-        {"detect_clips": {"emit": "viral"}},
-        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {"id": "viral-clips", "detect_clips": {"emit": "viral"}},
+        {"id": "montage-clips", "detect_clips": {"method": "silence", "emit": "montage"}},
         {"concat": {"from": ["viral", "montage"]}},
     ]
     assert validate_doc(d) == []
@@ -254,8 +293,8 @@ def test_concat_channel_list_reports_unknown_entry():
 def test_concat_transitions_at_boundaries_accepted():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [
-        {"detect_clips": {"emit": "viral"}},
-        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {"id": "viral-clips", "detect_clips": {"emit": "viral"}},
+        {"id": "montage-clips", "detect_clips": {"method": "silence", "emit": "montage"}},
         {
             "concat": {
                 "from": ["viral", "montage"],
@@ -277,8 +316,8 @@ def test_concat_transitions_at_invalid_value_rejected():
 def test_mapped_block_rejects_channel_list():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [
-        {"detect_clips": {"emit": "viral"}},
-        {"detect_clips": {"method": "silence", "emit": "montage"}},
+        {"id": "viral-clips", "detect_clips": {"emit": "viral"}},
+        {"id": "montage-clips", "detect_clips": {"method": "silence", "emit": "montage"}},
         {"cut": {"from": ["viral", "montage"]}},
     ]
     errors = validate_doc(d)
