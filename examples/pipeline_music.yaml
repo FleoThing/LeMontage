@@ -1,0 +1,49 @@
+lemontage: "1.0"
+name: music
+description: "Best moments stitched into one reel, with a music track laid over it — the drop lands on the reel's opening"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. The loudest windows = the strongest moments
+  - id: moments
+    detect_clips:
+      method: loudness
+      min_duration: 8s
+      max_duration: 20s
+      max_clips: 3
+      emit: highlights
+
+  # 2. Cut each moment out of the source, in parallel
+  - cut:
+      from: highlights
+
+  # 3. Vertical export
+  - export:
+      from: highlights
+      format: vertical
+      resolution: 1080x1920
+      fps: 30
+
+  # 4. Stitch into one reel, exposed as a channel for the music step
+  - concat:
+      from: highlights
+      transitions: fade
+      duration: 0.5s
+      emit: reel
+
+  # 5. Lay the music over the reel. `align.drop: auto` finds the track's drop
+  #    (largest sustained energy jump) and shifts the music so it lands at
+  #    `align.to` in the video. The track is trimmed/looped to the reel length.
+  - music:
+      from: reel
+      source: ./track.mp3
+      align: { drop: auto, to: 1s }
+      fade_out: 2s
+      output: "./output/{{ name }}-scored.mp4"
+
+output:
+  dir: ./output
+  cleanup: true

@@ -214,6 +214,9 @@ def _check_block_params(
             except (ValueError, TypeError):
                 errors.append(f"{label}: still.motion_duration must be a duration (e.g. 0.3s)")
 
+    if block == "music":
+        _check_music_params(params, label, errors)
+
     if block == "concat":
         _check_concat_transitions(params.get("transitions"), label, errors)
         scope = params.get("transitions_at")
@@ -226,6 +229,41 @@ def _check_block_params(
             errors.append(f"{label}: emit must be a channel name (string)")
         else:
             emitted.add(emit)
+
+
+def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
+    source = params.get("source")
+    if source is None:
+        errors.append(f"{label}: music requires a 'source' (path to an audio file)")
+    elif not isinstance(source, str):
+        errors.append(f"{label}: music.source must be a string path")
+
+    for field in ("start_at", "fade_out"):
+        value = params.get(field)
+        if value is None:
+            continue
+        try:
+            if parse_seconds(value) < 0:
+                errors.append(f"{label}: music.{field} must be >= 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: music.{field} must be a time value (e.g. 2s)")
+
+    align = params.get("align")
+    if align is None:
+        return
+    if not isinstance(align, dict):
+        errors.append(f"{label}: music.align must be a mapping with 'drop' and 'to'")
+        return
+    drop = align.get("drop", "auto")
+    if drop != "auto":
+        try:
+            parse_seconds(drop)
+        except (ValueError, TypeError):
+            errors.append(f"{label}: music.align.drop must be 'auto' or a time value")
+    try:
+        parse_seconds(align.get("to", 0))
+    except (ValueError, TypeError):
+        errors.append(f"{label}: music.align.to must be a time value (e.g. 12s)")
 
 
 def _check_concat_transitions(transitions: object, label: str, errors: list[str]) -> None:

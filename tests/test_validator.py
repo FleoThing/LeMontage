@@ -94,11 +94,61 @@ def test_unknown_block_rejected():
     assert any("unknown block" in e for e in errors)
 
 
-def test_reserved_block_music_rejected():
+def test_reserved_block_tts_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
-    d["steps"] = [{"stt": {}}, {"music": {"mood": "calm"}}]
+    d["steps"] = [{"stt": {}}, {"tts": {"voice": "calm"}}]
     errors = validate_doc(d)
-    assert any("music" in e and "reserved" in e for e in errors)
+    assert any("tts" in e and "reserved" in e for e in errors)
+
+
+def test_music_block_accepted():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = list(d["steps"]) + [
+        {"concat": {"from": "clip_channel", "emit": "reel"}},
+        {
+            "music": {
+                "from": "reel",
+                "source": "track.mp3",
+                "start_at": "0s",
+                "align": {"drop": "auto", "to": "1.5s"},
+                "fade_out": "2s",
+            }
+        },
+    ]
+    assert validate_doc(d) == []
+
+
+def test_music_requires_source():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [{"music": {"fade_out": "2s"}}]
+    errors = validate_doc(d)
+    assert any("music requires a 'source'" in e for e in errors)
+
+
+def test_music_rejects_bad_times_and_align():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {
+            "music": {
+                "source": "t.mp3",
+                "start_at": "abc",
+                "fade_out": -1,
+                "align": {"drop": "nope", "to": "xyz"},
+            }
+        }
+    ]
+    errors = validate_doc(d)
+    assert any("music.start_at" in e for e in errors)
+    assert any("music.fade_out" in e for e in errors)
+    assert any("music.align.drop" in e for e in errors)
+    assert any("music.align.to" in e for e in errors)
+
+
+def test_music_align_must_be_mapping():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [{"music": {"source": "t.mp3", "align": "auto"}}]
+    errors = validate_doc(d)
+    assert any("music.align must be a mapping" in e for e in errors)
 
 
 def test_reserved_detect_method_rejected():
