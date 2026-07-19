@@ -371,7 +371,44 @@ def test_cache_isolates_by_input_source(patch_registry, tmp_path):
     assert block.calls == 2  # different sources must not share a cache entry
 
 
-def test_cache_disabled_reruns(patch_registry, tmp_path):
+def test_cache_invalidated_by_param_change(patch_registry, tmp_path):
+    """Changing a step's params must rerun it (no stale cache hit)."""
+    block = RecordingBlock("stt")
+    patch_registry["stt"] = block
+    run(
+        base_doc([{"id": "a", "stt": {"value": 1}}], output={"dir": str(tmp_path)}),
+        reporter=lambda m: None,
+    )
+    run(
+        base_doc([{"id": "a", "stt": {"value": 2}}], output={"dir": str(tmp_path)}),
+        reporter=lambda m: None,
+    )
+    assert block.calls == 2
+
+
+def test_param_change_upstream_invalidates_downstream(patch_registry, tmp_path):
+    """Changing an export param reruns the export AND the downstream concat."""
+    patch_registry["detect_clips"] = Producer()
+    mapper = Mapper("export")
+    patch_registry["export"] = mapper
+    agg = RecordingAggregator()
+    patch_registry["concat"] = agg
+
+    def doc(bg):
+        return base_doc(
+            [
+                {"id": "clips", "detect_clips": {"n": 2, "emit": "ch"}},
+                {"id": "exp", "export": {"from": "ch", "bg": bg}},
+                {"id": "reel", "concat": {"from": "ch"}},
+            ],
+            output={"dir": str(tmp_path)},
+        )
+
+    run(doc("white"), reporter=lambda m: None)  # warm the cache
+    agg.items = None
+    run(doc("black"), reporter=lambda m: None)  # only exp's params changed
+    assert mapper.item_calls == 4  # 2 items x 2 runs: exp re-ran
+    assert agg.items is not None  # concat re-ran too, not served from cache
     block = RecordingBlock("stt")
     patch_registry["stt"] = block
     doc = base_doc(
