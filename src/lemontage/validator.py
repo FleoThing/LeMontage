@@ -209,6 +209,9 @@ def _check_block_params(
         if mute is not None and not isinstance(mute, (bool, list)):
             errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
 
+    if block == "overlay":
+        _check_overlay(params, label, errors)
+
     if block == "still":
         motion = params.get("motion")
         if motion is not None and (not isinstance(motion, str) or motion not in spec.STILL_MOTIONS):
@@ -261,6 +264,48 @@ def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
                 errors.append(f"{label}: music.{field} must be >= 0")
         except (ValueError, TypeError):
             errors.append(f"{label}: music.{field} must be a time value (e.g. 2s)")
+
+
+def _check_overlay(params: dict, label: str, errors: list[str]) -> None:
+    text = params.get("text")
+    if not isinstance(text, str) or not text.strip():
+        errors.append(f"{label}: overlay requires a non-empty 'text' string")
+
+    band = params.get("band")
+    if band is not None:
+        if not isinstance(band, dict):
+            errors.append(f"{label}: overlay.band must be a mapping (color/height/position)")
+        else:
+            height = band.get("height")
+            if height is not None and (
+                isinstance(height, bool) or not isinstance(height, int) or height <= 0
+            ):
+                errors.append(f"{label}: overlay.band.height must be a positive integer")
+            position = band.get("position")
+            if position is not None and position not in spec.OVERLAY_BAND_POSITIONS:
+                valid = ", ".join(sorted(spec.OVERLAY_BAND_POSITIONS))
+                errors.append(
+                    f"{label}: unknown overlay.band.position '{position}' (choose from: {valid})"
+                )
+
+    show = params.get("show")
+    if show is None:
+        return
+    if not isinstance(show, dict):
+        errors.append(f"{label}: overlay.show must be a mapping with 'from'/'to'")
+        return
+    if "except" in show:
+        errors.append(f"{label}: overlay.show.except is not supported yet (use from/to)")
+    times = {}
+    for key in ("from", "to"):
+        if key not in show:
+            continue
+        try:
+            times[key] = parse_seconds(show[key])
+        except (ValueError, TypeError):
+            errors.append(f"{label}: overlay.show.{key} must be a time value (e.g. 11s)")
+    if "from" in times and "to" in times and times["to"] <= times["from"]:
+        errors.append(f"{label}: overlay.show.to must be after show.from")
 
 
 def _check_concat_transitions(transitions: object, label: str, errors: list[str]) -> None:

@@ -678,6 +678,42 @@ Single mode (no `from:`) lays the music over the pipeline input (or `input:`).
 
 ---
 
+### 6.13 `overlay` — conditional title/band overlay
+
+Burns multi-line text — optionally on a uniform full-width colour band — over
+the clip, either for the whole clip or only during a time window. More flexible
+than `export`'s `title`: it can sit on a solid band and appear/disappear at
+chosen times. Operates on the pipeline input, or maps over a channel of clips.
+The clip is re-encoded, so run it before `export` in the chain.
+
+```yaml
+- overlay:
+    from: clip_channel
+    text: "line one\nline two"                          # multi-line text
+    band: {color: white, height: 210, position: top}    # full-width band behind the text
+    show: {from: 0, to: 11s}                            # visible only in this window
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel | — | Channel of clips to map over. |
+| `input` | path | pipeline input | Source video (single mode). |
+| `text` | string | required | The overlay text. Real newlines or literal `\n` split it into lines. |
+| `band` | mapping | — | A uniform full-width band drawn behind the text. Keys: `color` (name or `#RRGGBB`, default `black`), `height` (px, default `210`), `position` (`top` or `bottom`, default `top`). Omit for text without a band. |
+| `show` | mapping | whole clip | Time window the overlay is visible: `from` (default `0`) and `to`, as time values (§13.1). Omit to keep it for the whole clip. |
+| `font` | string | `font1` | Text font: a preset alias `font1`…`font5` or an installed family name (same plumbing as `export.title_font`). |
+| `size` | int | `72` | Text size in px of the source frame. |
+| `color` | string | `white` | Text colour: a name or `#RRGGBB`. |
+| `margin` | int | `60` | Distance from the frame edge, in px — only without a `band` (with one, the text is centred vertically inside the band). |
+
+The text follows the band's `position` (top-centre or bottom-centre of the
+frame). `show.except: transition` (hide during a concat transition) is
+reserved — the validator rejects it for now.
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
@@ -692,6 +728,7 @@ Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
 | `export` | `files` |
 | `stills` | `count`, + channel |
 | `still` | `clips` / `clip` |
+| `overlay` | `clips` / `clip` |
 | `music` | `file` |
 
 ---

@@ -23,6 +23,7 @@ BUILTIN_BLOCKS = frozenset(
         "cut",
         "captions",
         "export",
+        "overlay",
         "concat",
         "speed",
         "reverse",
@@ -66,6 +67,9 @@ CONCAT_TRANSITIONS = frozenset(
         "slidedown",
     }
 )
+
+# Where `overlay` can place its full-width band (and its text) — SPEC §6.12.
+OVERLAY_BAND_POSITIONS = frozenset({"top", "bottom"})
 
 # How `export` fits the source into the target frame (see SPEC §6.6).
 EXPORT_FIT_MODES = frozenset({"contain", "cover"})
