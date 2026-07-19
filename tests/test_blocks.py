@@ -20,7 +20,10 @@ from lemontage.engine.blocks.captions import (
 )
 from lemontage.engine.blocks.detect_clips import (
     _agent_clips,
+    _beat_clips,
     _clip_item,
+    _detect_beats,
+    _loudness_timeline,
     _random_clips,
     _select_loud_clips,
     _windowed_clips,
@@ -237,6 +240,75 @@ def test_select_loud_clips_only_loud_regions_qualify():
 
 def test_select_loud_clips_empty_timeline():
     assert _select_loud_clips([], total=100.0, min_dur=8, max_dur=20, max_clips=5) == []
+
+
+# --- detect_clips audio (beat detection) ------------------------------------
+
+
+def test_detect_beats_finds_onsets_above_moving_average():
+    # 64 ms windows: quiet floor at -60 dB with two loud bursts.
+    timeline = [(i * 0.064, -60.0) for i in range(50)]
+    for burst in (10, 30):  # onsets at ~0.64 s and ~1.92 s
+        for j in range(burst, burst + 3):
+            timeline[j] = (timeline[j][0], -10.0)
+    beats = _detect_beats(timeline, min_gap=0.5)
+    assert len(beats) == 2
+    assert beats[0] == pytest.approx(0.64, abs=0.07)
+    assert beats[1] == pytest.approx(1.92, abs=0.07)
+
+
+def test_detect_beats_min_gap_suppresses_close_onsets():
+    timeline = [(i * 0.064, -60.0) for i in range(20)]
+    timeline[5] = (timeline[5][0], -10.0)
+    timeline[7] = (timeline[7][0], -10.0)  # 0.128 s after the first
+    assert len(_detect_beats(timeline, min_gap=0.5)) == 1
+
+
+def test_detect_beats_silence_yields_no_beats():
+    timeline = [(i * 0.064, float("-inf")) for i in range(20)]
+    assert _detect_beats(timeline, min_gap=0.5) == []
+
+
+def test_beat_clips_spans_between_beats():
+    assert _beat_clips([2.0, 4.0], 6.0, 5) == [(0.0, 2.0), (2.0, 4.0), (4.0, 6.0)]
+    assert _beat_clips([2.0, 4.0], 6.0, 2) == [(0.0, 2.0), (2.0, 4.0)]  # capped
+    assert _beat_clips([], 6.0, 5) == [(0.0, 6.0)]  # no beats: whole source
+
+
+def test_detect_clips_audio_dispatch(tmp_path, monkeypatch):
+    from lemontage.engine.blocks import detect_clips
+
+    monkeypatch.setattr(detect_clips.ffmpeg, "probe_duration", lambda _m: 3.0)
+    stderr = "".join(
+        f"pts_time:{i * 0.064:.3f}\nRMS_level={-10.0 if i in (16, 32) else -60.0}\n"
+        for i in range(47)
+    )
+    monkeypatch.setattr(detect_clips.ffmpeg, "run_capture", lambda args: stderr)
+    result = detect_clips.DetectClipsBlock().execute(
+        {"method": "audio", "music": "track.mp3", "min_gap": "0.5s"}, ctx(tmp_path), "d"
+    )
+    assert result.outputs["count"] == 3  # 0->beat1, beat1->beat2, beat2->end
+    assert result.channel_items[0]["start"] == 0.0
+    assert result.channel_items[-1]["end"] == 3.0
+
+
+def test_detect_clips_audio_on_real_sine_bursts(tmp_path):
+    # Synthetic track: 0.2 s 440 Hz bursts starting at t=1, 2, 3 s in 4 s of
+    # near-silence. Beats should land close to the burst onsets.
+    wav = tmp_path / "beats.wav"
+    ffmpeg.run(
+        [
+            "-f",
+            "lavfi",
+            "-i",
+            "aevalsrc=sin(440*2*PI*t)*lt(mod(t\\,1)\\,0.2)*gte(t\\,1):d=4:s=8000",
+            str(wav),
+        ]
+    )
+    beats = _detect_beats(_loudness_timeline(str(wav), nsamples=512), min_gap=0.5)
+    assert len(beats) == 3
+    for beat, expected in zip(beats, (1.0, 2.0, 3.0), strict=True):
+        assert beat == pytest.approx(expected, abs=0.15)
 
 
 # --- detect_clips random ----------------------------------------------------

@@ -9,6 +9,10 @@ Four local methods:
   (crowd roar + commentator excitement).
 * ``random``       — pick random, non-overlapping moments (no analysis); handy
   for a quick montage or B-roll. A ``seed`` makes it reproducible.
+* ``audio``        — cut to the rhythm of a music track: detect beats (RMS
+  onsets above a moving-average threshold) and emit one clip per beat-to-beat
+  span — automatically-timed jump cuts. ``music:`` points at the track
+  (defaults to the input's own audio); ``min_gap`` sets the shortest cut.
 
 ``silence`` and ``scene_change`` then trim/split the spans to the
 ``[min_duration, max_duration]`` window and cap at ``max_clips``; ``loudness``
@@ -32,7 +36,7 @@ _SILENCE_END = re.compile(r"silence_end:\s*([\d.]+)")
 _SCENE_PTS = re.compile(r"pts_time:([\d.]+)")
 # astats+ametadata prints two lines per window: "…pts_time:<sec>" then
 # "…RMS_level=<dB>". DOTALL lets the regex pair each timestamp with its level.
-_LOUDNESS = re.compile(r"pts_time:([\d.]+).*?RMS_level=(-?[\d.]+)", re.DOTALL)
+_LOUDNESS = re.compile(r"pts_time:([\d.]+).*?RMS_level=(-?[\d.]+|-inf)", re.DOTALL)
 # Auto-framing of a loud moment. The clip boundaries are found by expanding from
 # the peak while the level stays above a threshold set between the baseline
 # (median) and the peak — so the build-up and the sustained reaction are both
@@ -66,6 +70,11 @@ class DetectClipsBlock(Block):
         elif method == "scene_change":
             spans = _spans_from_scene_cuts(media, total)
             clips = _windowed_clips(spans, min_dur, max_dur, max_clips)
+        elif method == "audio":
+            music = params.get("music") or media
+            min_gap = parse_seconds(params.get("min_gap", "0.5s"))
+            beats = _detect_beats(_loudness_timeline(music, nsamples=512), min_gap)
+            clips = _beat_clips(beats, total, max_clips)
         elif method == "random":
             rng = random.Random(params.get("seed"))
             clips = _random_clips(total, min_dur, max_dur, max_clips, rng)
@@ -207,8 +216,10 @@ def _random_clips(
     return clips
 
 
-def _loudness_timeline(media: str) -> list[tuple[float, float]]:
-    """Return [(time, RMS level in dB)] sampled in 1-second windows."""
+def _loudness_timeline(media: str, nsamples: int = 8000) -> list[tuple[float, float]]:
+    """Return [(time, RMS level in dB)] sampled in windows of ``nsamples``
+    samples at 8 kHz (default 8000 = 1-second windows; 512 = 64 ms, fine
+    enough to resolve musical beats). Silent windows read as ``-inf`` dB."""
     stderr = ffmpeg.run_capture(
         [
             "-i",
@@ -216,7 +227,7 @@ def _loudness_timeline(media: str) -> list[tuple[float, float]]:
             "-af",
             (
                 "aformat=channel_layouts=mono,aresample=8000,"
-                "asetnsamples=n=8000:p=0,astats=metadata=1:reset=1,"
+                f"asetnsamples=n={nsamples}:p=0,astats=metadata=1:reset=1,"
                 "ametadata=mode=print:key=lavfi.astats.Overall.RMS_level"
             ),
             "-f",
@@ -225,6 +236,35 @@ def _loudness_timeline(media: str) -> list[tuple[float, float]]:
         ]
     )
     return [(float(t), float(level)) for t, level in _LOUDNESS.findall(stderr)]
+
+
+_BEAT_RISE = 6.0  # dB above the moving average that marks a beat onset
+_BEAT_HISTORY = 8  # windows in the moving average (~0.5 s at 64 ms windows)
+
+
+def _detect_beats(
+    timeline: list[tuple[float, float]], min_gap: float, rise: float = _BEAT_RISE
+) -> list[float]:
+    """Onset detection: a beat is a window whose RMS level jumps ``rise`` dB
+    above the moving average of the previous windows, at least ``min_gap``
+    seconds after the previous beat. Stdlib-only; strict ``>`` keeps pure
+    silence (-inf vs -inf) from ever registering."""
+    beats: list[float] = []
+    for i, (t, level) in enumerate(timeline):
+        history = [lvl for _, lvl in timeline[max(0, i - _BEAT_HISTORY) : i]]
+        if not history:
+            continue
+        avg = sum(history) / len(history)
+        if level > avg + rise and (not beats or t - beats[-1] >= min_gap):
+            beats.append(t)
+    return beats
+
+
+def _beat_clips(beats: list[float], total: float, max_clips: int) -> list[tuple[float, float]]:
+    """One clip per beat-to-beat span across the source, starting at 0 and
+    ending at the media end — jump cuts timed by the music."""
+    edges = [0.0, *(b for b in beats if 0.0 < b < total), total]
+    return [(a, b) for a, b in zip(edges, edges[1:], strict=False) if b > a][:max_clips]
 
 
 def _select_loud_clips(

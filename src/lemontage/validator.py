@@ -184,6 +184,17 @@ def _check_block_params(
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
         if method == "agent" and not isinstance(params.get("clips"), list):
             errors.append(f"{label}: detect_clips.method 'agent' requires a 'clips' list")
+        if method == "audio":
+            music = params.get("music")
+            if music is not None and not isinstance(music, str):
+                errors.append(f"{label}: detect_clips.music must be a path (string)")
+            min_gap = params.get("min_gap")
+            if min_gap is not None:
+                try:
+                    if parse_seconds(min_gap) <= 0:
+                        errors.append(f"{label}: detect_clips.min_gap must be > 0")
+                except (ValueError, TypeError):
+                    errors.append(f"{label}: detect_clips.min_gap must be a duration (e.g. 0.5s)")
 
     if block == "export":
         fit = params.get("fit")

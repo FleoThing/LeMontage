@@ -150,6 +150,26 @@ def test_reserved_detect_method_rejected():
     assert any("engagement" in e for e in errors)
 
 
+def test_audio_detect_method_accepted():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"method": "audio", "music": "track.mp3", "min_gap": "0.5s", "emit": "c"}},
+        {"cut": {"from": "c"}},
+    ]
+    assert validate_doc(d) == []
+
+
+def test_audio_detect_method_bad_params_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"detect_clips": {"method": "audio", "music": 42, "min_gap": "nope", "emit": "c"}},
+        {"cut": {"from": "c"}},
+    ]
+    errors = validate_doc(d)
+    assert any("music must be a path" in e for e in errors)
+    assert any("min_gap must be a duration" in e for e in errors)
+
+
 def test_cloud_provider_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [{"stt": {"engine": "elevenlabs"}}]

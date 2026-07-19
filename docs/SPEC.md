@@ -237,7 +237,7 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 ```yaml
 - id: clips
   detect_clips:
-    method: silence       # silence | scene_change | loudness | random
+    method: silence       # silence | scene_change | loudness | random | audio
     min_duration: 30s
     max_duration: 60s
     max_clips: 5
@@ -246,7 +246,9 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `agent`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `audio` \| `agent`. |
+| `music` | path | input's own audio | (`audio` only) Music track whose beats time the cuts. |
+| `min_gap` | duration | `0.5s` | (`audio` only) Shortest allowed gap between two beats (i.e. minimum cut length). |
 | `clips` | list | — | (`agent` only) The boundaries chosen by the AI agent: `[{start, end}, …]`. Used verbatim (clamped to the media); `min/max_duration` and `max_clips` do not apply. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
@@ -265,6 +267,22 @@ sustained reaction are both captured; `min_duration`/`max_duration` only bound
 the resulting length (no manual offset). `random` picks `max_clips` random,
 non-overlapping moments (each of a random length in the min/max window) with no
 analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
+`audio` cuts the source to the **rhythm of a music track**: beats are detected
+as RMS onsets jumping above a moving-average threshold (64 ms windows via
+`astats`), and one clip is emitted per beat-to-beat span from `0` to the media
+end — automatically-timed jump cuts. `music:` points at the track (defaults to
+the input's own audio); `min_gap` sets the shortest cut; `max_clips` caps the
+count (raise it to keep every beat); `min/max_duration` do not apply.
+
+```yaml
+- id: beats
+  detect_clips:
+    method: audio
+    music: ./assets/track.mp3   # omit to use the input's own audio
+    min_gap: 0.5s
+    max_clips: 50
+    emit: beat_cuts
+```
 
 **Transcript-aware boundaries.** Pass `words:` (from an earlier `stt` step) to
 make detection transcript-aware: boundaries snap to whole words (no clip starts
