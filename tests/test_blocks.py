@@ -941,6 +941,7 @@ def test_concat_with_transitions_duration_too_long_raises(tmp_path, monkeypatch)
     from lemontage.engine.blocks.concat import _concat_with_transitions
 
     monkeypatch.setattr(ff, "probe_duration", lambda _f: 1.0)
+    monkeypatch.setattr(ff, "has_audio", lambda _f: True)
     monkeypatch.setattr(ff, "run", lambda args: None)
 
     files = [str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")]
@@ -1145,9 +1146,7 @@ def test_single_transition_conflicts_with_transitions():
 def test_build_transition_filters_default_offset_is_clip_boundary():
     from lemontage.engine.blocks.concat import _build_transition_filters
 
-    filters, out_v, out_a = _build_transition_filters(
-        [10.0, 8.0], ["fade"], 0.5, keep_audio=True
-    )
+    filters, out_v, out_a = _build_transition_filters([10.0, 8.0], ["fade"], 0.5, keep_audio=True)
     assert filters == [
         "[0:v:0][1:v:0]xfade=transition=fade:duration=0.5:offset=9.500[vs0]",
         "[0:a:0][1:a:0]acrossfade=d=0.5[as0]",
@@ -1161,9 +1160,7 @@ def test_build_transition_filters_explicit_at_overrides_offset():
     filters, _, _ = _build_transition_filters(
         [15.0, 8.0], ["fadewhite"], 0.5, keep_audio=False, offsets=[11.0]
     )
-    assert filters == [
-        "[0:v:0][1:v:0]xfade=transition=fadewhite:duration=0.5:offset=11.000[vs0]"
-    ]
+    assert filters == ["[0:v:0][1:v:0]xfade=transition=fadewhite:duration=0.5:offset=11.000[vs0]"]
 
 
 def test_build_transition_filters_at_past_end_raises():
