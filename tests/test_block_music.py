@@ -62,6 +62,20 @@ def test_music_no_video_audio_maps_music_only(tmp_path, stubbed, monkeypatch):
     assert "amix" not in args[args.index("-filter_complex") + 1]
 
 
+def test_music_mix_false_ignores_video_audio(tmp_path, stubbed):
+    # Even when the video HAS audio, mix:false must drop it and map music only —
+    # so muted, concat-spliced silent tracks can't stutter the music.
+    MusicBlock().execute_channel(
+        {"source": str(tmp_path / "track.mp3"), "mix": False},
+        [{"index": 0, "file": "reel.mp4"}],
+        ctx(tmp_path),
+        "bgm",
+    )
+    args = stubbed["args"]
+    assert "[m]" in args
+    assert "amix" not in args[args.index("-filter_complex") + 1]
+
+
 def test_music_rejects_multi_clip_channel(tmp_path, stubbed):
     with pytest.raises(ValueError, match="concat"):
         MusicBlock().execute_channel(

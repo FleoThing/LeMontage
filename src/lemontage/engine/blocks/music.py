@@ -60,8 +60,9 @@ class MusicBlock(Block):
         video_dur = ffmpeg.probe_duration(video)
         offset = _music_offset(params, source)
         fade = parse_seconds(params.get("fade_out", 0))
+        keep_source_audio = bool(params.get("mix", True))
         out = _output_path(params, ctx)
-        _mux(video, source, out, video_dur, offset, fade)
+        _mux(video, source, out, video_dur, offset, fade, keep_source_audio)
         result = str(out)
         return BlockResult(
             outputs={"file": result},
@@ -86,8 +87,21 @@ def _music_offset(params: dict[str, Any], source: str) -> float:
     return drop_at - target
 
 
-def _mux(video: str, source: str, out: Path, video_dur: float, offset: float, fade: float) -> None:
-    """Overlay the music on the video: trim/loop to length, fade out, mix."""
+def _mux(
+    video: str,
+    source: str,
+    out: Path,
+    video_dur: float,
+    offset: float,
+    fade: float,
+    keep_source_audio: bool = True,
+) -> None:
+    """Overlay the music on the video: trim/loop to length, fade out, mix.
+
+    ``keep_source_audio=False`` (``mix: false``) ignores the video's own audio
+    and makes the music the sole track — the right choice when the clips are
+    muted, since amixing their (silent, concat-spliced) tracks otherwise
+    stutters the music at every clip join."""
     chain = []
     if offset > 0:
         chain.append(f"atrim=start={offset:.3f},asetpts=PTS-STARTPTS")
@@ -98,7 +112,7 @@ def _mux(video: str, source: str, out: Path, video_dur: float, offset: float, fa
         chain.append(f"afade=t=out:st={max(video_dur - fade, 0):.3f}:d={fade:.3f}")
     filters = [f"[1:a]{','.join(chain)}[m]"]
 
-    mix = ffmpeg.has_audio(video)
+    mix = keep_source_audio and ffmpeg.has_audio(video)
     if mix:
         filters.append("[0:a][m]amix=inputs=2:duration=first:normalize=0[a]")
 
