@@ -264,6 +264,32 @@ def test_detect_beats_min_gap_suppresses_close_onsets():
     assert len(_detect_beats(timeline, min_gap=0.5)) == 1
 
 
+def test_detect_beats_grid_fills_soft_beat_and_rejects_off_grid():
+    # A steady pulse every 0.512 s (~117 BPM) over 8 s, but the 4th beat is too
+    # soft to clear the raw threshold ("da di") and there's one loud off-grid
+    # blip. The tempo grid must fill the missing beat and drop the blip.
+    dt = 0.064
+    n = int(8.0 / dt)
+    timeline = [(i * dt, -60.0) for i in range(n)]
+    period = 8  # windows -> 0.512 s
+    grid = list(range(8, n - 3, period))
+    for k, idx in enumerate(grid):
+        loud = -55.0 if k == 3 else -10.0  # 4th beat barely rises: raw miss
+        for j in range(idx, idx + 3):
+            timeline[j] = (timeline[j][0], loud)
+    blip = grid[2] + 3  # a loud onset sitting between two grid beats
+    for j in range(blip, blip + 2):
+        timeline[j] = (timeline[j][0], -10.0)
+
+    beats = _detect_beats(timeline, min_gap=0.2)
+    expected = [g * dt for g in grid]
+    # Every grid beat is present (soft one filled in), within one window.
+    for want in expected:
+        assert any(abs(b - want) <= dt for b in beats), f"missing grid beat {want:.3f}"
+    # The off-grid blip is not emitted as its own beat.
+    assert not any(abs(b - blip * dt) <= dt for b in beats)
+
+
 def test_detect_beats_silence_yields_no_beats():
     timeline = [(i * 0.064, float("-inf")) for i in range(20)]
     assert _detect_beats(timeline, min_gap=0.5) == []

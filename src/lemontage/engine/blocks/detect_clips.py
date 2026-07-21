@@ -9,10 +9,12 @@ Four local methods:
   (crowd roar + commentator excitement).
 * ``random``       — pick random, non-overlapping moments (no analysis); handy
   for a quick montage or B-roll. A ``seed`` makes it reproducible.
-* ``audio``        — cut to the rhythm of a music track: detect beats (RMS
-  onsets above a moving-average threshold) and emit one clip per beat-to-beat
-  span — automatically-timed jump cuts. ``music:`` points at the track
-  (defaults to the input's own audio); ``min_gap`` sets the shortest cut.
+* ``audio``        — cut to the rhythm of a music track: track beats
+  (onset envelope + a tempo grid that fills soft/missing beats and rejects
+  off-beat noise) and emit one clip per beat-to-beat span — automatically-timed
+  jump cuts that stay locked to the pulse even when the rhythm is irregular.
+  ``music:`` points at the track (defaults to the input's own audio);
+  ``min_gap`` sets the shortest cut.
 
 ``silence`` and ``scene_change`` then trim/split the spans to the
 ``[min_duration, max_duration]`` window and cap at ``max_clips``; ``loudness``
@@ -21,6 +23,7 @@ emits centred clips directly, and ``random`` scatters clips across the timeline.
 
 from __future__ import annotations
 
+import math
 import random
 import re
 import statistics
@@ -240,15 +243,49 @@ def _loudness_timeline(media: str, nsamples: int = 8000) -> list[tuple[float, fl
 
 _BEAT_RISE = 6.0  # dB above the moving average that marks a beat onset
 _BEAT_HISTORY = 8  # windows in the moving average (~0.5 s at 64 ms windows)
+# Tempo-aware grid: only engages when there are enough onsets to trust a period.
+_GRID_MIN_ONSETS = 5  # below this, sparse audio stays on the raw-onset path
+_TEMPO_MIN_BPM = 60.0  # slowest tempo the grid will lock to
+_TEMPO_MAX_BPM = 200.0  # fastest tempo the grid will lock to
+_GRID_TOL = 0.30  # snap a grid beat to a real onset within ±this fraction of a period
 
 
 def _detect_beats(
     timeline: list[tuple[float, float]], min_gap: float, rise: float = _BEAT_RISE
 ) -> list[float]:
-    """Onset detection: a beat is a window whose RMS level jumps ``rise`` dB
-    above the moving average of the previous windows, at least ``min_gap``
-    seconds after the previous beat. Stdlib-only; strict ``>`` keeps pure
-    silence (-inf vs -inf) from ever registering."""
+    """Beat tracking, robust to irregular rhythm.
+
+    Two stages. First, *raw onsets*: a window whose RMS jumps ``rise`` dB above
+    the moving average of the previous windows, ``min_gap`` apart. On sparse
+    audio (fewer than ``_GRID_MIN_ONSETS`` onsets) these are returned as-is.
+
+    On a dense, periodic stream the second stage takes over: estimate the
+    dominant *period* by autocorrelating the onset envelope, phase-lock a grid
+    to the real onsets, then walk the grid across the track. Each grid beat
+    snaps to the nearest real onset when one sits within ``_GRID_TOL`` of a
+    period; otherwise the grid position itself is emitted — so a beat that was
+    too soft to clear the threshold (the ``da di`` in *do do do da di do*) is
+    filled in, and a spurious onset off the grid is dropped. The cuts stay
+    locked to the pulse instead of chasing every wobble in the mix.
+
+    Stdlib-only; strict ``>`` keeps pure silence (-inf vs -inf) from registering.
+    """
+    onsets = _raw_onsets(timeline, min_gap, rise)
+    if len(onsets) < _GRID_MIN_ONSETS:
+        return onsets
+
+    env = _onset_envelope(timeline)
+    dt = _window_dt(timeline)
+    period = _dominant_period(env, dt)
+    if period is None:
+        return onsets
+    return _track_grid(timeline, env, dt, period, onsets, min_gap)
+
+
+def _raw_onsets(
+    timeline: list[tuple[float, float]], min_gap: float, rise: float
+) -> list[float]:
+    """A beat per window that jumps ``rise`` dB above the trailing average."""
     beats: list[float] = []
     for i, (t, level) in enumerate(timeline):
         history = [lvl for _, lvl in timeline[max(0, i - _BEAT_HISTORY) : i]]
@@ -258,6 +295,77 @@ def _detect_beats(
         if level > avg + rise and (not beats or t - beats[-1] >= min_gap):
             beats.append(t)
     return beats
+
+
+def _window_dt(timeline: list[tuple[float, float]]) -> float:
+    """Seconds per analysis window (the sampling period of the envelope)."""
+    return timeline[1][0] - timeline[0][0] if len(timeline) > 1 else 0.064
+
+
+def _onset_envelope(timeline: list[tuple[float, float]]) -> list[float]:
+    """Positive RMS increase over the trailing average, per window — an onset
+    strength signal that peaks on attacks and is ~0 on sustains and silence."""
+    env: list[float] = []
+    for i, (_t, level) in enumerate(timeline):
+        history = [lvl for _, lvl in timeline[max(0, i - _BEAT_HISTORY) : i]]
+        avg = sum(history) / len(history) if history else level
+        flux = level - avg
+        env.append(flux if (flux > 0 and math.isfinite(flux)) else 0.0)
+    return env
+
+
+def _dominant_period(env: list[float], dt: float) -> float | None:
+    """Dominant beat period in seconds, via autocorrelation of the onset
+    envelope over the ``[_TEMPO_MIN_BPM, _TEMPO_MAX_BPM]`` lag range. Returns
+    None when no lag stands out (no steady pulse to lock to)."""
+    min_lag = max(1, int(round(60.0 / _TEMPO_MAX_BPM / dt)))
+    max_lag = min(len(env) - 1, int(round(60.0 / _TEMPO_MIN_BPM / dt)))
+    if max_lag <= min_lag:
+        return None
+    best_lag, best_score = 0, 0.0
+    for lag in range(min_lag, max_lag + 1):
+        score = sum(env[i] * env[i - lag] for i in range(lag, len(env)))
+        if score > best_score:
+            best_score, best_lag = score, lag
+    return best_lag * dt if best_lag else None
+
+
+def _track_grid(
+    timeline: list[tuple[float, float]],
+    env: list[float],
+    dt: float,
+    period: float,
+    onsets: list[float],
+    min_gap: float,
+) -> list[float]:
+    """Phase-lock a grid of spacing ``period`` to the onsets, then emit one beat
+    per grid step — snapped to a real onset when one is within tolerance, else
+    the grid position itself (a filled-in soft/missing beat)."""
+    end = timeline[-1][0]
+    phase = _grid_phase(env, dt, period)
+    tol = _GRID_TOL * period
+
+    beats: list[float] = []
+    g = phase
+    while g <= end + 1e-9:
+        near = min((o for o in onsets if abs(o - g) <= tol), key=lambda o: abs(o - g), default=g)
+        beat = near
+        if beat >= 0 and (not beats or beat - beats[-1] >= min_gap):
+            beats.append(beat)
+        g += period
+    return beats
+
+
+def _grid_phase(env: list[float], dt: float, period: float) -> float:
+    """Grid offset (seconds) whose beat positions collect the most onset energy —
+    aligns the grid to the actual downbeats rather than an arbitrary t=0."""
+    step = max(1, int(round(period / dt)))
+    best_off, best_energy = 0, -1.0
+    for off in range(step):
+        energy = sum(env[i] for i in range(off, len(env), step))
+        if energy > best_energy:
+            best_energy, best_off = energy, off
+    return best_off * dt
 
 
 def _beat_clips(beats: list[float], total: float, max_clips: int) -> list[tuple[float, float]]:
