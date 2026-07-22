@@ -264,30 +264,61 @@ def test_detect_beats_min_gap_suppresses_close_onsets():
     assert len(_detect_beats(timeline, min_gap=0.5)) == 1
 
 
-def test_detect_beats_grid_fills_soft_beat_and_rejects_off_grid():
-    # A steady pulse every 0.512 s (~117 BPM) over 8 s, but the 4th beat is too
-    # soft to clear the raw threshold ("da di") and there's one loud off-grid
-    # blip. The tempo grid must fill the missing beat and drop the blip.
-    dt = 0.064
-    n = int(8.0 / dt)
-    timeline = [(i * dt, -60.0) for i in range(n)]
-    period = 8  # windows -> 0.512 s
-    grid = list(range(8, n - 3, period))
-    for k, idx in enumerate(grid):
-        loud = -55.0 if k == 3 else -10.0  # 4th beat barely rises: raw miss
-        for j in range(idx, idx + 3):
-            timeline[j] = (timeline[j][0], loud)
-    blip = grid[2] + 3  # a loud onset sitting between two grid beats
-    for j in range(blip, blip + 2):
-        timeline[j] = (timeline[j][0], -10.0)
+def test_beats_librosa_gate_drops_beats_in_a_break(tmp_path):
+    # Onset detection must yield NO cut inside a genuine silent break, so cuts
+    # hold there instead of ticking on a constant metronome.
+    pytest.importorskip("librosa")
+    sf = pytest.importorskip("soundfile")
+    import numpy as np
 
-    beats = _detect_beats(timeline, min_gap=0.2)
-    expected = [g * dt for g in grid]
-    # Every grid beat is present (soft one filled in), within one window.
-    for want in expected:
-        assert any(abs(b - want) <= dt for b in beats), f"missing grid beat {want:.3f}"
-    # The off-grid blip is not emitted as its own beat.
-    assert not any(abs(b - blip * dt) <= dt for b in beats)
+    from lemontage.engine.blocks.detect_clips import _beats_librosa
+
+    sr = 22050
+    y = np.zeros(int(12 * sr))
+    for k in range(int(12 / 0.5)):  # a click every 0.5 s...
+        t = k * 0.5
+        if 4.0 <= t < 8.0:  # ...except a 4 s silent break in the middle
+            continue
+        i = int(t * sr)
+        n = int(0.03 * sr)
+        y[i : i + n] += np.hanning(n) * np.sin(2 * np.pi * 1000 * np.arange(n) / sr)
+    path = tmp_path / "gap.wav"
+    sf.write(str(path), y, sr)
+
+    beats = _beats_librosa(path, min_gap=0.2)
+    assert beats, "the clicks must be detected"
+    assert not any(4.5 < b < 7.5 for b in beats), "no beat may survive inside the break"
+    assert any(b < 4.0 for b in beats) and any(b > 8.0 for b in beats), "beats resume after"
+
+
+def test_beats_librosa_follows_onset_density(tmp_path):
+    # A dense (double-time) passage must yield far more cuts than a sparse one.
+    pytest.importorskip("librosa")
+    sf = pytest.importorskip("soundfile")
+    import numpy as np
+
+    from lemontage.engine.blocks.detect_clips import _beats_librosa
+
+    sr = 22050
+    y = np.zeros(int(12 * sr))
+
+    def click(t):
+        i = int(t * sr)
+        n = int(0.02 * sr)
+        y[i : i + n] += np.hanning(n) * np.sin(2 * np.pi * 1000 * np.arange(n) / sr)
+
+    t = 0.0
+    while t < 12:
+        period = 0.125 if 4.0 <= t < 8.0 else 0.5  # 4x denser in the middle
+        click(t)
+        t += period
+    path = tmp_path / "dense.wav"
+    sf.write(str(path), y, sr)
+
+    beats = _beats_librosa(path, min_gap=0.05)
+    dense = len([b for b in beats if 4.0 <= b < 8.0])
+    sparse = len([b for b in beats if 0.0 <= b < 4.0])
+    assert dense > 2 * sparse, f"dense passage must cut more (dense={dense} sparse={sparse})"
 
 
 def test_detect_beats_silence_yields_no_beats():
