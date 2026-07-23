@@ -214,6 +214,9 @@ def _check_block_params(
             except (ValueError, TypeError):
                 errors.append(f"{label}: still.motion_duration must be a duration (e.g. 0.3s)")
 
+    if block == "music":
+        _check_music_params(params, label, errors)
+
     if block == "concat":
         _check_concat_transitions(params.get("transitions"), label, errors)
         scope = params.get("transitions_at")
@@ -226,6 +229,24 @@ def _check_block_params(
             errors.append(f"{label}: emit must be a channel name (string)")
         else:
             emitted.add(emit)
+
+
+def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
+    source = params.get("source")
+    if source is None:
+        errors.append(f"{label}: music requires a 'source' (path to an audio file)")
+    elif not isinstance(source, str):
+        errors.append(f"{label}: music.source must be a string path")
+
+    for field in ("start_at", "delay", "fade_out"):
+        value = params.get(field)
+        if value is None:
+            continue
+        try:
+            if parse_seconds(value) < 0:
+                errors.append(f"{label}: music.{field} must be >= 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: music.{field} must be a time value (e.g. 2s)")
 
 
 def _check_concat_transitions(transitions: object, label: str, errors: list[str]) -> None:

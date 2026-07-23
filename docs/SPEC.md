@@ -631,6 +631,44 @@ track); `concat` tolerates this and drops audio for the join.
 
 ---
 
+### 6.12 `music` — lay a music track over the final montage
+
+A channel aggregator, meant to run **after `concat`**: it takes the reel from
+its channel (which must hold a single clip) and muxes an audio file over it.
+The music is trimmed — or looped, when shorter than the video — to the video
+length, optionally faded out, and **mixed with the video's own audio** when it
+has one (video-only reels just get the music). The video stream is copied, not
+re-encoded.
+
+`start_at` skips into the track, dropping the song's intro so it opens on a
+later part. `delay` holds the music back so it enters `delay` seconds into the
+video (silence first), then fills the rest. The two are independent and compose.
+
+Single mode (no `from:`) lays the music over the pipeline input (or `input:`).
+
+```yaml
+- music:
+    from: reel            # channel emitted by a concat step
+    source: ./track.mp3
+    start_at: 8s          # open 8s into the track (skip the intro)
+    delay: 2s             # music enters 2s into the video
+    fade_out: 2s
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `from` | channel | — | Channel holding the finished reel (one clip; run `concat` first). |
+| `input` | path | pipeline input | Source video (single mode). |
+| `source` | path | **required** | Audio file to lay over the video (mp3, wav, …). |
+| `start_at` | time | `0s` | Offset into the music where playback begins (skip the song's intro). |
+| `delay` | time | `0s` | Hold the music back this many seconds so it enters later over the video. |
+| `fade_out` | time | `0s` | Fade the music out over the last N seconds of the video. |
+| `output` | path template | `<dir>/<name>-music.mp4` | Where to write the result (`{{ name }}` supported). |
+
+**Outputs:** `file` (the scored video), + a one-item channel via `emit:`.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
@@ -645,6 +683,7 @@ Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
 | `export` | `files` |
 | `stills` | `count`, + channel |
 | `still` | `clips` / `clip` |
+| `music` | `file` |
 
 ---
 
@@ -736,7 +775,6 @@ not implemented in v1 — using them is a validation error:
 - cloud providers (`engine: elevenlabs`, `model: deepgram`, …)
 - `use:` (composing community pipelines from the hub)
 - `hooks:` (lifecycle callbacks)
-- `music:` block
 - custom/third-party blocks
 
 ---
