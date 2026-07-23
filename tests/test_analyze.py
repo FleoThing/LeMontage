@@ -4,6 +4,8 @@ FFmpeg is mocked at the ``run_capture``/probe boundary so the real parsing
 helpers (scene cuts, silencedetect, loudness) run; Whisper is mocked whole.
 """
 
+import pytest
+
 from lemontage import analyze
 
 
@@ -90,3 +92,21 @@ def test_visual_flag_attaches_scores(monkeypatch):
     monkeypatch.setattr(analyze, "_visual_scores", fake_visual)
     m = analyze.analyze_video("v.mp4", transcribe=False, visual=True)
     assert all("sharpness" in s and "motion" in s for s in m["shots"])
+
+
+def test_visual_raises_when_no_frames_decode(monkeypatch):
+    """OpenCV yields no frames for codecs it can't decode (e.g. AV1) — fail loudly
+    instead of emitting all-zero scores."""
+    cv2 = pytest.importorskip("cv2")
+
+    class FakeCap:
+        def isOpened(self):
+            return True
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(cv2, "VideoCapture", lambda _p: FakeCap())
+    monkeypatch.setattr(analyze, "_sample_gray", lambda *a, **k: [])  # nothing decodes
+    with pytest.raises(RuntimeError, match="decoded no frames"):
+        analyze._visual_scores("av1.mp4", [{"start": 0.0, "end": 1.0}])

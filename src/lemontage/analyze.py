@@ -109,9 +109,11 @@ def _visual_scores(path: str, shots: list[dict], samples: int = 4) -> None:
     if not cap.isOpened():
         raise RuntimeError(f"could not open {path} for visual analysis")
     raw: list[tuple[float, float]] = []
+    read = 0
     try:
         for shot in shots:
             frames = _sample_gray(cap, shot["start"], shot["end"], samples, cv2)
+            read += len(frames)
             sharp = (
                 float(np.mean([cv2.Laplacian(f, cv2.CV_64F).var() for f in frames]))
                 if frames
@@ -120,6 +122,13 @@ def _visual_scores(path: str, shots: list[dict], samples: int = 4) -> None:
             raw.append((sharp, _mean_flow(frames, cv2, np)))
     finally:
         cap.release()
+    # OpenCV silently returns no frames for codecs it can't decode (notably AV1),
+    # which would emit an all-zero, meaningless scoring. Fail loudly instead.
+    if shots and read == 0:
+        raise RuntimeError(
+            f"visual analysis decoded no frames from {path} — the codec may be "
+            "unsupported by OpenCV (e.g. AV1). Transcode to H.264 first."
+        )
     _apply_normalized(shots, raw)
 
 
