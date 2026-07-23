@@ -12,6 +12,11 @@ lemontage \- declarative YAML pipelines for automated social video creation
 .RI [ \-\-var\ KEY=VALUE ]
 .I pipeline.yaml
 .br
+.B lemontage analyze
+.RB [ \-\-no\-transcribe ]
+.RI [ \-o\ FILE ]
+.I video
+.br
 .B lemontage validate
 .I pipeline.yaml
 .br
@@ -43,6 +48,15 @@ Validate, then execute the pipeline. Final media is written under the output
 directory (\fB./output\fR by default); intermediates go under
 \fB<output>/.lemontage/\fR. Exit status is 0 on success, 1 on a validation or
 execution failure.
+.TP
+.B analyze \fIvideo\fR
+Distil a video into a compact JSON manifest (a Video State Object) and print it
+to stdout, or to \fIFILE\fR with \fB\-o\fR. The manifest holds the duration,
+frame rate, shots (scene\-cut boundaries with per\-shot loudness), and \(em when
+the media has audio \(em dead\-air spans and word\-level speech timings. It lets
+an AI agent understand the whole video from one cheap read instead of
+screenshotting it frame by frame. \fB\-\-no\-transcribe\fR skips speech\-to\-text
+(faster, omits words); \fB\-\-model\fR and \fB\-\-lang\fR tune Whisper.
 .TP
 .B validate \fIpipeline.yaml\fR
 Check the pipeline against the v1 spec without running it. Prints each error and
