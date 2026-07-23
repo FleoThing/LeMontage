@@ -88,6 +88,19 @@ def probe_resolution(path: str | Path) -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
+def probe_fps(path: str | Path) -> float:
+    """Return the video's frame rate, parsed from ffmpeg's stream dump.
+
+    Returns 0.0 when no rate is reported (e.g. audio-only input)."""
+    proc = subprocess.run(
+        [ffmpeg_bin(), "-i", str(path)], capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
+    match = re.search(r"(\d+(?:\.\d+)?)\s*fps", proc.stderr) or re.search(
+        r"(\d+(?:\.\d+)?)\s*tbr", proc.stderr
+    )
+    return float(match.group(1)) if match else 0.0
+
+
 def has_audio(path: str | Path) -> bool:
     """Return True if the media has at least one audio stream.
 

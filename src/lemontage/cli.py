@@ -74,6 +74,28 @@ def build_parser() -> argparse.ArgumentParser:
         "so an AI agent can read them and choose clips",
     )
 
+    p_analyze = sub.add_parser(
+        "analyze",
+        help="analyze a video into a compact JSON manifest (VSO) an AI agent reads "
+        "instead of screenshotting the video frame by frame",
+    )
+    p_analyze.add_argument("file", help="video file to analyze")
+    p_analyze.add_argument(
+        "-o", "--output", help="write the manifest here (default: stdout)", metavar="FILE"
+    )
+    p_analyze.add_argument(
+        "--no-transcribe",
+        action="store_true",
+        help="skip speech-to-text (faster; omits speech.words)",
+    )
+    p_analyze.add_argument(
+        "--visual",
+        action="store_true",
+        help="score per-shot motion + sharpness (needs the [analyze] extra: OpenCV)",
+    )
+    p_analyze.add_argument("--model", default="base", help="whisper model size (default: base)")
+    p_analyze.add_argument("--lang", default="auto", help="speech language (default: auto)")
+
     p_validate = sub.add_parser("validate", help="validate a pipeline without running it")
     p_validate.add_argument("file", help="pipeline YAML file")
 
@@ -97,6 +119,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_validate(args.file)
     if args.command == "init":
         return _cmd_init(args.file, args.force)
+    if args.command == "analyze":
+        return _cmd_analyze(
+            args.file, args.output, args.no_transcribe, args.visual, args.model, args.lang
+        )
     if args.command == "run":
         return _cmd_run(args.file, args.var, args.clean, args.json)
     if args.command == "completion":
@@ -113,6 +139,30 @@ def _cmd_validate(file: str) -> int:
             print(f"  - {err}", file=sys.stderr)
         return 1
     print(f"✓ {file}: valid")
+    return 0
+
+
+def _cmd_analyze(
+    file: str, output: str | None, no_transcribe: bool, visual: bool, model: str, lang: str
+) -> int:
+    import json
+
+    from .analyze import analyze_video
+
+    try:
+        manifest = analyze_video(
+            file, transcribe=not no_transcribe, visual=visual, model=model, lang=lang
+        )
+    except Exception as exc:  # noqa: BLE001 - surface ffmpeg/whisper errors to the user
+        print(f"✗ {exc}", file=sys.stderr)
+        return 1
+
+    text = json.dumps(manifest, ensure_ascii=False, indent=2)
+    if output:
+        Path(output).write_text(text, encoding="utf-8")
+        print(f"✓ wrote manifest to {output}", file=sys.stderr)
+    else:
+        print(text)
     return 0
 
 

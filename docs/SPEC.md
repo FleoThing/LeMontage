@@ -874,6 +874,54 @@ lemontage run agent-clips.yaml
 LeMontage stays deterministic — it transcribes, cuts and exports; the editorial
 call (*which* moment is viral) lives in the agent.
 
+### 13.0.1 `analyze` — read the video once, cheaply
+
+Before the loop above, an agent should **understand** the source instead of
+screenshotting it frame by frame (which burns tokens and never really "watches"
+the video). `lemontage analyze <video>` distils it into one compact JSON
+manifest — a Video State Object — the agent reads in a single pass:
+
+```bash
+lemontage analyze episode.mp4 -o episode.vso.json
+lemontage analyze episode.mp4 --no-transcribe   # skip STT, keep shots + loudness
+```
+
+```json
+{
+  "duration": 42.5,
+  "fps": 30.0,
+  "has_audio": true,
+  "shots": [{ "id": 1, "start": 0.0, "end": 3.4, "loudness_db": -18.2 }],
+  "speech": {
+    "dead_air": [[1.56, 2.80], [5.10, 6.20]],
+    "words": [{ "t": 0.42, "d": 0.43, "w": "Bienvenue" }]
+  }
+}
+```
+
+- **shots** — scene-cut boundaries (FFmpeg `select='gt(scene,…)'`), each with a
+  per-shot average loudness (dB). Quiet, static talking heads vs. loud action
+  fall out of `loudness_db`.
+- **dead_air** — silence spans (`silencedetect`), the obvious cut candidates.
+- **words** — Whisper word timings (`{t, d, w}`), omitted with `--no-transcribe`.
+
+The core is local FFmpeg + faster-whisper — no extra dependency. The agent reads
+the manifest, picks spans, and feeds them back through `detect_clips`
+`method: agent`.
+
+`--visual` adds per-shot **motion** and **sharpness** (each `0`–`1`, `1` = best
+in this video) via OpenCV — the optional `[analyze]` extra
+(`pip install 'lemontage[analyze]'`):
+
+```bash
+lemontage analyze episode.mp4 --visual -o episode.vso.json
+# each shot then also carries: "motion": 0.31, "sharpness": 0.92
+```
+
+- **sharpness** — mean Laplacian variance of sampled frames; a shot far below the
+  others is soft/blurry or a static text card the agent can drop.
+- **motion** — mean dense optical-flow magnitude; low = a frozen/static shot.
+
 ### 13.1 Time values
 
 Durations (`min_duration`, …) and timecodes (`start`, `end`) accept:
