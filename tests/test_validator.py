@@ -357,3 +357,71 @@ def test_multi_channel_example_is_valid():
 
     example = Path(__file__).resolve().parents[1] / "examples" / "pipeline_merge.yaml"
     assert validate_file(example) == []
+
+
+def test_concat_single_transition_accepted():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"id": "p1", "detect_clips": {"emit": "part1"}},
+        {"id": "p2", "detect_clips": {"method": "silence", "emit": "part2"}},
+        {
+            "concat": {
+                "from": ["part1", "part2"],
+                "transition": {"type": "fadewhite", "duration": "0.5s", "at": "11s"},
+            }
+        },
+    ]
+    assert validate_doc(d) == []
+
+
+def test_concat_single_transition_unknown_type_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"concat": {"from": "clip_channel", "transition": {"type": "swirl"}}}]
+    errors = validate_doc(d)
+    assert any("unknown transition type" in e and "swirl" in e for e in errors)
+
+
+def test_concat_single_transition_must_be_mapping():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [{"concat": {"from": "clip_channel", "transition": "fade"}}]
+    errors = validate_doc(d)
+    assert any("must be a mapping" in e for e in errors)
+
+
+def test_concat_single_transition_conflicts_with_transitions():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [
+        {
+            "concat": {
+                "from": "clip_channel",
+                "transition": {"type": "fade"},
+                "transitions": "fade",
+            }
+        }
+    ]
+    errors = validate_doc(d)
+    assert any("not both" in e for e in errors)
+
+
+def test_concat_single_transition_bad_at_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [
+        {"concat": {"from": "clip_channel", "transition": {"type": "fade", "at": "nope"}}}
+    ]
+    errors = validate_doc(d)
+    assert any("transition.at" in e for e in errors)
+
+
+def test_concat_new_xfade_types_accepted():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] += [
+        {
+            "concat": {
+                "from": "clip_channel",
+                "transitions": ["fadewhite", "fadegrays", "pixelize", "distance", "smoothleft"],
+            }
+        }
+    ]
+    # 5 names for however many gaps -- count is a runtime check, names must pass.
+    errors = [e for e in validate_doc(d) if "unknown transition" in e]
+    assert errors == []

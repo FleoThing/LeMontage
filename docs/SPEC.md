@@ -481,6 +481,11 @@ of failing.
     from: [viral, montage]
     transitions: fade
     transitions_at: boundaries
+
+# assembly-level: one typed transition between two parts, at a precise offset
+- concat:
+    from: [part1, part2]
+    transition: { type: fadewhite, duration: 0.5s, at: 11s }
 ```
 
 **Nesting (sub-pipelines).** A `concat` may itself `emit:` its reel as a
@@ -512,12 +517,16 @@ list here; mapped blocks (`cut`/`captions`/`export`) read a single channel.
 | `transitions` | string \| list | — | Play a transition between clips. A single name applies to the targeted gaps; a list gives one per gap. Omit for a plain cut. |
 | `transitions_at` | string | `all` | Where transitions apply: `all` (every gap; a `transitions` list must be **clips − 1** long) or `boundaries` (only at channel-merge joins; a list must be **channels − 1** long, and within-channel gaps stay hard cuts). |
 | `duration` | duration | `0.5s` | Crossfade length for each transition; must be shorter than both clips it joins. |
+| `transition` | mapping | — | Assembly-level alternative to `transitions`: one typed transition with keys `type` (a transition name, required), `duration` (default `0.5s`), and optional `at` (absolute offset, in the merged timeline, where the crossfade starts; default = the boundary between the parts). When `from` merges several channels it applies at the channel joins only; on a single channel it applies at every gap. `at` requires exactly one join, and `at + duration` must fit inside the first part (whatever follows it in the first part is truncated). Mutually exclusive with `transitions`. |
 
-**Transitions:** `fade`, `fadeblack` (fade through black), `zoomin` (requires
+**Transitions:** `fade`, `fadeblack` (fade through black), `fadewhite` (fade
+through white), `fadegrays` (desaturate, then fade), `zoomin` (requires
 FFmpeg ≥ 5.0), `circleopen` / `circleclose` (spotlight iris out of / into the
-next clip), `dissolve` (noisy, organic fade), `radial` (clock-hand sweep),
+next clip), `dissolve` (noisy, organic fade), `pixelize` (mosaic blocks),
+`distance` (perceptual pixel morph), `radial` (clock-hand sweep),
 `wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`, `slideright`,
-`slideup`, `slidedown`, and `none` (a hard cut for that gap). Any
+`slideup`, `slidedown`, `smoothleft`, `smoothright`, `smoothup`,
+`smoothdown` (soft-edged wipes), and `none` (a hard cut for that gap). Any
 transition re-encodes the join (via FFmpeg's `xfade`/`acrossfade`);
 a plain concat without `transitions` is faster. Place `concat` after `export` so
 all clips share the same resolution and frame rate.

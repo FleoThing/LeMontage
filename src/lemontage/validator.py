@@ -235,6 +235,7 @@ def _check_block_params(
         scope = params.get("transitions_at")
         if scope is not None and scope not in ("all", "boundaries"):
             errors.append(f"{label}: concat.transitions_at must be 'all' or 'boundaries'")
+        _check_concat_transition(params, label, errors)
 
     emit = params.get("emit")
     if emit is not None:
@@ -277,6 +278,34 @@ def _check_concat_transitions(transitions: object, label: str, errors: list[str]
     for name in names:
         if not isinstance(name, str) or name not in spec.CONCAT_TRANSITIONS:
             errors.append(f"{label}: unknown transition '{name}' (choose from: {valid})")
+
+
+def _check_concat_transition(params: dict, label: str, errors: list[str]) -> None:
+    """Validate concat's singular `transition` mapping (type / duration / at)."""
+    transition = params.get("transition")
+    if transition is None:
+        return
+    if not isinstance(transition, dict):
+        errors.append(f"{label}: concat.transition must be a mapping (type/duration/at)")
+        return
+    if params.get("transitions") is not None:
+        errors.append(f"{label}: use either concat.transition or concat.transitions, not both")
+    name = transition.get("type")
+    if not isinstance(name, str) or name not in spec.CONCAT_TRANSITIONS or name == "none":
+        valid = ", ".join(sorted(spec.CONCAT_TRANSITIONS - {"none"}))
+        errors.append(f"{label}: unknown transition type '{name}' (choose from: {valid})")
+    for key, ok, rule in (
+        ("duration", lambda s: s > 0, "> 0"),
+        ("at", lambda s: s >= 0, ">= 0"),
+    ):
+        value = transition.get(key)
+        if value is None:
+            continue
+        try:
+            if not ok(parse_seconds(value)):
+                errors.append(f"{label}: concat.transition.{key} must be {rule}")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: concat.transition.{key} must be a duration (e.g. 0.5s)")
 
 
 def _check_channel_refs(doc: dict, errors: list[str], emitted: set[str]) -> None:
