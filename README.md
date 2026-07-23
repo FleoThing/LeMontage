@@ -79,6 +79,7 @@ pip install -e ".[engine,dev]"
 ## Documentation
 
 - [YAML specification](docs/SPEC.md)
+- [AI agent playbook](AGENTS.md) — which features to use for which kind of video
 - [Architecture](docs/ARCHITECTURE.md)
 - [Install and deployment](docs/INSTALL.md)
 - [Release process](docs/RELEASE.md)
