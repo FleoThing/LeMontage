@@ -662,6 +662,16 @@ def test_concat_single_mode_requires_channel(tmp_path):
         ConcatBlock().execute({}, ctx(tmp_path), "concat")
 
 
+def test_concat_default_output_keyed_on_step_id(tmp_path):
+    # Two `emit` concats with no explicit output must not clobber each other.
+    from lemontage.engine.blocks.concat import _output_path
+
+    a = _output_path({}, ctx(tmp_path), "reel-a")
+    b = _output_path({}, ctx(tmp_path), "reel-b")
+    assert a != b
+    assert a.name == "demo-reel-a.mp4" and b.name == "demo-reel-b.mp4"
+
+
 def test_scale_chain_contain_letterboxes(tmp_path):
     chain = _scale_chain({}, 1080, 1920)  # default fit
     assert any("force_original_aspect_ratio=decrease" in f for f in chain)

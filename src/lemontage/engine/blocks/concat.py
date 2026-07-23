@@ -45,7 +45,7 @@ class ConcatBlock(Block):
         files = [it.get("file") or it.get("clip") for it in ordered]
         if not files:
             return BlockResult(outputs={})
-        out = _output_path(params, ctx)
+        out = _output_path(params, ctx, step_id)
         boundary_gaps = _boundary_gaps(ordered)
         transitions = _resolve_transitions(params, len(files), boundary_gaps)
         if transitions is None:
@@ -62,7 +62,7 @@ class ConcatBlock(Block):
         )
 
 
-def _output_path(params: dict[str, Any], ctx: RunContext) -> Path:
+def _output_path(params: dict[str, Any], ctx: RunContext, step_id: str) -> Path:
     template = params.get("output")
     if template:
         rendered = (
@@ -72,7 +72,8 @@ def _output_path(params: dict[str, Any], ctx: RunContext) -> Path:
         )
         out = Path(rendered)
     else:
-        out = ctx.output_dir / f"{ctx.pipeline_name}-reel.mp4"
+        # Keyed on step_id so two `emit` concats never clobber each other's file.
+        out = ctx.output_dir / f"{ctx.pipeline_name}-{step_id}.mp4"
     # A pipeline-supplied path must not escape the output tree (path traversal).
     out = safepath.confine(out, safepath.allowed_roots(ctx.output_dir))
     out.parent.mkdir(parents=True, exist_ok=True)
