@@ -268,11 +268,14 @@ the resulting length (no manual offset). `random` picks `max_clips` random,
 non-overlapping moments (each of a random length in the min/max window) with no
 analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
 `audio` cuts the source to the **rhythm of a music track**: beats are detected
-as RMS onsets jumping above a moving-average threshold (64 ms windows via
-`astats`), and one clip is emitted per beat-to-beat span from `0` to the media
-end — automatically-timed jump cuts. `music:` points at the track (defaults to
-the input's own audio); `min_gap` sets the shortest cut; `max_clips` caps the
-count (raise it to keep every beat); `min/max_duration` do not apply.
+with the librosa onset tracker when the `[analyze]` extra is installed (a coarser
+RMS-onset detector via `astats` is the built-in fallback otherwise), and one clip
+is emitted per beat-to-beat span from `0` to the media end — automatically-timed
+jump cuts. The cadence follows the actual onsets rather than a fixed BPM, so it
+stays locked to the pulse even when the rhythm is irregular. `music:` points at
+the track (defaults to the input's own audio); `min_gap` sets the shortest cut;
+`max_clips` caps the count (raise it to keep every beat); `min/max_duration` do
+not apply.
 
 ```yaml
 - id: beats

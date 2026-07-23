@@ -26,6 +26,7 @@ from __future__ import annotations
 import random
 import re
 import statistics
+from pathlib import Path
 from typing import Any
 
 from .. import ffmpeg
