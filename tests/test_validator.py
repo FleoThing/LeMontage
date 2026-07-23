@@ -216,6 +216,28 @@ def test_export_unknown_fit_rejected():
     assert any("unknown export fit" in e and "zoom" in e for e in errors)
 
 
+def test_export_valid_canvas_and_position_pass():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"][-1] = {"export": {"from": "clip_channel", "canvas": "1080x1920", "position": "top"}}
+    assert validate_doc(d) == []
+
+
+def test_export_bad_canvas_format_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"][-1] = {"export": {"from": "clip_channel", "canvas": "1080by1920"}}
+    errors = validate_doc(d)
+    assert any("export.canvas" in e and "WIDTHxHEIGHT" in e for e in errors)
+
+
+def test_export_unknown_position_rejected():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"][-1] = {
+        "export": {"from": "clip_channel", "canvas": "1080x1920", "position": "corner"}
+    }
+    errors = validate_doc(d)
+    assert any("unknown export position" in e and "corner" in e for e in errors)
+
+
 def test_export_bad_mute_type_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"][-1] = {"export": {"from": "clip_channel", "mute": "yes"}}

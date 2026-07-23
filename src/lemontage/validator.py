@@ -8,6 +8,7 @@ is valid.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -208,6 +209,19 @@ def _check_block_params(
         mute = params.get("mute")
         if mute is not None and not isinstance(mute, (bool, list)):
             errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
+        canvas = params.get("canvas")
+        if canvas is not None and (
+            not isinstance(canvas, str) or not re.fullmatch(r"\d+x\d+", canvas.lower())
+        ):
+            errors.append(
+                f"{label}: export.canvas must be a 'WIDTHxHEIGHT' string (e.g. 1080x1920)"
+            )
+        position = params.get("position")
+        if position is not None and (
+            not isinstance(position, str) or position.lower() not in spec.EXPORT_CANVAS_POSITIONS
+        ):
+            valid = ", ".join(sorted(spec.EXPORT_CANVAS_POSITIONS))
+            errors.append(f"{label}: unknown export position '{position}' (choose from: {valid})")
 
     if block == "still":
         motion = params.get("motion")
