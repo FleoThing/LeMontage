@@ -66,7 +66,7 @@ def test_concat_output_path_rejects_traversal(tmp_path):
 
     c = ctx(tmp_path)
     with pytest.raises(safepath.UnsafePathError):
-        concat_output_path({"output": "/etc/passwd.mp4"}, c)
+        concat_output_path({"output": "/etc/passwd.mp4"}, c, "final")
 
 
 # --- S2: ASS text escaping --------------------------------------------------
