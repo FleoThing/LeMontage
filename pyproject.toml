@@ -21,6 +21,13 @@ engine = [
     "imageio-ffmpeg>=0.4",
     "faster-whisper>=1.0",
 ]
+# Per-shot visual quality scoring for `lemontage analyze --visual` (motion via
+# optical flow, sharpness via Laplacian variance). Opt-in: heavier than the
+# FFmpeg+Whisper core, and only useful when an agent wants to rank shots.
+analyze = [
+    "opencv-python-headless>=4.8",
+    "numpy>=1.24",
+]
 dev = [
     "pre-commit>=4.0",
     "pytest>=8.0",

@@ -88,6 +88,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="skip speech-to-text (faster; omits speech.words)",
     )
+    p_analyze.add_argument(
+        "--visual",
+        action="store_true",
+        help="score per-shot motion + sharpness (needs the [analyze] extra: OpenCV)",
+    )
     p_analyze.add_argument("--model", default="base", help="whisper model size (default: base)")
     p_analyze.add_argument("--lang", default="auto", help="speech language (default: auto)")
 
@@ -115,7 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "init":
         return _cmd_init(args.file, args.force)
     if args.command == "analyze":
-        return _cmd_analyze(args.file, args.output, args.no_transcribe, args.model, args.lang)
+        return _cmd_analyze(
+            args.file, args.output, args.no_transcribe, args.visual, args.model, args.lang
+        )
     if args.command == "run":
         return _cmd_run(args.file, args.var, args.clean, args.json)
     if args.command == "completion":
@@ -136,14 +143,16 @@ def _cmd_validate(file: str) -> int:
 
 
 def _cmd_analyze(
-    file: str, output: str | None, no_transcribe: bool, model: str, lang: str
+    file: str, output: str | None, no_transcribe: bool, visual: bool, model: str, lang: str
 ) -> int:
     import json
 
     from .analyze import analyze_video
 
     try:
-        manifest = analyze_video(file, transcribe=not no_transcribe, model=model, lang=lang)
+        manifest = analyze_video(
+            file, transcribe=not no_transcribe, visual=visual, model=model, lang=lang
+        )
     except Exception as exc:  # noqa: BLE001 - surface ffmpeg/whisper errors to the user
         print(f"✗ {exc}", file=sys.stderr)
         return 1

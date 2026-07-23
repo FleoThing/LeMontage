@@ -14,6 +14,7 @@ lemontage \- declarative YAML pipelines for automated social video creation
 .br
 .B lemontage analyze
 .RB [ \-\-no\-transcribe ]
+.RB [ \-\-visual ]
 .RI [ \-o\ FILE ]
 .I video
 .br
@@ -57,6 +58,8 @@ the media has audio \(em dead\-air spans and word\-level speech timings. It lets
 an AI agent understand the whole video from one cheap read instead of
 screenshotting it frame by frame. \fB\-\-no\-transcribe\fR skips speech\-to\-text
 (faster, omits words); \fB\-\-model\fR and \fB\-\-lang\fR tune Whisper.
+\fB\-\-visual\fR adds per\-shot motion and sharpness scores (0\(en1, 1 = best in
+the video) via OpenCV \(em needs the optional \fB[analyze]\fR extra.
 .TP
 .B validate \fIpipeline.yaml\fR
 Check the pipeline against the v1 spec without running it. Prints each error and

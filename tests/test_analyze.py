@@ -67,3 +67,26 @@ def test_no_audio_omits_speech(monkeypatch):
     m = analyze.analyze_video("v.mp4")
     assert "speech" not in m
     assert all(s["loudness_db"] is None for s in m["shots"])
+
+
+def test_apply_normalized_scales_by_max():
+    shots = [{"id": 1}, {"id": 2}, {"id": 3}]
+    # (sharpness, motion): shot 2 sharpest, shot 3 most motion
+    analyze._apply_normalized(shots, [(100.0, 1.0), (400.0, 2.0), (200.0, 4.0)])
+    assert shots[1]["sharpness"] == 1.0  # 400/400
+    assert shots[0]["sharpness"] == 0.25  # 100/400
+    assert shots[2]["motion"] == 1.0  # 4/4
+    assert shots[0]["motion"] == 0.25  # 1/4
+
+
+def test_visual_flag_attaches_scores(monkeypatch):
+    patch_ffmpeg(monkeypatch)
+    monkeypatch.setattr(analyze, "_transcribe_words", lambda *a: [])
+
+    def fake_visual(_path, shots, samples=4):
+        for s in shots:
+            s["sharpness"], s["motion"] = 0.5, 0.5
+
+    monkeypatch.setattr(analyze, "_visual_scores", fake_visual)
+    m = analyze.analyze_video("v.mp4", transcribe=False, visual=True)
+    assert all("sharpness" in s and "motion" in s for s in m["shots"])

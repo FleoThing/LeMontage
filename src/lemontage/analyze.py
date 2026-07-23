@@ -23,7 +23,12 @@ from .engine.providers.whisper import WhisperSTT
 
 
 def analyze_video(
-    path: str, *, transcribe: bool = True, model: str = "base", lang: str = "auto"
+    path: str,
+    *,
+    transcribe: bool = True,
+    visual: bool = False,
+    model: str = "base",
+    lang: str = "auto",
 ) -> dict:
     """Analyse ``path`` and return the VSO manifest (see module docstring)."""
     path = str(path)
@@ -40,6 +45,8 @@ def analyze_video(
         }
         for i, (start, end) in enumerate(_spans_from_scene_cuts(path, duration))
     ]
+    if visual:
+        _visual_scores(path, shots)
 
     manifest: dict = {
         "duration": round(duration, 3),
@@ -78,6 +85,78 @@ def _dead_air(path: str, duration: float) -> list[list[float]]:
     if cursor < duration:
         gaps.append([round(cursor, 3), round(duration, 3)])
     return gaps
+
+
+def _visual_scores(path: str, shots: list[dict], samples: int = 4) -> None:
+    """Add per-shot ``sharpness`` and ``motion`` (0–1, 1 = best in this video).
+
+    Both are relative *within* the video so an agent can rank shots: sharpness is
+    the mean Laplacian variance of sampled frames (low = soft/blurry/text card),
+    motion the mean dense optical-flow magnitude between them (low = static).
+    Needs the ``[analyze]`` extra (OpenCV + NumPy). Mutates ``shots`` in place.
+
+    ponytail: 4 frames/shot at 320px width — cheap; bump ``samples`` if a shot's
+    single motion peak is being missed."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError as exc:
+        raise RuntimeError(
+            "visual analysis needs the [analyze] extra: pip install 'lemontage[analyze]'"
+        ) from exc
+
+    cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        raise RuntimeError(f"could not open {path} for visual analysis")
+    raw: list[tuple[float, float]] = []
+    try:
+        for shot in shots:
+            frames = _sample_gray(cap, shot["start"], shot["end"], samples, cv2)
+            sharp = (
+                float(np.mean([cv2.Laplacian(f, cv2.CV_64F).var() for f in frames]))
+                if frames
+                else 0.0
+            )
+            raw.append((sharp, _mean_flow(frames, cv2, np)))
+    finally:
+        cap.release()
+    _apply_normalized(shots, raw)
+
+
+def _sample_gray(cap, start: float, end: float, n: int, cv2) -> list:
+    """Grab ``n`` evenly-spaced grayscale frames from ``[start, end]``, ≤320px wide."""
+    frames = []
+    span = end - start
+    for i in range(n):
+        cap.set(cv2.CAP_PROP_POS_MSEC, (start + (i + 0.5) / n * span) * 1000)
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if gray.shape[1] > 320:
+            gray = cv2.resize(gray, (320, round(320 * gray.shape[0] / gray.shape[1])))
+        frames.append(gray)
+    return frames
+
+
+def _mean_flow(frames: list, cv2, np) -> float:
+    """Mean dense optical-flow magnitude across consecutive frames (0 if <2)."""
+    if len(frames) < 2:
+        return 0.0
+    mags = []
+    for a, b in zip(frames, frames[1:], strict=False):
+        flow = cv2.calcOpticalFlowFarneback(a, b, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+        mags.append(float(np.mean(np.hypot(flow[..., 0], flow[..., 1]))))
+    return sum(mags) / len(mags)
+
+
+def _apply_normalized(shots: list[dict], raw: list[tuple[float, float]]) -> None:
+    """Scale raw (sharpness, motion) by the video's max so the best shot = 1.0."""
+    max_s = max((s for s, _ in raw), default=0.0) or 1.0
+    max_m = max((m for _, m in raw), default=0.0) or 1.0
+    for shot, (sharp, motion) in zip(shots, raw, strict=False):
+        shot["sharpness"] = round(sharp / max_s, 3)
+        shot["motion"] = round(motion / max_m, 3)
 
 
 def _transcribe_words(path: str, model: str, lang: str) -> list[dict]:

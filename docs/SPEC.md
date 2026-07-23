@@ -905,10 +905,22 @@ lemontage analyze episode.mp4 --no-transcribe   # skip STT, keep shots + loudnes
 - **dead_air** — silence spans (`silencedetect`), the obvious cut candidates.
 - **words** — Whisper word timings (`{t, d, w}`), omitted with `--no-transcribe`.
 
-Everything is local FFmpeg + faster-whisper — no extra dependency. The agent
-reads the manifest, picks spans, and feeds them back through `detect_clips`
-`method: agent`. Per-shot visual quality (motion, sharpness/blur) is a planned
-addition behind an optional `[analyze]` extra.
+The core is local FFmpeg + faster-whisper — no extra dependency. The agent reads
+the manifest, picks spans, and feeds them back through `detect_clips`
+`method: agent`.
+
+`--visual` adds per-shot **motion** and **sharpness** (each `0`–`1`, `1` = best
+in this video) via OpenCV — the optional `[analyze]` extra
+(`pip install 'lemontage[analyze]'`):
+
+```bash
+lemontage analyze episode.mp4 --visual -o episode.vso.json
+# each shot then also carries: "motion": 0.31, "sharpness": 0.92
+```
+
+- **sharpness** — mean Laplacian variance of sampled frames; a shot far below the
+  others is soft/blurry or a static text card the agent can drop.
+- **motion** — mean dense optical-flow magnitude; low = a frozen/static shot.
 
 ### 13.1 Time values
 
