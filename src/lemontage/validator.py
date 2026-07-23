@@ -238,7 +238,7 @@ def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
     elif not isinstance(source, str):
         errors.append(f"{label}: music.source must be a string path")
 
-    for field in ("start_at", "fade_out"):
+    for field in ("start_at", "delay", "fade_out"):
         value = params.get(field)
         if value is None:
             continue
@@ -247,23 +247,6 @@ def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
                 errors.append(f"{label}: music.{field} must be >= 0")
         except (ValueError, TypeError):
             errors.append(f"{label}: music.{field} must be a time value (e.g. 2s)")
-
-    align = params.get("align")
-    if align is None:
-        return
-    if not isinstance(align, dict):
-        errors.append(f"{label}: music.align must be a mapping with 'drop' and 'to'")
-        return
-    drop = align.get("drop", "auto")
-    if drop != "auto":
-        try:
-            parse_seconds(drop)
-        except (ValueError, TypeError):
-            errors.append(f"{label}: music.align.drop must be 'auto' or a time value")
-    try:
-        parse_seconds(align.get("to", 0))
-    except (ValueError, TypeError):
-        errors.append(f"{label}: music.align.to must be a time value (e.g. 12s)")
 
 
 def _check_concat_transitions(transitions: object, label: str, errors: list[str]) -> None:

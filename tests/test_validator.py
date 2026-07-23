@@ -110,7 +110,7 @@ def test_music_block_accepted():
                 "from": "reel",
                 "source": "track.mp3",
                 "start_at": "0s",
-                "align": {"drop": "auto", "to": "1.5s"},
+                "delay": "1s",
                 "fade_out": "2s",
             }
         },
@@ -125,30 +125,22 @@ def test_music_requires_source():
     assert any("music requires a 'source'" in e for e in errors)
 
 
-def test_music_rejects_bad_times_and_align():
+def test_music_rejects_bad_times():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [
         {
             "music": {
                 "source": "t.mp3",
                 "start_at": "abc",
+                "delay": -1,
                 "fade_out": -1,
-                "align": {"drop": "nope", "to": "xyz"},
             }
         }
     ]
     errors = validate_doc(d)
     assert any("music.start_at" in e for e in errors)
+    assert any("music.delay" in e for e in errors)
     assert any("music.fade_out" in e for e in errors)
-    assert any("music.align.drop" in e for e in errors)
-    assert any("music.align.to" in e for e in errors)
-
-
-def test_music_align_must_be_mapping():
-    d = copy.deepcopy(VALID_PIPELINE)
-    d["steps"] = [{"music": {"source": "t.mp3", "align": "auto"}}]
-    errors = validate_doc(d)
-    assert any("music.align must be a mapping" in e for e in errors)
 
 
 def test_reserved_detect_method_rejected():

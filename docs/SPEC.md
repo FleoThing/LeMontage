@@ -640,12 +640,9 @@ length, optionally faded out, and **mixed with the video's own audio** when it
 has one (video-only reels just get the music). The video stream is copied, not
 re-encoded.
 
-`align` shifts the music so its *drop* lands at a chosen point of the video.
-`drop: auto` finds the drop automatically: the track is decoded to PCM and
-scanned with a windowed RMS (0.5 s windows) for the largest **sustained**
-energy jump — a one-window spike doesn't count. `drop: <time>` sets it
-manually. When `align` is given it overrides `start_at`. A drop that would
-land before the music can start simply delays the music's entry instead.
+`start_at` skips into the track, dropping the song's intro so it opens on a
+later part. `delay` holds the music back so it enters `delay` seconds into the
+video (silence first), then fills the rest. The two are independent and compose.
 
 Single mode (no `from:`) lays the music over the pipeline input (or `input:`).
 
@@ -653,7 +650,8 @@ Single mode (no `from:`) lays the music over the pipeline input (or `input:`).
 - music:
     from: reel            # channel emitted by a concat step
     source: ./track.mp3
-    align: { drop: auto, to: 1s }   # the drop hits 1s into the video
+    start_at: 8s          # open 8s into the track (skip the intro)
+    delay: 2s             # music enters 2s into the video
     fade_out: 2s
 ```
 
@@ -662,8 +660,8 @@ Single mode (no `from:`) lays the music over the pipeline input (or `input:`).
 | `from` | channel | — | Channel holding the finished reel (one clip; run `concat` first). |
 | `input` | path | pipeline input | Source video (single mode). |
 | `source` | path | **required** | Audio file to lay over the video (mp3, wav, …). |
-| `start_at` | time | `0s` | Offset into the music where playback begins (ignored when `align` is set). |
-| `align` | mapping | — | `{drop: auto\|<time>, to: <time>}` — put the music's drop (`auto` = RMS-detected) at video time `to`. |
+| `start_at` | time | `0s` | Offset into the music where playback begins (skip the song's intro). |
+| `delay` | time | `0s` | Hold the music back this many seconds so it enters later over the video. |
 | `fade_out` | time | `0s` | Fade the music out over the last N seconds of the video. |
 | `output` | path template | `<dir>/<name>-music.mp4` | Where to write the result (`{{ name }}` supported). |
 

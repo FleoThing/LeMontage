@@ -5,17 +5,13 @@ takes the reel from the channel and muxes an audio file over it. The music is
 trimmed (or looped) to the video length, optionally faded out, and mixed with
 the video's own audio when it has one.
 
-Alignment: ``align: {drop: auto|<time>, to: <time>}`` shifts the music so its
-*drop* (the big energy hit) lands at a chosen point of the video. ``drop: auto``
-finds the drop with a windowed-RMS scan — the largest sustained energy jump in
-the track — so no manual timing is needed.
+Timing: ``start_at`` skips into the track (drop the song's intro); ``delay``
+holds the music back so it enters later over the video (silence first). The two
+are independent and compose.
 """
 
 from __future__ import annotations
 
-import array
-import math
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -58,11 +54,12 @@ class MusicBlock(Block):
             raise ValueError(f"music: source not found: {source}")
 
         video_dur = ffmpeg.probe_duration(video)
-        offset = _music_offset(params, source)
+        start_at = parse_seconds(params.get("start_at", 0))
+        delay = parse_seconds(params.get("delay", 0))
         fade = parse_seconds(params.get("fade_out", 0))
         keep_source_audio = bool(params.get("mix", True))
         out = _output_path(params, ctx)
-        _mux(video, source, out, video_dur, offset, fade, keep_source_audio)
+        _mux(video, source, out, video_dur, start_at, delay, fade, keep_source_audio)
         result = str(out)
         return BlockResult(
             outputs={"file": result},
@@ -70,44 +67,33 @@ class MusicBlock(Block):
         )
 
 
-def _music_offset(params: dict[str, Any], source: str) -> float:
-    """Seconds into the music where playback starts at video time 0.
-
-    Negative means the music starts *after* the video begins (a delay).
-    ``align`` overrides ``start_at``: the drop time minus the video-side target.
-    """
-    align = params.get("align")
-    if align is None:
-        return parse_seconds(params.get("start_at", 0))
-    if not isinstance(align, dict):
-        raise ValueError("music: 'align' must be a mapping with 'drop' and 'to'")
-    drop = align.get("drop", "auto")
-    drop_at = detect_drop(source) if drop == "auto" else parse_seconds(drop)
-    target = parse_seconds(align.get("to", 0))
-    return drop_at - target
-
-
 def _mux(
     video: str,
     source: str,
     out: Path,
     video_dur: float,
-    offset: float,
+    start_at: float,
+    delay: float,
     fade: float,
     keep_source_audio: bool = True,
 ) -> None:
-    """Overlay the music on the video: trim/loop to length, fade out, mix.
+    """Overlay the music on the video: skip in, hold back, trim/loop, fade, mix.
+
+    ``start_at`` trims that many seconds off the front of the track. ``delay``
+    pads silence in front so the music enters ``delay`` seconds into the video;
+    the music then only has to fill the remaining ``video_dur - delay`` seconds.
 
     ``keep_source_audio=False`` (``mix: false``) ignores the video's own audio
     and makes the music the sole track — the right choice when the clips are
     muted, since amixing their (silent, concat-spliced) tracks otherwise
     stutters the music at every clip join."""
+    play_dur = max(0.0, video_dur - delay)
     chain = []
-    if offset > 0:
-        chain.append(f"atrim=start={offset:.3f},asetpts=PTS-STARTPTS")
-    elif offset < 0:
-        chain.append(f"adelay={int(-offset * 1000)}:all=1")
-    chain.append(f"atrim=duration={video_dur:.3f}")
+    if start_at > 0:
+        chain.append(f"atrim=start={start_at:.3f},asetpts=PTS-STARTPTS")
+    chain.append(f"atrim=duration={play_dur:.3f}")
+    if delay > 0:
+        chain.append(f"adelay={int(delay * 1000)}:all=1")
     if fade > 0:
         chain.append(f"afade=t=out:st={max(video_dur - fade, 0):.3f}:d={fade:.3f}")
     filters = [f"[1:a]{','.join(chain)}[m]"]
@@ -117,8 +103,8 @@ def _mux(
         filters.append("[0:a][m]amix=inputs=2:duration=first:normalize=0[a]")
 
     args = ["-i", str(video)]
-    # Loop the music when it is shorter than the video (after the offset trim).
-    if ffmpeg.probe_duration(source) - max(offset, 0) < video_dur:
+    # Loop the music when it can't fill the video after the start_at trim.
+    if ffmpeg.probe_duration(source) - start_at < play_dur:
         args += ["-stream_loop", "-1"]
     args += ["-i", str(source)]
     args += ["-filter_complex", ";".join(filters)]
@@ -141,58 +127,3 @@ def _output_path(params: dict[str, Any], ctx: RunContext) -> Path:
     out = safepath.confine(out, safepath.allowed_roots(ctx.output_dir))
     out.parent.mkdir(parents=True, exist_ok=True)
     return out
-
-
-# --- drop detection ----------------------------------------------------------
-
-
-def detect_drop(source: str | Path, window: float = 0.5, rate: int = 8000) -> float:
-    """Find the track's drop: the largest sustained RMS energy jump, in seconds."""
-    samples = _decode_pcm(source, rate)
-    n = int(rate * window)
-    rms = [
-        math.sqrt(sum(s * s for s in samples[i : i + n]) / n)
-        for i in range(0, len(samples) - n + 1, n)
-    ]
-    return _drop_window(rms) * window
-
-
-def _drop_window(rms: list[float]) -> int:
-    """Index of the window with the biggest jump vs. what precedes, held ≥3 windows."""
-    if len(rms) < 4:
-        return 0
-    best, best_score = 0, 0.0
-    for i in range(1, len(rms) - 2):
-        before = sum(rms[max(0, i - 4) : i]) / len(rms[max(0, i - 4) : i])
-        sustained = min(rms[i : i + 3])  # must stay loud, not a one-window spike
-        score = sustained / (before + 1.0)
-        if score > best_score:
-            best_score, best = score, i
-    return best
-
-
-def _decode_pcm(source: str | Path, rate: int) -> array.array:
-    """Decode the audio to mono 16-bit PCM samples via ffmpeg."""
-    cmd = [
-        ffmpeg.ffmpeg_bin(),
-        "-v",
-        "error",
-        "-i",
-        str(source),
-        "-ac",
-        "1",
-        "-ar",
-        str(rate),
-        "-f",
-        "s16le",
-        "-",
-    ]
-    proc = subprocess.run(cmd, capture_output=True, stdin=subprocess.DEVNULL)
-    if proc.returncode != 0:
-        raise ffmpeg.FFmpegError(
-            f"ffmpeg failed decoding '{source}': {proc.stderr.decode(errors='replace').strip()}"
-        )
-    raw = proc.stdout
-    samples = array.array("h")
-    samples.frombytes(raw[: len(raw) - len(raw) % 2])
-    return samples

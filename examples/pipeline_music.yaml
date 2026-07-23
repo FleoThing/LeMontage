@@ -1,6 +1,6 @@
 lemontage: "1.0"
 name: music
-description: "Best moments stitched into one reel, with a music track laid over it — the drop lands on the reel's opening"
+description: "Best moments stitched into one reel, with a music track laid over it"
 
 input:
   type: video
@@ -34,13 +34,14 @@ steps:
       duration: 0.5s
       emit: reel
 
-  # 5. Lay the music over the reel. `align.drop: auto` finds the track's drop
-  #    (largest sustained energy jump) and shifts the music so it lands at
-  #    `align.to` in the video. The track is trimmed/looped to the reel length.
+  # 5. Lay the music over the reel. `start_at` opens the track 8s in (skipping
+  #    its intro); `delay` lets the reel breathe for 1s before the music enters.
+  #    The track is trimmed/looped to the reel length and faded out at the end.
   - music:
       from: reel
       source: ./track.mp3
-      align: { drop: auto, to: 1s }
+      start_at: 8s
+      delay: 1s
       fade_out: 2s
       output: "./output/{{ name }}-scored.mp4"
 
