@@ -17,9 +17,11 @@ steps:
       min_duration: 3s
       max_duration: 8s
       emit: a_clips
-  - cut:
+  - id: a-cut
+    cut:
       from: a_clips
-  - export:
+  - id: a-export
+    export:
       from: a_clips
   - id: a-reel
     concat:
@@ -36,9 +38,11 @@ steps:
       min_duration: 2s
       max_duration: 5s
       emit: b_clips
-  - cut:
+  - id: b-cut
+    cut:
       from: b_clips
-  - export:
+  - id: b-export
+    export:
       from: b_clips
   - id: b-reel
     concat:

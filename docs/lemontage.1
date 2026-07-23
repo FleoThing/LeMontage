@@ -137,7 +137,9 @@ Built\-in blocks: \fBstt\fR, \fBdetect_clips\fR, \fBcut\fR,
 music enter later over the video, \fBfade_out\fR, \fBmix\fR).
 Common per\-step fields: \fBid\fR, \fBcache\fR,
 \fBon_failure\fR (\fBabort\fR|\fBskip\fR|\fBretry\fR), \fBretries\fR,
-\fBrequires\fR.
+\fBrequires\fR. Step ids must be unique; an anonymous step defaults its id
+to the block name, so two anonymous steps of the same block need explicit
+distinct \fBid\fR values (validation error otherwise).
 .SS Templating
 Values may reference \fB{{ vars.* }}\fR, \fB{{ input.* }}\fR,
 \fB{{ steps.<id>.* }}\fR and \fB{{ matrix.* }}\fR. References resolve lazily,

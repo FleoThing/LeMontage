@@ -145,7 +145,7 @@ Every step accepts these fields alongside its block-specific params:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `id` | string | block name | Identifier for referencing this step's outputs. Required if two steps use the same block. |
+| `id` | string | block name | Identifier for referencing this step's outputs. Must be unique across steps: two steps resolving to the same id (explicit duplicates, or two anonymous steps of the same block) is a validation error. |
 | `cache` | bool | `true` | Skip the step if its output already exists (checkpoint). |
 | `on_failure` | enum | `abort` | `abort` \| `skip` \| `retry`. |
 | `retries` | int | `0` | Number of retries when `on_failure: retry`. |
