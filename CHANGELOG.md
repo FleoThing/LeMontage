@@ -7,6 +7,44 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-24
+
+### Added
+
+- `lemontage analyze <video>`: distils a video into a compact JSON manifest (a
+  Video State Object) — shots with per-shot loudness, dead-air spans, and word
+  timings — so an AI agent understands the source in one cheap read instead of
+  screenshotting it. `--visual` adds per-shot motion and sharpness scores
+  (OpenCV, behind the optional `[analyze]` extra); `--no-transcribe` skips STT.
+- `music` block: lay a music track over the final reel. `start_at` skips into
+  the track, `delay` holds it back, `fade_out` fades the end, and `mix: false`
+  makes the music the sole audio (drops the source track).
+- `detect_clips` `method: agent` and `lemontage run --json`: the AI-agent loop —
+  read the transcript from `--json`, choose spans, feed them back verbatim.
+- `concat` assembly-level `transition`: one typed crossfade (`fadewhite`,
+  `pixelize`, `smoothleft`, …) at channel-merge boundaries, with an optional
+  absolute `at` offset.
+- `export` `canvas` / `position`: place the rendered frame inside a larger
+  canvas (e.g. a 1080x1080 square centred in a 1080x1920 vertical frame).
+- `overlay` block: burn timed multi-line text — optionally on a full-width
+  band — shown only during a `show.from`/`show.to` window.
+- `AGENTS.md`: a playbook mapping a user's video goal to the features to use.
+
+### Fixed
+
+- Duplicate step ids are now a validation error (two steps resolving to the same
+  id silently overwrote each other's cache).
+- Cache keys now hash a step's params plus its upstream steps' keys, so a param
+  change reruns the step and everything downstream of it.
+- Two `emit` concats with no explicit output no longer collide (default output
+  is keyed on the step id).
+
+### Changed
+
+- Roadmap reframed as a direction statement plus an idea pool; the shipped
+  history now lives here in the CHANGELOG only.
+- The man page is no longer rendered onto the GitHub Pages site.
+
 ## [0.4.0] - 2026-07-18
 
 ### Added
