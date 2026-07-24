@@ -75,9 +75,15 @@ def test_run_rejects_malformed_var(tmp_path, capsys):
 
 
 def test_main_without_subcommand_errors():
-    # The subcommand is required, so argparse exits rather than falling through.
+    # A command is required (no_args_is_help off), so a missing command is a
+    # usage error that exits rather than falling through.
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_version_flag_prints_version(capsys):
+    assert main(["--version"]) == 0
+    assert "lemontage" in capsys.readouterr().out
 
 
 def test_run_executes_pipeline(tmp_path, monkeypatch):
