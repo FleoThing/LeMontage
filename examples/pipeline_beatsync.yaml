@@ -1,0 +1,47 @@
+lemontage: "1.0"
+name: beatsync
+description: "A music montage whose cuts land on the beat"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Read the music track's beats and tile the source into bar-length clips.
+  #    Each clip spans 4 beats (one bar), so every cut in the reel lands on a beat.
+  - id: grid
+    detect_clips:
+      method: beat
+      track: ./track.mp3       # the beat reference (same track laid over below)
+      beats_per_clip: 4        # one cut per bar
+      max_clips: 8
+      emit: shots
+
+  # 2. Cut the beat-aligned segments out of the source, in parallel.
+  - cut:
+      from: shots
+
+  # 3. Vertical export (muted — the music is the only audio).
+  - export:
+      from: shots
+      format: vertical
+      resolution: 1080x1920
+      mute: true
+
+  # 4. Stitch into one reel.
+  - concat:
+      from: shots
+      emit: reel
+
+  # 5. Lay the SAME track over the reel: its beats defined the cuts, so the
+  #    edit stays locked to the music.
+  - music:
+      from: reel
+      source: ./track.mp3
+      mix: false
+      fade_out: 2s
+      output: "./output/{{ name }}.mp4"
+
+output:
+  dir: ./output
+  cleanup: true

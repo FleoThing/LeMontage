@@ -246,8 +246,11 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `agent`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `beat` \| `agent`. |
 | `clips` | list | — | (`agent` only) The boundaries chosen by the AI agent: `[{start, end}, …]`. Used verbatim (clamped to the media); `min/max_duration` and `max_clips` do not apply. |
+| `track` | string | — | (`beat` only) Path to the music file whose beats define the cuts. Requires the `[beat]` extra (librosa). |
+| `beats_per_clip` | int | `4` | (`beat` only) How many beats each clip spans — `4` = one bar (a cut per bar), `1` = a cut on every beat. |
+| `start_at` | duration | `0` | (`beat` only) Ignore beats before this offset; set it to the `music` step's own `start_at` so the grid and the laid-over track agree. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
@@ -265,6 +268,14 @@ sustained reaction are both captured; `min_duration`/`max_duration` only bound
 the resulting length (no manual offset). `random` picks `max_clips` random,
 non-overlapping moments (each of a random length in the min/max window) with no
 analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
+`beat` reads a music `track`'s beats (via librosa's PLP, so it follows tempo
+drift rather than assuming one BPM) and tiles the source into consecutive clips
+each `beats_per_clip` beats long. Because each clip's length is a whole number of
+beats, the cut points of the concatenated reel land **on the beat** — lay the
+same track over it with `music` (matching `start_at`) for a music-synced montage.
+The `beats_per_clip` grouping replaces `min/max_duration` (clamping would desync
+the cuts), and the detected grid is exposed as a `beats` output so `method: agent`
+can pick beat-aligned boundaries itself. Needs `pip install 'lemontage[beat]'`.
 
 **Transcript-aware boundaries.** Pass `words:` (from an earlier `stt` step) to
 make detection transcript-aware: boundaries snap to whole words (no clip starts
@@ -296,8 +307,8 @@ clip's `text`/`words`, since the agent already chose the exact cut points:
 
 **Outputs:** `count`, `timestamps` (list of `{start, end}`), `clips` (the full
 items, incl. `text`/`words` when `words:` was given — readable via `run --json`),
-plus the named channel (each item: `index`, `start`, `end`, and — with `words:` —
-`text`, `words`).
+`beats` (the detected beat grid, `method: beat` only), plus the named channel
+(each item: `index`, `start`, `end`, and — with `words:` — `text`, `words`).
 
 > Out of scope for v1: `method: engagement` (LLM-scored). Reserved keyword.
 
