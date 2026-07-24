@@ -23,6 +23,7 @@ BUILTIN_BLOCKS = frozenset(
         "cut",
         "captions",
         "export",
+        "filter",
         "overlay",
         "concat",
         "speed",
@@ -32,6 +33,11 @@ BUILTIN_BLOCKS = frozenset(
         "music",
     }
 )
+
+# Named looks the `filter` block can apply (see SPEC §6.13). `eq` grades colour
+# separately (brightness/contrast/saturation/gamma).
+FILTER_LOOKS = frozenset({"bw", "vignette", "grain", "sharpen"})
+FILTER_EQ_KEYS = frozenset({"brightness", "contrast", "saturation", "gamma"})
 
 # Channel aggregators that may merge several channels via a list-valued `from`
 # (e.g. `concat: {from: [viral, montage]}`). Mapped blocks read a single channel.

@@ -7,6 +7,14 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- `filter` block: per-clip looks. `look` applies named FFmpeg effects (`bw`,
+  `vignette`, `grain`, `sharpen`) — one name or a list, in order — and `eq`
+  grades colour (`brightness`/`contrast`/`saturation`/`gamma`). Works on the
+  input or maps over a channel of clips. FFmpeg-only, no new dependency. See
+  `examples/pipeline_filter.yaml`.
+
 ## [0.5.0] - 2026-07-24
 
 ### Added

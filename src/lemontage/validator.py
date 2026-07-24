@@ -223,6 +223,9 @@ def _check_block_params(
             valid = ", ".join(sorted(spec.EXPORT_CANVAS_POSITIONS))
             errors.append(f"{label}: unknown export position '{position}' (choose from: {valid})")
 
+    if block == "filter":
+        _check_filter_params(params, label, errors)
+
     if block == "overlay":
         _check_overlay(params, label, errors)
 
@@ -278,6 +281,32 @@ def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
                 errors.append(f"{label}: music.{field} must be >= 0")
         except (ValueError, TypeError):
             errors.append(f"{label}: music.{field} must be a time value (e.g. 2s)")
+
+
+def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
+    look = params.get("look")
+    names = look if isinstance(look, list) else ([look] if isinstance(look, str) else [])
+    if look is not None and not names:
+        errors.append(f"{label}: filter.look must be a name or a list of names")
+    for name in names:
+        if not isinstance(name, str) or name not in spec.FILTER_LOOKS:
+            valid = ", ".join(sorted(spec.FILTER_LOOKS))
+            errors.append(f"{label}: unknown filter look '{name}' (choose from: {valid})")
+
+    eq = params.get("eq")
+    if eq is not None:
+        if not isinstance(eq, dict):
+            errors.append(f"{label}: filter.eq must be a mapping (brightness/contrast/…)")
+        else:
+            for key, value in eq.items():
+                if key not in spec.FILTER_EQ_KEYS:
+                    valid = ", ".join(sorted(spec.FILTER_EQ_KEYS))
+                    errors.append(f"{label}: unknown filter.eq key '{key}' (choose from: {valid})")
+                elif isinstance(value, bool) or not isinstance(value, (int, float)):
+                    errors.append(f"{label}: filter.eq.{key} must be a number")
+
+    if look is None and eq is None:
+        errors.append(f"{label}: filter needs a 'look' and/or an 'eq'")
 
 
 def _check_overlay(params: dict, label: str, errors: list[str]) -> None:

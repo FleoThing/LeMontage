@@ -8,6 +8,7 @@ from .concat import ConcatBlock
 from .cut import CutBlock
 from .detect_clips import DetectClipsBlock
 from .export import ExportBlock
+from .filter import FilterBlock
 from .music import MusicBlock
 from .overlay import OverlayBlock
 from .reverse import ReverseBlock
@@ -25,6 +26,7 @@ REGISTRY: dict[str, Block] = {
         CutBlock(),
         CaptionsBlock(),
         ExportBlock(),
+        FilterBlock(),
         OverlayBlock(),
         ConcatBlock(),
         SpeedBlock(),
