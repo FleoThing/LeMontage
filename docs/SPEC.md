@@ -270,12 +270,15 @@ the resulting length (no manual offset). `random` picks `max_clips` random,
 non-overlapping moments (each of a random length in the min/max window) with no
 analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
 `beat` reads a music `track`'s beats (via librosa's PLP, so it follows tempo
-drift rather than assuming one BPM) and tiles the source into consecutive clips
-each `beats_per_clip` beats long. Because each clip's length is a whole number of
-beats, the cut points of the concatenated reel land **on the beat** — lay the
-same track over it with `music` (matching `start_at`) for a music-synced montage.
-The `beats_per_clip` grouping replaces `min/max_duration` (clamping would desync
-the cuts), and the detected grid is exposed as a `beats` output so `method: agent`
+drift rather than assuming one BPM) and builds a **montage**: each clip lasts
+`beats_per_clip` beats' worth of time (so the concatenated reel's cut points land
+**on the beat**), and each clip is drawn from a *different, spread-out* moment of
+the source — so every beat is a **visible cut to new footage**, not the same shot
+replayed. (Taking consecutive segments would just re-play the source with no
+visible cut.) Lay the same track over it with `music` (matching `start_at`) for a
+music-synced montage. The `beats_per_clip` grouping replaces `min/max_duration`
+(clamping would desync the cuts); `source_start` skips an intro handled by another
+channel; and the detected grid is exposed as a `beats` output so `method: agent`
 can pick beat-aligned boundaries itself. Needs `pip install 'lemontage[beat]'`.
 
 **Transcript-aware boundaries.** Pass `words:` (from an earlier `stt` step) to

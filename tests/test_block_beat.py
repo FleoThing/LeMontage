@@ -14,31 +14,34 @@ def ctx(tmp_path):
 
 
 def test_beat_clips_cuts_land_on_beats():
-    """Cumulative clip ends must equal the grouped beat times, so a concatenated
-    reel cuts on the beat."""
+    """Clip durations follow the grouped beat spacing (so the reel cuts on the
+    beat), and clips are drawn from spread-out, distinct source positions (so each
+    cut is a visible jump, not continuous footage)."""
     beats = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
-    clips = _beat_clips(beats, total=10.0, beats_per_clip=2, max_clips=5)
-    assert clips == [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)]
-    ends = [round(end, 3) for _, end in clips]
-    assert ends == beats[2:7:2]  # 1.0, 2.0, 3.0 — every 2nd beat
+    clips = _beat_clips(beats, total=30.0, beats_per_clip=2, max_clips=5)
+    durations = [round(e - s, 3) for s, e in clips]
+    assert durations == [1.0, 1.0, 1.0]  # every 2 beats = 1.0s → beat-locked rhythm
+    starts = [s for s, _ in clips]
+    assert starts == sorted(starts) and len(set(starts)) == len(starts)  # spread, distinct
+    assert starts[1] - starts[0] > 1.0  # each clip jumps further than its own length
 
 
 def test_beat_clips_start_at_source_offset():
-    """source_start walks the beat tiling forward past an intro handled elsewhere."""
+    """source_start starts the montage past an intro handled by another channel."""
     beats = [0.0, 1.0, 2.0, 3.0, 4.0]
     clips = _beat_clips(beats, total=100.0, beats_per_clip=1, max_clips=5, source_start=8.0)
-    assert clips[0][0] == 8.0  # first beat clip begins at the offset, not 0
+    assert clips[0][0] == 8.0  # first clip begins at the offset, not 0
+    assert all(s >= 8.0 for s, _ in clips)  # nothing drawn from before the intro
     assert [round(e - s, 3) for s, e in clips] == [1.0, 1.0, 1.0, 1.0]  # beat-spaced
 
 
-def test_beat_clips_stops_at_source_end_and_max():
+def test_beat_clips_caps_at_max_clips():
     beats = [i * 0.5 for i in range(40)]
-    assert len(_beat_clips(beats, total=1.2, beats_per_clip=1, max_clips=99)) <= 3  # source-bound
-    assert len(_beat_clips(beats, total=999.0, beats_per_clip=1, max_clips=4)) == 4  # cap
+    assert len(_beat_clips(beats, total=999.0, beats_per_clip=1, max_clips=4)) == 4
 
 
 def test_beat_method_emits_beat_aligned_channel(tmp_path, monkeypatch):
-    monkeypatch.setattr(ffmpeg, "probe_duration", lambda p: 10.0)
+    monkeypatch.setattr(ffmpeg, "probe_duration", lambda p: 30.0)
     monkeypatch.setattr(
         detect_clips, "_beat_times", lambda track, start_at: [0.0, 1.0, 2.0, 3.0, 4.0]
     )
@@ -49,7 +52,10 @@ def test_beat_method_emits_beat_aligned_channel(tmp_path, monkeypatch):
         ctx(tmp_path),
         "grid",
     )
-    assert [it["end"] for it in res.channel_items] == [1.0, 2.0, 3.0, 4.0]
+    durations = [round(it["end"] - it["start"], 3) for it in res.channel_items]
+    assert durations == [1.0, 1.0, 1.0, 1.0]  # beat-locked cut rhythm
+    starts = [it["start"] for it in res.channel_items]
+    assert len(set(starts)) == len(starts)  # distinct source moments → visible cuts
     assert res.outputs["beats"] == [0.0, 1.0, 2.0, 3.0, 4.0]  # grid exposed to the agent loop
 
 

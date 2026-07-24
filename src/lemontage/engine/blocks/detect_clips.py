@@ -165,27 +165,35 @@ def _beat_clips(
     max_clips: int,
     source_start: float = 0.0,
 ) -> list[tuple[float, float]]:
-    """Tile the source into consecutive clips whose lengths follow the beat grid.
+    """Beat-driven montage clips: cut *rhythm* follows the beats, cut *content*
+    jumps around the source so every beat is a visible change of shot.
 
-    Each clip spans ``beats_per_clip`` beats' worth of time (a bar, by default 4),
-    walked forward through the source from ``source_start`` (0 by default; set it
-    to skip an intro handled by another channel). Because clip *i*'s length equals
-    the gap between beat ``i*k`` and ``(i+1)*k``, the cumulative cut points of the
-    concatenated reel land exactly on the beats — no min/max clamp, which would
-    desync the cuts. Stops at the source end or ``max_clips``.
+    Two independent things:
+
+    * **Length** — clip *i* lasts ``beats_per_clip`` beats' worth of time (a bar,
+      by default 4). The cumulative lengths equal the beat grid, so the
+      concatenated reel's cut points land on the beats (no min/max clamp, which
+      would desync them).
+    * **Position** — clip *i* is drawn from a *different, spread-out* part of the
+      source (``[source_start, total]`` split into equal slots). Taking
+      consecutive segments instead would replay the footage continuously and show
+      no cut at all on the beat — the whole point is that each beat jumps to a new
+      moment. Stops at ``max_clips``.
     """
     k = max(1, beats_per_clip)
     marks = beats[::k]
     durations = [b - a for a, b in zip(marks, marks[1:], strict=False) if b > a]
+    durations = durations[:max_clips]
+    if not durations:
+        return []
+    span = max(0.0, total - source_start)
+    slot = span / len(durations)  # each clip starts in its own slice of the source
     clips: list[tuple[float, float]] = []
-    cursor = source_start
-    for d in durations:
-        end = min(cursor + d, total)
-        if end - cursor >= 0.1:  # drop a sub-frame tail at the very end
-            clips.append((cursor, end))
-        cursor = end
-        if cursor >= total or len(clips) >= max_clips:
-            break
+    for i, d in enumerate(durations):
+        start = source_start + i * slot
+        end = min(start + d, total)
+        if end - start >= 0.1:  # skip a degenerate tail at the very end
+            clips.append((start, end))
     return clips
 
 
