@@ -1,0 +1,41 @@
+lemontage: "1.0"
+name: overlay
+description: "Burn a two-line title on a white band, visible only for the first 11 seconds"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Pick the strongest moment
+  - id: moments
+    detect_clips:
+      method: loudness
+      min_duration: 8s
+      max_duration: 15s
+      max_clips: 1
+      emit: clips
+
+  # 2. Cut it out of the source
+  - cut:
+      from: clips
+
+  # 3. Title on a full-width white band at the top, shown for the first 11s
+  #    of the clip, then it disappears. Omit `show` to keep it for the whole
+  #    clip; omit `band` for text without a band.
+  - overlay:
+      from: clips
+      text: "line one\nline two"
+      color: black
+      band: {color: white, height: 210, position: top}
+      show: {from: 0, to: 11s}
+
+  # 4. Vertical export
+  - export:
+      from: clips
+      format: vertical
+      fps: 30
+      output: "./output/{{ name }}-{{ index }}.mp4"
+
+output:
+  dir: ./output
