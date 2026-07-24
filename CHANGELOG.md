@@ -7,6 +7,16 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- `export` `smart_crop`: subject-following vertical reframe. Instead of black
+  bars (`contain`) or a fixed centre crop (`cover`), the crop window slides to
+  keep the main face in shot (mediapipe, smoothed trajectory driven via FFmpeg
+  `sendcmd`) — real landscape → 9:16 TikTok framing. Behind the optional
+  `[smartcrop]` extra (mediapipe + OpenCV); falls back to a centre crop when the
+  source is not wider than the target or no face is found. See
+  `examples/pipeline_smartcrop.yaml`.
+
 ## [0.5.0] - 2026-07-24
 
 ### Added
