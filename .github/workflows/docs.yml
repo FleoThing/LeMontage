@@ -38,7 +38,6 @@ jobs:
 
           nav='<nav class="site">
             <a href="index.html">Home</a>
-            <a href="man.html">Manual (man)</a>
             <a href="spec.html">YAML Spec</a>
             <a href="install.html">Install</a>
             <a href="architecture.html">Architecture</a>
@@ -64,12 +63,6 @@ jobs:
           render_md docs/ARCHITECTURE.md architecture.html "LeMontage — Architecture"
           render_md docs/ROADMAP.md      roadmap.html      "LeMontage — Roadmap"
           render_md CHANGELOG.md         changelog.html    "LeMontage — Changelog"
-
-          # The man page, for everyone without `man` (Windows users): same
-          # content as `man lemontage`, rendered from docs/lemontage.1.
-          pandoc -f man docs/lemontage.1 --standalone --css=style.css \
-            --metadata title="lemontage(1) — manual" \
-            --include-before-body=/tmp/nav.html -o _site/man.html
 
       - uses: actions/upload-pages-artifact@v5
         with:
