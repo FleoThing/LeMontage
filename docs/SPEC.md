@@ -251,6 +251,7 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 | `track` | string | — | (`beat` only) Path to the music file whose beats define the cuts. Requires the `[beat]` extra (librosa). |
 | `beats_per_clip` | int | `4` | (`beat` only) How many beats each clip spans — `4` = one bar (a cut per bar), `1` = a cut on every beat. |
 | `start_at` | duration | `0` | (`beat` only) Ignore beats before this offset; set it to the `music` step's own `start_at` so the grid and the laid-over track agree. |
+| `source_start` | duration | `0` | (`beat` only) Where in the **source video** the beat clips start walking forward — set it past an intro handled by another channel (e.g. `source_start: 8` after a fixed 0–8s intro clip). |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |

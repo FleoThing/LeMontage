@@ -23,6 +23,14 @@ def test_beat_clips_cuts_land_on_beats():
     assert ends == beats[2:7:2]  # 1.0, 2.0, 3.0 — every 2nd beat
 
 
+def test_beat_clips_start_at_source_offset():
+    """source_start walks the beat tiling forward past an intro handled elsewhere."""
+    beats = [0.0, 1.0, 2.0, 3.0, 4.0]
+    clips = _beat_clips(beats, total=100.0, beats_per_clip=1, max_clips=5, source_start=8.0)
+    assert clips[0][0] == 8.0  # first beat clip begins at the offset, not 0
+    assert [round(e - s, 3) for s, e in clips] == [1.0, 1.0, 1.0, 1.0]  # beat-spaced
+
+
 def test_beat_clips_stops_at_source_end_and_max():
     beats = [i * 0.5 for i in range(40)]
     assert len(_beat_clips(beats, total=1.2, beats_per_clip=1, max_clips=99)) <= 3  # source-bound

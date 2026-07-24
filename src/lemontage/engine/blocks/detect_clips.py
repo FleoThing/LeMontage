@@ -64,7 +64,13 @@ class DetectClipsBlock(Block):
             clips = _agent_clips(params.get("clips"), total)
         elif method == "beat":
             beats = _beat_times(params.get("track"), parse_seconds(params.get("start_at", 0)))
-            clips = _beat_clips(beats, total, int(params.get("beats_per_clip", 4)), max_clips)
+            clips = _beat_clips(
+                beats,
+                total,
+                int(params.get("beats_per_clip", 4)),
+                max_clips,
+                parse_seconds(params.get("source_start", 0)),
+            )
         elif method == "loudness":
             timeline = _loudness_timeline(media)
             clips = _select_loud_clips(timeline, total, min_dur, max_dur, max_clips)
@@ -153,13 +159,18 @@ def _beat_times(track: Any, start_at: float) -> list[float]:
 
 
 def _beat_clips(
-    beats: list[float], total: float, beats_per_clip: int, max_clips: int
+    beats: list[float],
+    total: float,
+    beats_per_clip: int,
+    max_clips: int,
+    source_start: float = 0.0,
 ) -> list[tuple[float, float]]:
     """Tile the source into consecutive clips whose lengths follow the beat grid.
 
     Each clip spans ``beats_per_clip`` beats' worth of time (a bar, by default 4),
-    walked forward through the source from 0. Because clip *i*'s length equals the
-    gap between beat ``i*k`` and ``(i+1)*k``, the cumulative cut points of the
+    walked forward through the source from ``source_start`` (0 by default; set it
+    to skip an intro handled by another channel). Because clip *i*'s length equals
+    the gap between beat ``i*k`` and ``(i+1)*k``, the cumulative cut points of the
     concatenated reel land exactly on the beats — no min/max clamp, which would
     desync the cuts. Stops at the source end or ``max_clips``.
     """
@@ -167,7 +178,7 @@ def _beat_clips(
     marks = beats[::k]
     durations = [b - a for a, b in zip(marks, marks[1:], strict=False) if b > a]
     clips: list[tuple[float, float]] = []
-    cursor = 0.0
+    cursor = source_start
     for d in durations:
         end = min(cursor + d, total)
         if end - cursor >= 0.1:  # drop a sub-frame tail at the very end
