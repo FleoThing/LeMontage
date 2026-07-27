@@ -47,9 +47,7 @@ def test_export_smart_crop_builds_subject_chain(tmp_path, monkeypatch):
         "crop_filters",
         lambda m, w, h, c: ["scale=3414:1920", "sendcmd=f=x", "crop=1080:1920:100:0"],
     )
-    ExportBlock().execute(
-        {"smart_crop": True, "resolution": "1080x1920"}, ctx(tmp_path), "export"
-    )
+    ExportBlock().execute({"smart_crop": True, "resolution": "1080x1920"}, ctx(tmp_path), "export")
     vf = args["a"][args["a"].index("-vf") + 1]
     assert "sendcmd=f=x" in vf and "crop=1080:1920:100:0" in vf and vf.endswith("fps=30")
 

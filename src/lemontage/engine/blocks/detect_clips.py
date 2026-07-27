@@ -1,6 +1,6 @@
 """``detect_clips`` — find candidate clips and emit them as a channel (SPEC §6.3).
 
-Four local methods:
+Local methods:
 
 * ``silence``      — split on silence (``silencedetect``), keep the spoken spans.
 * ``scene_change`` — split on visual scene cuts (``select='gt(scene,…)'``).
@@ -9,6 +9,9 @@ Four local methods:
   (crowd roar + commentator excitement).
 * ``random``       — pick random, non-overlapping moments (no analysis); handy
   for a quick montage or B-roll. A ``seed`` makes it reproducible.
+* ``beat``         — tile the source into segments whose boundaries land on a
+  music track's beats (``librosa``, ``[beat]`` extra), so a concatenated reel
+  cuts on the beat. See ``_beat_times`` / ``_beat_clips``.
 
 ``silence`` and ``scene_change`` then trim/split the spans to the
 ``[min_duration, max_duration]`` window and cap at ``max_clips``; ``loudness``
@@ -20,6 +23,7 @@ from __future__ import annotations
 import random
 import re
 import statistics
+from pathlib import Path
 from typing import Any
 
 from .. import ffmpeg
@@ -55,8 +59,18 @@ class DetectClipsBlock(Block):
         max_clips = int(params.get("max_clips", 5))
 
         total = ffmpeg.probe_duration(media)
+        beats: list[float] = []
         if method == "agent":
             clips = _agent_clips(params.get("clips"), total)
+        elif method == "beat":
+            beats = _beat_times(params.get("track"), parse_seconds(params.get("start_at", 0)))
+            clips = _beat_clips(
+                beats,
+                total,
+                int(params.get("beats_per_clip", 4)),
+                max_clips,
+                parse_seconds(params.get("source_start", 0)),
+            )
         elif method == "loudness":
             timeline = _loudness_timeline(media)
             clips = _select_loud_clips(timeline, total, min_dur, max_dur, max_clips)
@@ -73,24 +87,27 @@ class DetectClipsBlock(Block):
             raise ValueError(f"detect_clips: unsupported method '{method}'")
 
         words = params.get("words") or []
-        # In agent mode the boundaries are the agent's decision — attach the
-        # transcript for context but never snap them. For detected methods,
-        # snapping trims machine-guessed boundaries to whole words.
-        snap = method != "agent"
+        # In agent/beat mode the boundaries are deliberate (the agent's picks, or
+        # a musical beat grid) — attach the transcript for context but never snap
+        # them. For detected methods, snapping trims machine-guessed boundaries to
+        # whole words.
+        snap = method not in ("agent", "beat")
         items = [
             _clip_item(i, start, end, words, snap=snap) for i, (start, end) in enumerate(clips)
         ]
 
-        return BlockResult(
-            outputs={
-                "count": len(items),
-                "timestamps": [{"start": it["start"], "end": it["end"]} for it in items],
-                # Full items (with per-clip `text`/`words` when a transcript was
-                # given) so an AI agent reading `--json` can refine boundaries.
-                "clips": items,
-            },
-            channel_items=items,
-        )
+        outputs: dict[str, Any] = {
+            "count": len(items),
+            "timestamps": [{"start": it["start"], "end": it["end"]} for it in items],
+            # Full items (with per-clip `text`/`words` when a transcript was
+            # given) so an AI agent reading `--json` can refine boundaries.
+            "clips": items,
+        }
+        # Expose the raw beat grid so `method: agent` can pick beat-aligned
+        # boundaries itself (roadmap: beat-sync exposed to the agent loop).
+        if beats:
+            outputs["beats"] = [round(t, 3) for t in beats]
+        return BlockResult(outputs=outputs, channel_items=items)
 
 
 def _agent_clips(clips: Any, total: float) -> list[tuple[float, float]]:
@@ -110,6 +127,73 @@ def _agent_clips(clips: Any, total: float) -> list[tuple[float, float]]:
         if end > start:
             out.append((start, end))
     return out
+
+
+def _beat_times(track: Any, start_at: float) -> list[float]:
+    """Detect a music track's beat times (seconds) via ``librosa``.
+
+    Uses PLP (predominant local pulse) rather than a single global BPM, so the
+    grid follows tempo drift (accelerando, live drums) instead of drifting off a
+    fixed grid — the whole point of beat-sync on real music. ``start_at`` drops
+    beats before that offset (align with the ``music`` block's own ``start_at``).
+    """
+    if not isinstance(track, str) or not track:
+        raise ValueError("detect_clips: method 'beat' requires a 'track' (path to a music file)")
+    if not Path(track).exists():
+        raise ValueError(f"detect_clips: beat track not found: {track}")
+    try:
+        import librosa
+        import numpy as np
+    except ImportError as exc:  # pragma: no cover - exercised only without the extra
+        raise ValueError(
+            "detect_clips: method 'beat' needs librosa — install with pip install 'lemontage[beat]'"
+        ) from exc
+
+    y, sr = librosa.load(track, sr=None, mono=True)
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    pulse = librosa.beat.plp(onset_envelope=onset_env, sr=sr)
+    beat_frames = np.flatnonzero(librosa.util.localmax(pulse))
+    times = librosa.frames_to_time(beat_frames, sr=sr)
+    return [float(t) for t in times if t >= start_at]
+
+
+def _beat_clips(
+    beats: list[float],
+    total: float,
+    beats_per_clip: int,
+    max_clips: int,
+    source_start: float = 0.0,
+) -> list[tuple[float, float]]:
+    """Beat-driven montage clips: cut *rhythm* follows the beats, cut *content*
+    jumps around the source so every beat is a visible change of shot.
+
+    Two independent things:
+
+    * **Length** — clip *i* lasts ``beats_per_clip`` beats' worth of time (a bar,
+      by default 4). The cumulative lengths equal the beat grid, so the
+      concatenated reel's cut points land on the beats (no min/max clamp, which
+      would desync them).
+    * **Position** — clip *i* is drawn from a *different, spread-out* part of the
+      source (``[source_start, total]`` split into equal slots). Taking
+      consecutive segments instead would replay the footage continuously and show
+      no cut at all on the beat — the whole point is that each beat jumps to a new
+      moment. Stops at ``max_clips``.
+    """
+    k = max(1, beats_per_clip)
+    marks = beats[::k]
+    durations = [b - a for a, b in zip(marks, marks[1:], strict=False) if b > a]
+    durations = durations[:max_clips]
+    if not durations:
+        return []
+    span = max(0.0, total - source_start)
+    slot = span / len(durations)  # each clip starts in its own slice of the source
+    clips: list[tuple[float, float]] = []
+    for i, d in enumerate(durations):
+        start = source_start + i * slot
+        end = min(start + d, total)
+        if end - start >= 0.1:  # skip a degenerate tail at the very end
+            clips.append((start, end))
+    return clips
 
 
 def _clip_item(

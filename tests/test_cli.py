@@ -75,9 +75,15 @@ def test_run_rejects_malformed_var(tmp_path, capsys):
 
 
 def test_main_without_subcommand_errors():
-    # The subcommand is required, so argparse exits rather than falling through.
+    # A command is required (no_args_is_help off), so a missing command is a
+    # usage error that exits rather than falling through.
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_version_flag_prints_version(capsys):
+    assert main(["--version"]) == 0
+    assert "lemontage" in capsys.readouterr().out
 
 
 def test_run_executes_pipeline(tmp_path, monkeypatch):
@@ -231,3 +237,11 @@ def test_output_cleanup_flag_in_yaml_removes_temp(tmp_path, monkeypatch):
     monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
     assert main(["run", str(target)]) == 0  # no --clean flag
     assert not (tmp_path / ".lemontage").exists()
+
+
+def test_theme_resolves_every_marker_style():
+    """Console.print(style=...) needs each marker style to be a whole theme key."""
+    from lemontage.cli import _MARKER_STYLES, err
+
+    for marker, style in _MARKER_STYLES.items():
+        assert err.get_style(style), marker

@@ -1,13 +1,57 @@
-"""LeMontage command-line interface: ``run``, ``validate``, ``init`` and ``completion``."""
+"""LeMontage command-line interface: ``run``, ``analyze``, ``validate`` and ``init``.
+
+Built on [Typer](https://typer.tiangolo.com) (typed sub-commands, ``--help``,
+native shell completion via ``--install-completion``) with
+[Rich](https://github.com/Textualize/rich) for coloured terminal output. The
+``main(argv)`` wrapper keeps returning an exit code so the tests (and any
+embedder) can call it directly; machine-readable output (``run --json``,
+``analyze`` to stdout) stays plain on **stdout** while status goes to **stderr**.
+"""
 
 from __future__ import annotations
 
-import argparse
-import sys
 from pathlib import Path
+
+import typer
+from rich.console import Console
+from rich.theme import Theme
+
+# Typer 0.27 vendors its own click (``typer._click``) and dropped the dependency
+# on the real one. Importing the pip-installed ``click`` would hand us a *different*
+# class tree, so the ``except`` clauses below would silently stop matching what
+# Typer raises — take the exceptions from whichever click Typer is actually using.
+try:  # typer >= 0.27
+    from typer._click.exceptions import Abort, UsageError
+except ImportError:  # typer <= 0.26, on the real click
+    from click.exceptions import Abort, UsageError
 
 from . import __version__
 from .validator import validate_doc, validate_file
+
+# The docs-site palette (docs/site/style.css, dark scheme — terminals are dark)
+# so the CLI and docs-lemontage.fleothing.com read as one product. Those six CSS
+# vars carry no success/warning/error hue: `warn`/`error` are the Primer dark
+# semantics the rest of the palette follows, `success` and `done` are picked.
+# The .bold/.dim variants exist because Console.print(style=...) — unlike markup
+# — resolves a theme name only as a whole key, never as "bold <name>".
+_ACCENT = "#58a6ff"  # --accent
+_ERROR = "#f85149"
+THEME = Theme(
+    {
+        "accent": _ACCENT,
+        "accent.bold": f"bold {_ACCENT}",
+        "accent.dim": f"dim {_ACCENT}",
+        "muted": "#8b949e",  # --muted
+        "success": "#9aa9ff",
+        "done": "#744197",  # the final "pipeline done" line only
+        "warn": "#d29922",
+        "error": _ERROR,
+        "error.bold": f"bold {_ERROR}",
+    }
+)
+
+# Status/diagnostics on stderr (so stdout stays clean for --json); Rich colours.
+err = Console(stderr=True, theme=THEME)
 
 STARTER_PIPELINE = """\
 lemontage: "1.0"
@@ -46,99 +90,107 @@ output:
   dir: ./output
 """
 
+app = typer.Typer(
+    help="LeMontage — pipeline-first clips, reels, TikToks and shorts.",
+    add_completion=True,
+    no_args_is_help=False,  # no command → a usage error (exit 2), like before
+)
 
-def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser. Shared by main() and the completion generator."""
-    parser = argparse.ArgumentParser(prog="lemontage", description=__doc__)
-    parser.add_argument("--version", action="version", version=f"lemontage {__version__}")
-    sub = parser.add_subparsers(dest="command", required=True)
 
-    p_run = sub.add_parser("run", help="run a pipeline")
-    p_run.add_argument("file", help="pipeline YAML file")
-    p_run.add_argument(
-        "--var",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        help="override a value from the 'vars' block (repeatable)",
-    )
-    p_run.add_argument(
-        "--clean",
-        action="store_true",
-        help="delete intermediate/temp files (output/.lemontage) after a successful run",
-    )
-    p_run.add_argument(
-        "--json",
-        action="store_true",
-        help="print every step's outputs (e.g. the stt transcript) as JSON on stdout, "
-        "so an AI agent can read them and choose clips",
-    )
+def _version(value: bool) -> None:
+    if value:
+        print(f"lemontage {__version__}")
+        raise typer.Exit(0)
 
-    p_analyze = sub.add_parser(
-        "analyze",
-        help="analyze a video into a compact JSON manifest (VSO) an AI agent reads "
-        "instead of screenshotting the video frame by frame",
-    )
-    p_analyze.add_argument("file", help="video file to analyze")
-    p_analyze.add_argument(
-        "-o", "--output", help="write the manifest here (default: stdout)", metavar="FILE"
-    )
-    p_analyze.add_argument(
-        "--no-transcribe",
-        action="store_true",
-        help="skip speech-to-text (faster; omits speech.words)",
-    )
-    p_analyze.add_argument(
-        "--visual",
-        action="store_true",
-        help="score per-shot motion + sharpness (needs the [analyze] extra: OpenCV)",
-    )
-    p_analyze.add_argument("--model", default="base", help="whisper model size (default: base)")
-    p_analyze.add_argument("--lang", default="auto", help="speech language (default: auto)")
 
-    p_validate = sub.add_parser("validate", help="validate a pipeline without running it")
-    p_validate.add_argument("file", help="pipeline YAML file")
+@app.callback()
+def _root(
+    version: bool = typer.Option(
+        False, "--version", callback=_version, is_eager=True, help="show the version and exit"
+    ),
+) -> None:
+    """LeMontage command-line interface."""
 
-    p_init = sub.add_parser("init", help="write a starter pipeline file")
-    p_init.add_argument("file", nargs="?", default="pipeline.yaml", help="output path")
-    p_init.add_argument("--force", action="store_true", help="overwrite if the file exists")
 
-    p_completion = sub.add_parser(
-        "completion", help="print a shell completion script (bash, zsh or fish)"
-    )
-    p_completion.add_argument("shell", choices=("bash", "zsh", "fish"), help="target shell")
+@app.command()
+def run(
+    file: str = typer.Argument(..., help="pipeline YAML file"),
+    var: list[str] = typer.Option(
+        [], "--var", metavar="KEY=VALUE", help="override a value from the 'vars' block (repeatable)"
+    ),
+    clean: bool = typer.Option(
+        False, "--clean", help="delete intermediate/temp files after a successful run"
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="print every step's outputs as JSON on stdout (for an AI agent)"
+    ),
+) -> None:
+    """Run a pipeline."""
+    raise typer.Exit(_cmd_run(file, var, clean, json_output))
 
-    return parser
+
+@app.command()
+def analyze(
+    file: str = typer.Argument(..., help="video file to analyze"),
+    output: str | None = typer.Option(
+        None, "-o", "--output", metavar="FILE", help="write the manifest here (default: stdout)"
+    ),
+    no_transcribe: bool = typer.Option(False, "--no-transcribe", help="skip speech-to-text"),
+    visual: bool = typer.Option(
+        False, "--visual", help="score per-shot motion + sharpness (needs the [analyze] extra)"
+    ),
+    model: str = typer.Option("base", help="whisper model size"),
+    lang: str = typer.Option("auto", help="speech language"),
+) -> None:
+    """Analyze a video into a compact JSON manifest (VSO) an AI agent reads."""
+    raise typer.Exit(_cmd_analyze(file, output, no_transcribe, visual, model, lang))
+
+
+@app.command()
+def validate(file: str = typer.Argument(..., help="pipeline YAML file")) -> None:
+    """Validate a pipeline without running it."""
+    raise typer.Exit(_cmd_validate(file))
+
+
+@app.command()
+def init(
+    file: str = typer.Argument("pipeline.yaml", help="output path"),
+    force: bool = typer.Option(False, "--force", help="overwrite if the file exists"),
+) -> None:
+    """Write a starter pipeline file."""
+    raise typer.Exit(_cmd_init(file, force))
+
+
+# A Click command so main() can invoke the app programmatically and read the
+# exit code (Typer's app() would sys.exit); no_args_is_help off → "Missing
+# command" is a usage error, preserving the pre-Typer behaviour.
+_command = typer.main.get_command(app)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
-    if args.command == "validate":
-        return _cmd_validate(args.file)
-    if args.command == "init":
-        return _cmd_init(args.file, args.force)
-    if args.command == "analyze":
-        return _cmd_analyze(
-            args.file, args.output, args.no_transcribe, args.visual, args.model, args.lang
-        )
-    if args.command == "run":
-        return _cmd_run(args.file, args.var, args.clean, args.json)
-    if args.command == "completion":
-        return _cmd_completion(args.shell)
-    parser.print_help()
-    return 1
+    # standalone_mode=False makes Click *return* a command's exit code (from a
+    # typer.Exit / --version) instead of sys.exit-ing, so we can hand it back.
+    try:
+        rv = _command(args=argv, standalone_mode=False)
+    except SystemExit as exc:
+        return int(exc.code or 0)
+    except Abort:
+        return 130
+    except UsageError as exc:
+        exc.show()  # writes usage + message to stderr
+        # No/invalid command exits (like argparse's required subcommand).
+        raise SystemExit(exc.exit_code) from exc
+    return rv if isinstance(rv, int) else 0
 
 
 def _cmd_validate(file: str) -> int:
     errors = validate_file(file)
     if errors:
-        print(f"✗ {file}: {len(errors)} error(s)", file=sys.stderr)
-        for err in errors:
-            print(f"  - {err}", file=sys.stderr)
+        err.print(f"[bold error]✗[/] {file}: [error]{len(errors)} error(s)[/]")
+        for e in errors:
+            err.print(f"  [error]-[/] {e}")
         return 1
-    print(f"✓ {file}: valid")
+    err.print(f"[bold success]✓[/] {file}: valid")
     return 0
 
 
@@ -154,32 +206,25 @@ def _cmd_analyze(
             file, transcribe=not no_transcribe, visual=visual, model=model, lang=lang
         )
     except Exception as exc:  # noqa: BLE001 - surface ffmpeg/whisper errors to the user
-        print(f"✗ {exc}", file=sys.stderr)
+        err.print(f"[bold error]✗[/] {exc}")
         return 1
 
     text = json.dumps(manifest, ensure_ascii=False, indent=2)
     if output:
         Path(output).write_text(text, encoding="utf-8")
-        print(f"✓ wrote manifest to {output}", file=sys.stderr)
+        err.print(f"[bold success]✓[/] wrote manifest to {output}")
     else:
         print(text)
-    return 0
-
-
-def _cmd_completion(shell: str) -> int:
-    from .completion import completion_script
-
-    print(completion_script(shell, build_parser()))
     return 0
 
 
 def _cmd_init(file: str, force: bool) -> int:
     path = Path(file)
     if path.exists() and not force:
-        print(f"✗ {path} already exists (use --force to overwrite)", file=sys.stderr)
+        err.print(f"[bold error]✗[/] {path} already exists (use [bold]--force[/] to overwrite)")
         return 1
     path.write_text(STARTER_PIPELINE, encoding="utf-8")
-    print(f"✓ wrote starter pipeline to {path}")
+    err.print(f"[bold success]✓[/] wrote starter pipeline to {path}")
     return 0
 
 
@@ -190,25 +235,27 @@ def _cmd_run(file: str, var_args: list[str], clean: bool = False, as_json: bool 
 
     errors = validate_file(file)
     if errors:
-        print(f"✗ {file}: {len(errors)} error(s)", file=sys.stderr)
-        for err in errors:
-            print(f"  - {err}", file=sys.stderr)
+        err.print(f"[bold error]✗[/] {file}: [error]{len(errors)} error(s)[/]")
+        for e in errors:
+            err.print(f"  [error]-[/] {e}")
         return 1
 
     try:
         overrides = _parse_var_overrides(var_args)
     except ValueError as exc:
-        print(f"✗ {exc}", file=sys.stderr)
+        err.print(f"[bold error]✗[/] {exc}")
         return 1
 
     doc = yaml.safe_load(Path(file).read_text(encoding="utf-8"))
-    print(f"▶ running {doc.get('name', file)}", file=sys.stderr)
-    # --clean forces cleanup; otherwise defer to the pipeline's output.cleanup.
-    clean_override = True if clean else None
+    name = doc.get("name", file)
+    clean_override = True if clean else None  # else defer to output.cleanup
+    err.print(f"[bold accent]▶[/] running [bold]{name}[/]")
     try:
-        result = run_pipeline(doc, var_overrides=overrides, clean=clean_override)
+        result = run_pipeline(
+            doc, var_overrides=overrides, clean=clean_override, reporter=_report_step
+        )
     except Exception as exc:  # noqa: BLE001 - surface engine errors to the user
-        print(f"✗ {exc}", file=sys.stderr)
+        err.print(f"[bold error]✗[/] {exc}")
         return 1
 
     if as_json:
@@ -223,10 +270,33 @@ def _cmd_run(file: str, var_args: list[str], clean: bool = False, as_json: bool 
         print(json.dumps(payload, default=str))
 
     if result.ok:
-        print(f"✓ {file}: done ({len(result.cells)} run(s))", file=sys.stderr)
+        err.print(f"[done]✓ {file}: done ([bold]{len(result.cells)}[/bold] run(s))[/done]")
         return 0
-    print(f"✗ {file}: pipeline finished with failures", file=sys.stderr)
+    err.print(f"[bold error]✗[/] {file}: pipeline finished with failures")
     return 1
+
+
+# Colour the executor's per-step status markers as they stream through.
+_MARKER_STYLES = {
+    "✓": "success",
+    "✗": "error.bold",
+    "↻": "warn",
+    "⊘": "muted",
+    "⊙": "accent.dim",
+    "→": "accent",
+    "🧹": "muted",
+    "━": "accent.bold",
+}
+
+
+def _report_step(message: str) -> None:
+    """Reporter passed to the engine: tint the line by its leading status marker.
+
+    ``markup=False`` so a step's arbitrary text (e.g. an exception with ``[..]``)
+    is never parsed as Rich markup.
+    """
+    marker = message.lstrip()[:1]
+    err.print(message, style=_MARKER_STYLES.get(marker), markup=False, highlight=False)
 
 
 def _parse_var_overrides(var_args: list[str]) -> dict[str, str]:
@@ -246,5 +316,4 @@ def _parse_var_overrides(var_args: list[str]) -> dict[str, str]:
     return overrides
 
 
-# Re-exported so tests can build docs without importing the file path machinery.
-__all__ = ["main", "build_parser", "validate_doc", "STARTER_PIPELINE"]
+__all__ = ["main", "app", "validate_doc", "STARTER_PIPELINE"]
