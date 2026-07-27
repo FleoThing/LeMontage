@@ -7,6 +7,15 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- `detect_clips` `method: beat`: music-synced cuts. Reads a `track`'s beats
+  (librosa PLP — follows tempo drift, no fixed BPM) and tiles the source into
+  clips `beats_per_clip` beats long, so the concatenated reel cuts on the beat;
+  lay the same track over it with `music` for a beat-synced montage. The beat
+  grid is exposed as a `beats` output for `method: agent`. Behind the optional
+  `[beat]` extra (librosa). See `examples/pipeline_beatsync.yaml`.
+
 ### Changed
 
 - **CLI rebuilt on [Typer](https://typer.tiangolo.com) + [Rich](https://github.com/Textualize/rich)**

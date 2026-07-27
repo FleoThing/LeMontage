@@ -30,6 +30,12 @@ analyze = [
     "opencv-python-headless>=4.8",
     "numpy>=1.24",
 ]
+# Beat detection for `detect_clips: method: beat` (music-synced cuts). Opt-in:
+# librosa pulls scipy/scikit-learn/numba, only needed when scoring to a track.
+beat = [
+    "librosa>=0.10",
+    "numpy>=1.24",
+]
 dev = [
     "pre-commit>=4.0",
     "pytest>=8.0",

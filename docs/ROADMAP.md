@@ -21,6 +21,17 @@ Set aside for now: cloud providers, TTS, remote inputs (YouTube/URL). No
 hostility to heavy dependencies — but only when they make a simple edit clearly
 better.
 
+## Next up — v0.6.0: CLI experience (Typer + Rich)
+
+Rebuild the `lemontage` command line on [Typer](https://typer.tiangolo.com)
+(typed sub-commands, native shell completion, richer `--help`) and
+[Rich](https://github.com/Textualize/rich) for the terminal output: coloured
+per-step status, a progress bar during `run`, readable validation errors, and a
+table view for `analyze` / `--json`. Both are **core dependencies** — they're
+lightweight pure-Python (unlike the media `engine` extra), and one CLI code path
+beats maintaining an argparse fallback. The hand-rolled `completion` command is
+replaced by Typer's built-in completion.
+
 ## Ideas (pool — no commitment, no order)
 
 - **Beat-sync**: lock cuts to the music's strong beats (a beat grid, even on
