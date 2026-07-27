@@ -12,10 +12,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import click
 import typer
 from rich.console import Console
 from rich.theme import Theme
+
+# Typer 0.27 vendors its own click (``typer._click``) and dropped the dependency
+# on the real one. Importing the pip-installed ``click`` would hand us a *different*
+# class tree, so the ``except`` clauses below would silently stop matching what
+# Typer raises — take the exceptions from whichever click Typer is actually using.
+try:  # typer >= 0.27
+    from typer._click.exceptions import Abort, UsageError
+except ImportError:  # typer <= 0.26, on the real click
+    from click.exceptions import Abort, UsageError
 
 from . import __version__
 from .validator import validate_doc, validate_file
@@ -166,9 +174,9 @@ def main(argv: list[str] | None = None) -> int:
         rv = _command(args=argv, standalone_mode=False)
     except SystemExit as exc:
         return int(exc.code or 0)
-    except click.exceptions.Abort:
+    except Abort:
         return 130
-    except click.exceptions.UsageError as exc:
+    except UsageError as exc:
         exc.show()  # writes usage + message to stderr
         # No/invalid command exits (like argparse's required subcommand).
         raise SystemExit(exc.exit_code) from exc
