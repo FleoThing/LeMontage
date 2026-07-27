@@ -146,8 +146,7 @@ def _beat_times(track: Any, start_at: float) -> list[float]:
         import numpy as np
     except ImportError as exc:  # pragma: no cover - exercised only without the extra
         raise ValueError(
-            "detect_clips: method 'beat' needs librosa — install with "
-            "pip install 'lemontage[beat]'"
+            "detect_clips: method 'beat' needs librosa — install with pip install 'lemontage[beat]'"
         ) from exc
 
     y, sr = librosa.load(track, sr=None, mono=True)
