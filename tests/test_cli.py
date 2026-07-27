@@ -237,3 +237,11 @@ def test_output_cleanup_flag_in_yaml_removes_temp(tmp_path, monkeypatch):
     monkeypatch.setattr(executor, "REGISTRY", {"stt": NoopBlock("stt")})
     assert main(["run", str(target)]) == 0  # no --clean flag
     assert not (tmp_path / ".lemontage").exists()
+
+
+def test_theme_resolves_every_marker_style():
+    """Console.print(style=...) needs each marker style to be a whole theme key."""
+    from lemontage.cli import _MARKER_STYLES, err
+
+    for marker, style in _MARKER_STYLES.items():
+        assert err.get_style(style), marker

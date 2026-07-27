@@ -15,12 +15,34 @@ from pathlib import Path
 import click
 import typer
 from rich.console import Console
+from rich.theme import Theme
 
 from . import __version__
 from .validator import validate_doc, validate_file
 
+# The docs-site palette (docs/site/style.css, dark scheme — terminals are dark)
+# so the CLI and docs-lemontage.fleothing.com read as one product. Those six CSS
+# vars carry no success/warning/error hue; those three are the Primer dark
+# semantics the rest of the palette already follows.
+# The .bold/.dim variants exist because Console.print(style=...) — unlike markup
+# — resolves a theme name only as a whole key, never as "bold <name>".
+_ACCENT = "#58a6ff"  # --accent
+_ERROR = "#f85149"
+THEME = Theme(
+    {
+        "accent": _ACCENT,
+        "accent.bold": f"bold {_ACCENT}",
+        "accent.dim": f"dim {_ACCENT}",
+        "muted": "#8b949e",  # --muted
+        "success": "#3fb950",
+        "warn": "#d29922",
+        "error": _ERROR,
+        "error.bold": f"bold {_ERROR}",
+    }
+)
+
 # Status/diagnostics on stderr (so stdout stays clean for --json); Rich colours.
-err = Console(stderr=True)
+err = Console(stderr=True, theme=THEME)
 
 STARTER_PIPELINE = """\
 lemontage: "1.0"
@@ -155,11 +177,11 @@ def main(argv: list[str] | None = None) -> int:
 def _cmd_validate(file: str) -> int:
     errors = validate_file(file)
     if errors:
-        err.print(f"[bold red]✗[/] {file}: [red]{len(errors)} error(s)[/]")
+        err.print(f"[bold error]✗[/] {file}: [error]{len(errors)} error(s)[/]")
         for e in errors:
-            err.print(f"  [red]-[/] {e}")
+            err.print(f"  [error]-[/] {e}")
         return 1
-    err.print(f"[bold green]✓[/] {file}: valid")
+    err.print(f"[bold success]✓[/] {file}: valid")
     return 0
 
 
@@ -175,13 +197,13 @@ def _cmd_analyze(
             file, transcribe=not no_transcribe, visual=visual, model=model, lang=lang
         )
     except Exception as exc:  # noqa: BLE001 - surface ffmpeg/whisper errors to the user
-        err.print(f"[bold red]✗[/] {exc}")
+        err.print(f"[bold error]✗[/] {exc}")
         return 1
 
     text = json.dumps(manifest, ensure_ascii=False, indent=2)
     if output:
         Path(output).write_text(text, encoding="utf-8")
-        err.print(f"[bold green]✓[/] wrote manifest to {output}")
+        err.print(f"[bold success]✓[/] wrote manifest to {output}")
     else:
         print(text)
     return 0
@@ -190,10 +212,10 @@ def _cmd_analyze(
 def _cmd_init(file: str, force: bool) -> int:
     path = Path(file)
     if path.exists() and not force:
-        err.print(f"[bold red]✗[/] {path} already exists (use [bold]--force[/] to overwrite)")
+        err.print(f"[bold error]✗[/] {path} already exists (use [bold]--force[/] to overwrite)")
         return 1
     path.write_text(STARTER_PIPELINE, encoding="utf-8")
-    err.print(f"[bold green]✓[/] wrote starter pipeline to {path}")
+    err.print(f"[bold success]✓[/] wrote starter pipeline to {path}")
     return 0
 
 
@@ -204,27 +226,27 @@ def _cmd_run(file: str, var_args: list[str], clean: bool = False, as_json: bool 
 
     errors = validate_file(file)
     if errors:
-        err.print(f"[bold red]✗[/] {file}: [red]{len(errors)} error(s)[/]")
+        err.print(f"[bold error]✗[/] {file}: [error]{len(errors)} error(s)[/]")
         for e in errors:
-            err.print(f"  [red]-[/] {e}")
+            err.print(f"  [error]-[/] {e}")
         return 1
 
     try:
         overrides = _parse_var_overrides(var_args)
     except ValueError as exc:
-        err.print(f"[bold red]✗[/] {exc}")
+        err.print(f"[bold error]✗[/] {exc}")
         return 1
 
     doc = yaml.safe_load(Path(file).read_text(encoding="utf-8"))
     name = doc.get("name", file)
     clean_override = True if clean else None  # else defer to output.cleanup
-    err.print(f"[bold cyan]▶[/] running [bold]{name}[/]")
+    err.print(f"[bold accent]▶[/] running [bold]{name}[/]")
     try:
         result = run_pipeline(
             doc, var_overrides=overrides, clean=clean_override, reporter=_report_step
         )
     except Exception as exc:  # noqa: BLE001 - surface engine errors to the user
-        err.print(f"[bold red]✗[/] {exc}")
+        err.print(f"[bold error]✗[/] {exc}")
         return 1
 
     if as_json:
@@ -239,22 +261,22 @@ def _cmd_run(file: str, var_args: list[str], clean: bool = False, as_json: bool 
         print(json.dumps(payload, default=str))
 
     if result.ok:
-        err.print(f"[bold green]✓[/] {file}: done ([bold]{len(result.cells)}[/] run(s))")
+        err.print(f"[bold success]✓[/] {file}: done ([bold]{len(result.cells)}[/] run(s))")
         return 0
-    err.print(f"[bold red]✗[/] {file}: pipeline finished with failures")
+    err.print(f"[bold error]✗[/] {file}: pipeline finished with failures")
     return 1
 
 
 # Colour the executor's per-step status markers as they stream through.
 _MARKER_STYLES = {
-    "✓": "green",
-    "✗": "bold red",
-    "↻": "yellow",
-    "⊘": "dim",
-    "⊙": "dim cyan",
-    "→": "cyan",
-    "🧹": "dim",
-    "━": "bold magenta",
+    "✓": "success",
+    "✗": "error.bold",
+    "↻": "warn",
+    "⊘": "muted",
+    "⊙": "accent.dim",
+    "→": "accent",
+    "🧹": "muted",
+    "━": "accent.bold",
 }
 
 
