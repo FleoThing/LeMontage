@@ -22,8 +22,8 @@ from .validator import validate_doc, validate_file
 
 # The docs-site palette (docs/site/style.css, dark scheme — terminals are dark)
 # so the CLI and docs-lemontage.fleothing.com read as one product. Those six CSS
-# vars carry no success/warning/error hue; those three are the Primer dark
-# semantics the rest of the palette already follows.
+# vars carry no success/warning/error hue: `warn`/`error` are the Primer dark
+# semantics the rest of the palette follows, `success` and `done` are picked.
 # The .bold/.dim variants exist because Console.print(style=...) — unlike markup
 # — resolves a theme name only as a whole key, never as "bold <name>".
 _ACCENT = "#58a6ff"  # --accent
@@ -34,7 +34,8 @@ THEME = Theme(
         "accent.bold": f"bold {_ACCENT}",
         "accent.dim": f"dim {_ACCENT}",
         "muted": "#8b949e",  # --muted
-        "success": "#3fb950",
+        "success": "#9aa9ff",
+        "done": "#744197",  # the final "pipeline done" line only
         "warn": "#d29922",
         "error": _ERROR,
         "error.bold": f"bold {_ERROR}",
@@ -261,7 +262,7 @@ def _cmd_run(file: str, var_args: list[str], clean: bool = False, as_json: bool 
         print(json.dumps(payload, default=str))
 
     if result.ok:
-        err.print(f"[bold success]✓[/] {file}: done ([bold]{len(result.cells)}[/] run(s))")
+        err.print(f"[done]✓ {file}: done ([bold]{len(result.cells)}[/bold] run(s))[/done]")
         return 0
     err.print(f"[bold error]✗[/] {file}: pipeline finished with failures")
     return 1
