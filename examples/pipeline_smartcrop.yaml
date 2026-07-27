@@ -1,0 +1,28 @@
+lemontage: "1.0"
+name: smartcrop
+description: "Reframe a landscape talk to vertical 9:16, keeping the speaker in shot"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  - id: clips
+    detect_clips:
+      method: silence
+      max_clips: 3
+      emit: highlights
+
+  - cut:
+      from: highlights
+
+  # Vertical export that follows the speaker's face instead of black bars or a
+  # fixed centre crop (needs the [smartcrop] extra).
+  - export:
+      from: highlights
+      format: vertical
+      resolution: 1080x1920
+      smart_crop: true
+
+output:
+  dir: ./output

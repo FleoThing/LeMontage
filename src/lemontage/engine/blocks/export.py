@@ -121,7 +121,8 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=0, step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-title", index=0)
         author = _author_ass(params, ctx, f"{step_id}-author", index=0)
-        _render(media, params, out, title, author, mute=_muted(params, 0))
+        crop_cmd = _crop_cmd(params, ctx, f"{step_id}-0")
+        _render(media, params, out, title, author, mute=_muted(params, 0), crop_cmd=crop_cmd)
         return BlockResult(outputs={"files": [str(out)]})
 
     def execute_item(
@@ -133,7 +134,10 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=item["index"], step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-{item['index']}-title", index=item["index"])
         author = _author_ass(params, ctx, f"{step_id}-{item['index']}-author", index=item["index"])
-        _render(clip, params, out, title, author, mute=_muted(params, item["index"]))
+        crop_cmd = _crop_cmd(params, ctx, f"{step_id}-{item['index']}")
+        _render(
+            clip, params, out, title, author, mute=_muted(params, item["index"]), crop_cmd=crop_cmd
+        )
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
 
 
@@ -525,6 +529,13 @@ def _bg_pad_color(bg: object) -> str:
     return text.replace("#", "0x") if text.startswith("#") else text
 
 
+def _crop_cmd(params: dict[str, Any], ctx: RunContext, name: str) -> Path | None:
+    """Path for a `smart_crop` sendcmd script, or None when not requested."""
+    if not params.get("smart_crop"):
+        return None
+    return ctx.work_dir() / f"{name}-crop.cmd"
+
+
 def _muted(params: dict[str, Any], index: int) -> bool:
     """Whether this clip's audio should be silenced.
 
@@ -544,23 +555,32 @@ def _render(
     title: Path | None = None,
     author: Path | None = None,
     mute: bool = False,
+    crop_cmd: Path | None = None,
 ) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
     if not 0 < fps <= _MAX_FPS:
         raise ValueError(f"export: fps {fps} out of range (1..{_MAX_FPS})")
-    # Strip the source's own baked-in letterbox bars first (default on) so a
-    # letterboxed source fills the frame instead of carrying its bars into the
-    # result. Needed for `cover` (else bars leak into the crop) and whenever a
-    # `bg` fill is set: with `blur` the sharp foreground would keep its bars over
-    # the blur, and with a colour the bars show as a black band inside the fill.
-    # Detected with FFmpeg's cropdetect — no extra dependency.
-    fit = str(params.get("fit", "contain")).lower()
-    wants_fill = fit == "cover" or bool(params.get("bg"))
-    source_crop = None
-    if wants_fill and params.get("trim_bars", True):
-        source_crop = ffmpeg.detect_content_crop(media)
-    chain = [*_scale_chain(params, width, height, source_crop), f"fps={fps}"]
+    if params.get("smart_crop"):
+        # Follow the subject to fill the frame (mediapipe); overrides fit/bg,
+        # since it height-matches and pans rather than barring or centre-cropping.
+        from .. import smartcrop
+
+        fit_filters = smartcrop.crop_filters(media, width, height, crop_cmd)
+    else:
+        # Strip the source's own baked-in letterbox bars first (default on) so a
+        # letterboxed source fills the frame instead of carrying its bars into the
+        # result. Needed for `cover` (else bars leak into the crop) and whenever a
+        # `bg` fill is set: with `blur` the sharp foreground would keep its bars
+        # over the blur, and with a colour the bars show as a black band inside
+        # the fill. Detected with FFmpeg's cropdetect — no extra dependency.
+        fit = str(params.get("fit", "contain")).lower()
+        wants_fill = fit == "cover" or bool(params.get("bg"))
+        source_crop = None
+        if wants_fill and params.get("trim_bars", True):
+            source_crop = ffmpeg.detect_content_crop(media)
+        fit_filters = _scale_chain(params, width, height, source_crop)
+    chain = [*fit_filters, f"fps={fps}"]
     if title is not None:
         fonts.ensure(params.get("title_font"))  # download preset / warn on missing
         chain.append(fonts.libass_filter(title))

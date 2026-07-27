@@ -198,6 +198,15 @@ def _check_block_params(
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
         if method == "agent" and not isinstance(params.get("clips"), list):
             errors.append(f"{label}: detect_clips.method 'agent' requires a 'clips' list")
+        if method == "beat":
+            track = params.get("track")
+            if not isinstance(track, str) or not track:
+                errors.append(
+                    f"{label}: detect_clips.method 'beat' requires a 'track' (music file path)"
+                )
+            bpc = params.get("beats_per_clip")
+            if bpc is not None and (isinstance(bpc, bool) or not isinstance(bpc, int) or bpc < 1):
+                errors.append(f"{label}: detect_clips.beats_per_clip must be an integer >= 1")
 
     if block == "export":
         fit = params.get("fit")
@@ -209,6 +218,9 @@ def _check_block_params(
         mute = params.get("mute")
         if mute is not None and not isinstance(mute, (bool, list)):
             errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
+        smart = params.get("smart_crop")
+        if smart is not None and not isinstance(smart, bool):
+            errors.append(f"{label}: export.smart_crop must be a boolean")
         canvas = params.get("canvas")
         if canvas is not None and (
             not isinstance(canvas, str) or not re.fullmatch(r"\d+x\d+", canvas.lower())

@@ -246,8 +246,12 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `agent`. |
+| `method` | enum | `silence` | `silence` \| `scene_change` \| `loudness` \| `random` \| `beat` \| `agent`. |
 | `clips` | list | — | (`agent` only) The boundaries chosen by the AI agent: `[{start, end}, …]`. Used verbatim (clamped to the media); `min/max_duration` and `max_clips` do not apply. |
+| `track` | string | — | (`beat` only) Path to the music file whose beats define the cuts. Requires the `[beat]` extra (librosa). |
+| `beats_per_clip` | int | `4` | (`beat` only) How many beats each clip spans — `4` = one bar (a cut per bar), `1` = a cut on every beat. |
+| `start_at` | duration | `0` | (`beat` only) Ignore beats before this offset; set it to the `music` step's own `start_at` so the grid and the laid-over track agree. |
+| `source_start` | duration | `0` | (`beat` only) Where in the **source video** the beat clips start walking forward — set it past an intro handled by another channel (e.g. `source_start: 8` after a fixed 0–8s intro clip). |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
@@ -265,6 +269,17 @@ sustained reaction are both captured; `min_duration`/`max_duration` only bound
 the resulting length (no manual offset). `random` picks `max_clips` random,
 non-overlapping moments (each of a random length in the min/max window) with no
 analysis — handy for a quick montage or B-roll; pass `seed` to reproduce a run.
+`beat` reads a music `track`'s beats (via librosa's PLP, so it follows tempo
+drift rather than assuming one BPM) and builds a **montage**: each clip lasts
+`beats_per_clip` beats' worth of time (so the concatenated reel's cut points land
+**on the beat**), and each clip is drawn from a *different, spread-out* moment of
+the source — so every beat is a **visible cut to new footage**, not the same shot
+replayed. (Taking consecutive segments would just re-play the source with no
+visible cut.) Lay the same track over it with `music` (matching `start_at`) for a
+music-synced montage. The `beats_per_clip` grouping replaces `min/max_duration`
+(clamping would desync the cuts); `source_start` skips an intro handled by another
+channel; and the detected grid is exposed as a `beats` output so `method: agent`
+can pick beat-aligned boundaries itself. Needs `pip install 'lemontage[beat]'`.
 
 **Transcript-aware boundaries.** Pass `words:` (from an earlier `stt` step) to
 make detection transcript-aware: boundaries snap to whole words (no clip starts
@@ -296,8 +311,8 @@ clip's `text`/`words`, since the agent already chose the exact cut points:
 
 **Outputs:** `count`, `timestamps` (list of `{start, end}`), `clips` (the full
 items, incl. `text`/`words` when `words:` was given — readable via `run --json`),
-plus the named channel (each item: `index`, `start`, `end`, and — with `words:` —
-`text`, `words`).
+`beats` (the detected beat grid, `method: beat` only), plus the named channel
+(each item: `index`, `start`, `end`, and — with `words:` — `text`, `words`).
 
 > Out of scope for v1: `method: engagement` (LLM-scored). Reserved keyword.
 
@@ -391,6 +406,7 @@ Renders the final video(s) to disk.
 | `format` | enum | `vertical` | `vertical` (9:16) \| `horizontal` (16:9) \| `square` (1:1). |
 | `resolution` | string | per-format | e.g. `1080x1920`. |
 | `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars). |
+| `smart_crop` | bool | `false` | Fill the frame by **following the subject** instead of barring or centre-cropping: the crop window slides to keep the main face in shot (mediapipe, smoothed). For a landscape → vertical reframe (real TikTok framing). Overrides `fit`/`bg`. Needs `pip install 'lemontage[smartcrop]'`; falls back to a centre crop when the source is not wider than the target or no face is found. |
 | `trim_bars` | bool | `true` | Auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source fills the frame. Applied with `fit: cover` (else the bars leak into the crop) and whenever a `bg` fill is set — `blur` (else the sharp foreground keeps its bars over the blur) or a colour (else the bars show as a black band inside the fill). Set `false` to keep them. |
 | `bg` | string | `black` | Fill for the `contain` bars: a colour (`white`, `#101010`) or `blur` — a blurred, zoomed copy of the source behind the sharp centred video (the classic vertical look). |
 | `canvas` | string | — | Place the export frame inside a larger canvas, e.g. `canvas: 1080x1920` with `resolution: 1080x1080` puts a square video on a vertical frame. The canvas becomes the final frame size and must be at least as large as the export frame. The empty area is filled with `bg` (a colour, default black; `bg: blur` only fills the fit bars, the canvas stays black). Applied after titles/author, so those stay on the export frame. |

@@ -9,11 +9,37 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `detect_clips` `method: beat`: music-synced cuts. Reads a `track`'s beats
+  (librosa PLP — follows tempo drift, no fixed BPM) and tiles the source into
+  clips `beats_per_clip` beats long, so the concatenated reel cuts on the beat;
+  lay the same track over it with `music` for a beat-synced montage. The beat
+  grid is exposed as a `beats` output for `method: agent`. Behind the optional
+  `[beat]` extra (librosa). See `examples/pipeline_beatsync.yaml`.
+- `export` `smart_crop`: subject-following vertical reframe. Instead of black
+  bars (`contain`) or a fixed centre crop (`cover`), the crop window slides to
+  keep the main face in shot (mediapipe, smoothed trajectory driven via FFmpeg
+  `sendcmd`) — real landscape → 9:16 TikTok framing. Behind the optional
+  `[smartcrop]` extra (mediapipe + OpenCV); falls back to a centre crop when the
+  source is not wider than the target or no face is found. See
+  `examples/pipeline_smartcrop.yaml`.
 - `filter` block: per-clip looks. `look` applies named FFmpeg effects (`bw`,
   `vignette`, `grain`, `sharpen`) — one name or a list, in order — and `eq`
   grades colour (`brightness`/`contrast`/`saturation`/`gamma`). Works on the
   input or maps over a channel of clips. FFmpeg-only, no new dependency. See
   `examples/pipeline_filter.yaml`.
+
+### Changed
+
+- **CLI rebuilt on [Typer](https://typer.tiangolo.com) + [Rich](https://github.com/Textualize/rich)**
+  (now core dependencies): typed sub-commands, richer `--help`, and coloured
+  terminal output — per-step run status, tinted `✓`/`✗` results, and readable
+  validation errors. `run --json` / `analyze` keep emitting plain JSON on stdout.
+
+### Removed
+
+- **Breaking:** the hand-rolled `lemontage completion <shell>` command is gone;
+  shell completion now comes from Typer via `--install-completion` /
+  `--show-completion` (bash, zsh, fish, PowerShell).
 
 ## [0.5.0] - 2026-07-24
 
