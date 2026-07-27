@@ -218,6 +218,9 @@ def _check_block_params(
         mute = params.get("mute")
         if mute is not None and not isinstance(mute, (bool, list)):
             errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
+        smart = params.get("smart_crop")
+        if smart is not None and not isinstance(smart, bool):
+            errors.append(f"{label}: export.smart_crop must be a boolean")
         canvas = params.get("canvas")
         if canvas is not None and (
             not isinstance(canvas, str) or not re.fullmatch(r"\d+x\d+", canvas.lower())

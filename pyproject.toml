@@ -36,6 +36,12 @@ beat = [
     "librosa>=0.10",
     "numpy>=1.24",
 ]
+# Subject-following vertical crop for `export: smart_crop: true`. mediapipe
+# tracks the face on CPU; OpenCV decodes the sampled frames. Opt-in.
+smartcrop = [
+    "mediapipe>=0.10",
+    "opencv-python-headless>=4.8",
+]
 dev = [
     "pre-commit>=4.0",
     "pytest>=8.0",
