@@ -16,6 +16,19 @@ may still introduce breaking changes, and those changes must be called out here.
   grid is exposed as a `beats` output for `method: agent`. Behind the optional
   `[beat]` extra (librosa). See `examples/pipeline_beatsync.yaml`.
 
+### Changed
+
+- **CLI rebuilt on [Typer](https://typer.tiangolo.com) + [Rich](https://github.com/Textualize/rich)**
+  (now core dependencies): typed sub-commands, richer `--help`, and coloured
+  terminal output — per-step run status, tinted `✓`/`✗` results, and readable
+  validation errors. `run --json` / `analyze` keep emitting plain JSON on stdout.
+
+### Removed
+
+- **Breaking:** the hand-rolled `lemontage completion <shell>` command is gone;
+  shell completion now comes from Typer via `--install-completion` /
+  `--show-completion` (bash, zsh, fish, PowerShell).
+
 ## [0.5.0] - 2026-07-24
 
 ### Added

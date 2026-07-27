@@ -6,8 +6,10 @@
 #
 # Only what the code imports directly is listed here.
 
-# Pipeline parsing / validation (always required)
+# Pipeline parsing / validation + CLI (always required)
 pyyaml==6.0.3
+typer==0.27.0             # typed CLI sub-commands + shell completion
+rich==15.0.0              # coloured terminal output
 
 # Execution engine: FFmpeg + speech-to-text
 imageio-ffmpeg==0.6.0     # bundled FFmpeg binary (no system install needed)
