@@ -1,0 +1,33 @@
+lemontage: "1.0"
+name: filter
+description: "Cut highlights, then give every clip a graded black-and-white film look"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  - id: clips
+    detect_clips:
+      method: loudness
+      max_clips: 3
+      emit: highlights
+
+  - cut:
+      from: highlights
+
+  # Grade + stylise each clip: a touch more contrast, desaturated to B&W,
+  # with light film grain.
+  - filter:
+      from: highlights
+      look: [bw, grain]
+      eq:
+        contrast: 1.15
+        brightness: 0.02
+
+  - export:
+      from: highlights
+      format: vertical
+
+output:
+  dir: ./output

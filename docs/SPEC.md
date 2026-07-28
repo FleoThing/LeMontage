@@ -745,6 +745,35 @@ reserved — the validator rejects it for now.
 
 ---
 
+### 6.14 `filter` — per-clip looks
+
+Grade and stylise a clip. Works on the pipeline input (single mode) or maps over
+a channel of clips (`from:`) — place it after `cut` (or `export`) to tint or
+stylise each clip. Everything is one FFmpeg video-filter chain — no extra
+dependency.
+
+```yaml
+- filter:
+    from: clips
+    look: [bw, grain]        # one name or a list, applied in order
+    eq:                      # optional colour grade
+      contrast: 1.15
+      saturation: 0.9
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `look` | string / list | — | Named effect(s), applied in order: `bw` (black & white), `vignette` (darkened corners), `grain` (film grain), `sharpen` (luma sharpen). |
+| `eq` | mapping | — | Colour grade via FFmpeg `eq`: any of `brightness`, `contrast`, `saturation`, `gamma` (plain numbers). Applied before the looks. |
+| `from` | channel | — | Map over a channel of clips instead of the input. |
+
+At least one of `look` / `eq` is required. `eq` runs first (the grade), then the
+looks in listed order.
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:

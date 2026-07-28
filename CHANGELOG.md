@@ -22,6 +22,11 @@ may still introduce breaking changes, and those changes must be called out here.
   `[smartcrop]` extra (mediapipe + OpenCV); falls back to a centre crop when the
   source is not wider than the target or no face is found. See
   `examples/pipeline_smartcrop.yaml`.
+- `filter` block: per-clip looks. `look` applies named FFmpeg effects (`bw`,
+  `vignette`, `grain`, `sharpen`) — one name or a list, in order — and `eq`
+  grades colour (`brightness`/`contrast`/`saturation`/`gamma`). Works on the
+  input or maps over a channel of clips. FFmpeg-only, no new dependency. See
+  `examples/pipeline_filter.yaml`.
 
 ### Changed
 
