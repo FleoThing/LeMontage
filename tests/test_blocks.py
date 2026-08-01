@@ -691,6 +691,14 @@ def test_scale_chain_stretch_fills_without_crop_or_bars():
     assert not any(f.startswith(("pad=", "crop=")) for f in chain)
 
 
+def test_scale_chain_fit_list_is_per_clip():
+    params = {"fit": ["cover", "stretch"]}
+    assert any("aspect_ratio=increase" in f for f in _scale_chain(params, 1080, 1920, index=0))
+    assert _scale_chain(params, 1080, 1920, index=1)[0] == "scale=1080:1920,setsar=1"
+    # past the end of the list -> contain (letterboxed)
+    assert any(f.startswith("pad=") for f in _scale_chain(params, 1080, 1920, index=5))
+
+
 def test_scale_chain_unknown_fit_raises():
     with pytest.raises(ValueError, match="unknown fit"):
         _scale_chain({"fit": "zoom"}, 1080, 1920)
