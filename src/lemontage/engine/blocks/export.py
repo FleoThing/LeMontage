@@ -453,6 +453,8 @@ def _scale_chain(
       cover and blurred behind the sharp centred video (the classic vertical look).
     * ``cover`` — scale to fill, then centre-crop the overflow so there are no
       bars (the source edges are cropped instead).
+    * ``stretch`` — scale each axis independently to the target: a horizontal
+      source fills a vertical frame whole, distorted, nothing cropped.
 
     ``source_crop`` (a ``"w:h:x:y"`` spec) strips baked-in bars from the source
     *before* fitting, so a letterboxed source still fills the whole frame.
@@ -462,6 +464,9 @@ def _scale_chain(
         valid = ", ".join(sorted(EXPORT_FIT_MODES))
         raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
     chain = [f"crop={source_crop}"] if source_crop else []
+    if fit == "stretch":
+        # Deliberately distorts: fills the frame edge to edge, no bars, no crop.
+        return chain + [f"scale={width}:{height},setsar=1"]
     if fit == "cover":
         return chain + [
             f"scale={width}:{height}:force_original_aspect_ratio=increase",
@@ -575,7 +580,7 @@ def _render(
         # over the blur, and with a colour the bars show as a black band inside
         # the fill. Detected with FFmpeg's cropdetect — no extra dependency.
         fit = str(params.get("fit", "contain")).lower()
-        wants_fill = fit == "cover" or bool(params.get("bg"))
+        wants_fill = fit in ("cover", "stretch") or bool(params.get("bg"))
         source_crop = None
         if wants_fill and params.get("trim_bars", True):
             source_crop = ffmpeg.detect_content_crop(media)
