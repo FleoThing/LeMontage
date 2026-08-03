@@ -8,7 +8,7 @@
 
 # Pipeline parsing / validation + CLI (always required)
 pyyaml==6.0.3
-typer==0.27.0             # typed CLI sub-commands + shell completion
+typer==0.27.1             # typed CLI sub-commands + shell completion
 rich==15.0.0              # coloured terminal output
 
 # Execution engine: FFmpeg + speech-to-text
