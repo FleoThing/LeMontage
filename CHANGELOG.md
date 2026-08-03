@@ -9,6 +9,12 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `analyze --packed`: a phrase-level markdown view of the transcript instead of
+  the JSON manifest. Words are grouped into phrases on silences >= 0.5s, each
+  line prefixed with its `[start-end]`, which reads at roughly a tenth of the
+  tokens of raw `speech.words`. Phrase edges are word edges, so a range can be
+  fed straight back as a `detect_clips: method: agent` span.
+
 - `detect_clips` `method: beat`: music-synced cuts. Reads a `track`'s beats
   (librosa PLP — follows tempo drift, no fixed BPM) and tiles the source into
   clips `beats_per_clip` beats long, so the concatenated reel cuts on the beat;
@@ -27,6 +33,13 @@ may still introduce breaking changes, and those changes must be called out here.
   grades colour (`brightness`/`contrast`/`saturation`/`gamma`). Works on the
   input or maps over a channel of clips. FFmpeg-only, no new dependency. See
   `examples/pipeline_filter.yaml`.
+
+### Fixed
+
+- `cut` now bakes a 30ms fade in/out at every segment edge. A hard splice left a
+  step discontinuity in the waveform, audible as a click at each join —
+  `concat` only crossfaded when `transitions:` was set, so plain cuts (the
+  common case for spoken edits) clicked. Skipped on sources with no audio track.
 
 ### Changed
 

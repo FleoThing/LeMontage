@@ -176,3 +176,69 @@ def _transcribe_words(path: str, model: str, lang: str) -> list[dict]:
         for seg in transcript.segments
         for w in seg.words
     ]
+
+
+# -------- Packed view --------------------------------------------------------
+#
+# `speech.words` is the precise form but a poor reading form: hundreds of
+# {t, d, w} objects the agent must mentally re-assemble into sentences. Packing
+# them into phrase lines prefixed with their [start-end] range costs a tenth of
+# the tokens and lets cuts be chosen from text alone — the boundaries are still
+# exact, because a phrase edge *is* a word edge.
+
+PHRASE_GAP = 0.5
+
+
+def pack_phrases(words: list[dict], gap: float = PHRASE_GAP) -> list[dict]:
+    """Group ``{t, d, w}`` words into phrases, breaking on any silence >= gap.
+
+    Returns ``{"start", "end", "text"}`` dicts. Boundaries land on word edges,
+    so they can be fed straight back as ``detect_clips: method: agent`` spans.
+    """
+    phrases: list[dict] = []
+    current: list[dict] = []
+
+    for word in words:
+        if current:
+            previous = current[-1]
+            if word["t"] - (previous["t"] + previous["d"]) >= gap:
+                phrases.append(_as_phrase(current))
+                current = []
+        current.append(word)
+
+    if current:
+        phrases.append(_as_phrase(current))
+    return phrases
+
+
+def _as_phrase(words: list[dict]) -> dict:
+    last = words[-1]
+    return {
+        "start": round(words[0]["t"], 2),
+        "end": round(last["t"] + last["d"], 2),
+        "text": " ".join(w["w"] for w in words if w["w"]),
+    }
+
+
+def format_packed(manifests: list[tuple[str, dict]], gap: float = PHRASE_GAP) -> str:
+    """Render one or more analyzed videos as a phrase-level markdown view."""
+    out = [
+        "# Packed transcripts",
+        "",
+        f"Phrase-level, grouped on silences >= {gap}s.",
+        "Use the `[start-end]` ranges as `detect_clips: method: agent` spans.",
+        "",
+    ]
+
+    for name, manifest in manifests:
+        words = manifest.get("speech", {}).get("words") or []
+        phrases = pack_phrases(words, gap)
+        duration = manifest.get("duration", 0.0)
+        out.append(f"## {name}  ({duration:.1f}s, {len(phrases)} phrases)")
+        if not phrases:
+            out.append("  (no speech — silent track, or analyzed with --no-transcribe)")
+        for phrase in phrases:
+            out.append(f"  [{phrase['start']:07.2f}-{phrase['end']:07.2f}] {phrase['text']}")
+        out.append("")
+
+    return "\n".join(out)

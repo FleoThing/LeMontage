@@ -139,11 +139,14 @@ def analyze(
     visual: bool = typer.Option(
         False, "--visual", help="score per-shot motion + sharpness (needs the [analyze] extra)"
     ),
+    packed: bool = typer.Option(
+        False, "--packed", help="emit a phrase-level markdown view instead of the JSON manifest"
+    ),
     model: str = typer.Option("base", help="whisper model size"),
     lang: str = typer.Option("auto", help="speech language"),
 ) -> None:
     """Analyze a video into a compact JSON manifest (VSO) an AI agent reads."""
-    raise typer.Exit(_cmd_analyze(file, output, no_transcribe, visual, model, lang))
+    raise typer.Exit(_cmd_analyze(file, output, no_transcribe, visual, packed, model, lang))
 
 
 @app.command()
@@ -195,11 +198,21 @@ def _cmd_validate(file: str) -> int:
 
 
 def _cmd_analyze(
-    file: str, output: str | None, no_transcribe: bool, visual: bool, model: str, lang: str
+    file: str,
+    output: str | None,
+    no_transcribe: bool,
+    visual: bool,
+    packed: bool,
+    model: str,
+    lang: str,
 ) -> int:
     import json
 
-    from .analyze import analyze_video
+    from .analyze import analyze_video, format_packed
+
+    if packed and no_transcribe:
+        err.print("[bold error]✗[/] --packed needs the transcript; drop --no-transcribe")
+        return 1
 
     try:
         manifest = analyze_video(
@@ -209,10 +222,16 @@ def _cmd_analyze(
         err.print(f"[bold error]✗[/] {exc}")
         return 1
 
-    text = json.dumps(manifest, ensure_ascii=False, indent=2)
+    if packed:
+        text = format_packed([(Path(file).stem, manifest)])
+        label = "packed transcript"
+    else:
+        text = json.dumps(manifest, ensure_ascii=False, indent=2)
+        label = "manifest"
+
     if output:
         Path(output).write_text(text, encoding="utf-8")
-        err.print(f"[bold success]✓[/] wrote manifest to {output}")
+        err.print(f"[bold success]✓[/] wrote {label} to {output}")
     else:
         print(text)
     return 0

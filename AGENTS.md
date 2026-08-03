@@ -44,7 +44,23 @@ action, punchlines), expanding around each peak.
 ```
 
 ### Podcast clips / quotes (cut on what is *said*)
-Get the transcript, read it, cut on whole sentences — never guess off audio:
+Get the transcript, read it, cut on whole sentences — never guess off audio.
+`--packed` is the reading form: phrases grouped on silences >= 0.5s, each
+prefixed with its `[start-end]`, a tenth of the tokens of raw `speech.words`:
+
+```bash
+lemontage analyze episode.mp4 --packed -o takes.md
+```
+
+```
+## episode  (59.9s, 14 phrases)
+  [020.88-031.06] In the land of Mordor, the dark lord Sauron forged a master ring,
+  [041.20-044.26] One ring to rule them all.
+```
+
+Every phrase edge is a word edge, so a range can be fed back verbatim as a
+`method: agent` span. Use the JSON manifest (`speech.words`) only when you need
+sub-phrase precision. For the raw per-step form:
 
 ```bash
 lemontage run transcribe.yaml --json > out.json   # an stt step; read cells[].outputs.<id>.words
@@ -113,6 +129,25 @@ random` (seeded, reproducible B-roll).
   (gate a step on another's `.success`) for robust longer runs (§5.1).
 - **cache** — steps checkpoint by default; a param change reruns the step and
   everything downstream. `run --clean` keeps only the final media.
+
+## Check your own render before showing it
+
+`run` succeeding means FFmpeg exited 0, not that the edit is good. Analyze your
+own output and compare it to what you intended:
+
+```bash
+lemontage analyze out/final.mp4 --no-transcribe -o check.json
+```
+
+- **duration** — matches the sum of your spans? A large gap means a step
+  dropped or duplicated clips.
+- **shots** — roughly one per cut you asked for? Far more means transitions
+  registered as scene cuts; far fewer means clips got merged.
+- **speech.dead_air** — silence at the head or tail is almost always a padding
+  mistake; trim the span rather than re-rendering blind.
+
+Fix, re-run, re-check. **Cap at 3 passes** — past that, report what's still
+wrong instead of looping. Only show the user a render that survived this.
 
 ## Reminders
 - Every step needs a **unique `id`** (two anonymous steps of the same block
