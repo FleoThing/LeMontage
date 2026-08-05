@@ -210,11 +210,13 @@ def _check_block_params(
 
     if block == "export":
         fit = params.get("fit")
-        if fit is not None and (
-            not isinstance(fit, str) or fit.lower() not in spec.EXPORT_FIT_MODES
-        ):
-            valid = ", ".join(sorted(spec.EXPORT_FIT_MODES))
-            errors.append(f"{label}: unknown export fit '{fit}' (choose from: {valid})")
+        # A list sets the mode per clip by position (like `mute`).
+        for one in fit if isinstance(fit, list) else [fit]:
+            if one is not None and (
+                not isinstance(one, str) or one.lower() not in spec.EXPORT_FIT_MODES
+            ):
+                valid = ", ".join(sorted(spec.EXPORT_FIT_MODES))
+                errors.append(f"{label}: unknown export fit '{one}' (choose from: {valid})")
         mute = params.get("mute")
         if mute is not None and not isinstance(mute, (bool, list)):
             errors.append(f"{label}: export.mute must be a boolean or a list of booleans")

@@ -78,7 +78,7 @@ CONCAT_TRANSITIONS = frozenset(
 OVERLAY_BAND_POSITIONS = frozenset({"top", "bottom"})
 
 # How `export` fits the source into the target frame (see SPEC §6.6).
-EXPORT_FIT_MODES = frozenset({"contain", "cover"})
+EXPORT_FIT_MODES = frozenset({"contain", "cover", "stretch"})
 
 # Where `export` places the frame inside a larger `canvas` (see SPEC §6.6). An
 # explicit "X,Y" pixel offset is also accepted wherever these names are.

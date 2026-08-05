@@ -136,7 +136,14 @@ class ExportBlock(Block):
         author = _author_ass(params, ctx, f"{step_id}-{item['index']}-author", index=item["index"])
         crop_cmd = _crop_cmd(params, ctx, f"{step_id}-{item['index']}")
         _render(
-            clip, params, out, title, author, mute=_muted(params, item["index"]), crop_cmd=crop_cmd
+            clip,
+            params,
+            out,
+            title,
+            author,
+            mute=_muted(params, item["index"]),
+            crop_cmd=crop_cmd,
+            index=item["index"],
         )
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
 
@@ -449,8 +456,30 @@ def _fill_title_tokens(text: str, index: int, name: str) -> str:
     return text
 
 
+def _fit_mode(params: dict[str, Any], index: int) -> str:
+    """The `fit` mode for this clip (0-based ``index``).
+
+    ``fit`` is normally one mode for the whole export; a list picks it per clip
+    by position (``fit: [cover, cover, stretch]`` stretches only the 3rd), so a
+    single clip in the middle of the edit can be distorted on purpose. Missing
+    positions fall back to ``contain``.
+    """
+    fit = params.get("fit", "contain")
+    if isinstance(fit, list):
+        fit = fit[index] if index < len(fit) else "contain"
+    fit = str(fit).lower()
+    if fit not in EXPORT_FIT_MODES:
+        valid = ", ".join(sorted(EXPORT_FIT_MODES))
+        raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
+    return fit
+
+
 def _scale_chain(
-    params: dict[str, Any], width: int, height: int, source_crop: str | None = None
+    params: dict[str, Any],
+    width: int,
+    height: int,
+    source_crop: str | None = None,
+    index: int = 0,
 ) -> list[str]:
     """Video filters that fit the source into width×height per the `fit` mode.
 
@@ -459,15 +488,17 @@ def _scale_chain(
       cover and blurred behind the sharp centred video (the classic vertical look).
     * ``cover`` — scale to fill, then centre-crop the overflow so there are no
       bars (the source edges are cropped instead).
+    * ``stretch`` — scale each axis independently to the target: a horizontal
+      source fills a vertical frame whole, distorted, nothing cropped.
 
     ``source_crop`` (a ``"w:h:x:y"`` spec) strips baked-in bars from the source
     *before* fitting, so a letterboxed source still fills the whole frame.
     """
-    fit = str(params.get("fit", "contain")).lower()
-    if fit not in EXPORT_FIT_MODES:
-        valid = ", ".join(sorted(EXPORT_FIT_MODES))
-        raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
+    fit = _fit_mode(params, index)
     chain = [f"crop={source_crop}"] if source_crop else []
+    if fit == "stretch":
+        # Deliberately distorts: fills the frame edge to edge, no bars, no crop.
+        return chain + [f"scale={width}:{height},setsar=1"]
     if fit == "cover":
         return chain + [
             f"scale={width}:{height}:force_original_aspect_ratio=increase",
@@ -589,6 +620,7 @@ def _render(
     author: Path | None = None,
     mute: bool = False,
     crop_cmd: Path | None = None,
+    index: int = 0,
 ) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
@@ -607,12 +639,11 @@ def _render(
         # `bg` fill is set: with `blur` the sharp foreground would keep its bars
         # over the blur, and with a colour the bars show as a black band inside
         # the fill. Detected with FFmpeg's cropdetect — no extra dependency.
-        fit = str(params.get("fit", "contain")).lower()
-        wants_fill = fit == "cover" or bool(params.get("bg"))
+        wants_fill = _fit_mode(params, index) in ("cover", "stretch") or bool(params.get("bg"))
         source_crop = None
         if wants_fill and params.get("trim_bars", True):
             source_crop = ffmpeg.detect_content_crop(media)
-        fit_filters = _scale_chain(params, width, height, source_crop)
+        fit_filters = _scale_chain(params, width, height, source_crop, index)
     chain = [*fit_filters, f"fps={fps}"]
     if title is not None:
         fonts.ensure(params.get("title_font"))  # download preset / warn on missing
