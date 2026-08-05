@@ -727,6 +727,21 @@ def test_canvas_positions_and_bg():
     assert "color=black" in blur
 
 
+def test_canvas_explicit_xy_offset():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    # a 720x553 band seated 421px down a 720x1280 canvas — neither top nor centre
+    pad = _canvas_pad({"resolution": "720x553", "canvas": "720x1280", "position": "0,421"})
+    assert pad == "pad=720:1280:0:421:color=black"
+
+
+def test_canvas_xy_offset_outside_canvas_raises():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    with pytest.raises(ValueError, match="outside the 720x1280 canvas"):
+        _canvas_pad({"resolution": "720x553", "canvas": "720x1280", "position": "0,900"})
+
+
 def test_canvas_absent_is_noop():
     from lemontage.engine.blocks.export import _canvas_pad
 

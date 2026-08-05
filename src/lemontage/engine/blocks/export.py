@@ -495,13 +495,42 @@ _CANVAS_XY = {
 assert set(_CANVAS_XY) == EXPORT_CANVAS_POSITIONS
 
 
+def _canvas_xy(position: str, canvas: tuple[int, int], frame: tuple[int, int]) -> str:
+    """The ``pad`` ``x:y`` for ``position``: a named anchor, or an ``"X,Y"`` pixel offset.
+
+    The five anchors cover the common cases, but a fixed layout needs an exact
+    seat — a video band under a header card, say, sits at neither the top nor the
+    centre. ``"X,Y"`` places the frame's top-left corner at that pixel. Both
+    coordinates are integers we format ourselves, so nothing the pipeline writes
+    reaches the filtergraph verbatim.
+    """
+    if position in _CANVAS_XY:
+        return _CANVAS_XY[position]
+    try:
+        x_text, y_text = position.split(",")
+        x, y = int(x_text), int(y_text)
+    except ValueError:
+        valid = ", ".join(sorted(_CANVAS_XY))
+        raise ValueError(
+            f"export: unknown position '{position}' "
+            f"(choose from: {valid}, or an 'X,Y' pixel offset)"
+        ) from None
+    cw, ch = canvas
+    width, height = frame
+    if x < 0 or y < 0 or x + width > cw or y + height > ch:
+        raise ValueError(
+            f"export: position {x},{y} puts the {width}x{height} frame outside the {cw}x{ch} canvas"
+        )
+    return f"{x}:{y}"
+
+
 def _canvas_pad(params: dict[str, Any]) -> str | None:
     """A ``pad`` filter placing the export frame inside a larger ``canvas``.
 
     ``canvas: WxH`` sets the final frame size; ``position`` (default ``center``)
-    picks where the export sits in it. The empty area is filled with ``bg``
-    (a colour, default black — ``bg: blur`` only fills the fit bars, so the
-    canvas falls back to black).
+    picks where the export sits in it — a named anchor or an ``X,Y`` pixel
+    offset. The empty area is filled with ``bg`` (a colour, default black —
+    ``bg: blur`` only fills the fit bars, so the canvas falls back to black).
     """
     canvas = params.get("canvas")
     if not canvas:
@@ -513,12 +542,10 @@ def _canvas_pad(params: dict[str, Any]) -> str | None:
             f"export: canvas {cw}x{ch} is smaller than the export frame {width}x{height}"
         )
     position = str(params.get("position", "center")).lower()
-    if position not in _CANVAS_XY:
-        valid = ", ".join(sorted(_CANVAS_XY))
-        raise ValueError(f"export: unknown position '{position}' (choose from: {valid})")
+    xy = _canvas_xy(position, (cw, ch), (width, height))
     bg = params.get("bg")
     color = "black" if str(bg).lower() == "blur" else _bg_pad_color(bg)
-    return f"pad={cw}:{ch}:{_CANVAS_XY[position]}:color={color}"
+    return f"pad={cw}:{ch}:{xy}:color={color}"
 
 
 def _bg_pad_color(bg: object) -> str:
