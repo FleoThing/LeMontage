@@ -5,6 +5,12 @@ time window of the clip. The band is an FFmpeg ``drawbox`` gated with
 ``enable='between(t,from,to)'``; the text reuses the export title's libass
 plumbing (the static FFmpeg build ships no ``drawtext``), with the ASS
 Dialogue start/end providing the same window.
+
+``text`` also takes a list of ``{text, color}`` runs, for a paragraph whose
+keywords each carry their own colour. The pipeline names colours; this module
+emits the ASS override blocks. User text keeps going through
+:func:`~lemontage.engine.assformat.escape_text` untouched, so the escaping that
+stops an untrusted pipeline from injecting render directives still holds.
 """
 
 from __future__ import annotations
@@ -80,6 +86,56 @@ def _band_filter(band: dict[str, Any], height: int, start: float, end: float | N
     return box
 
 
+def _ass_lines(raw: str, strip: bool) -> str:
+    """Escape one chunk of user text and join its lines with ASS breaks.
+
+    ``strip`` trims each line — right for a whole-overlay string, wrong for an
+    inline run, where the author's spaces are what separate it from its
+    neighbours.
+    """
+    text = raw.replace("\\n", "\n")
+    lines = [escape_text(line) for line in text.splitlines() or [""]]
+    if strip:
+        lines = [line.strip() for line in lines if line.strip()]
+    return r"\N".join(lines)
+
+
+def _ass_body(text: object) -> str:
+    """The ASS Dialogue text: a plain string, or ``{text, color}`` runs.
+
+    Runs are what a multi-colour paragraph needs — the highlighted-keyword look
+    where each phrase carries its own colour. The pipeline never writes ASS: it
+    names a colour, :func:`_ass_color` accepts only six hex digits or a known
+    name, and this function emits the override block. The run's own text still
+    goes through :func:`escape_text`, so its braces and backslashes are
+    neutralised and the tags below are the only ones libass can ever see.
+
+    Runs are concatenated verbatim, spaces included — ``{text: "Apollo 11's"}``
+    followed by ``{text: " flag"}`` is how the two stay apart.
+    """
+    if isinstance(text, str):
+        body = _ass_lines(text, strip=True)
+        if not body:
+            raise ValueError("overlay: 'text' is empty")
+        return body
+    if not isinstance(text, list) or not text:
+        raise ValueError("overlay: 'text' must be a string or a list of {text, color} runs")
+
+    parts = []
+    for index, run in enumerate(text):
+        if not isinstance(run, dict) or not str(run.get("text", "")).strip():
+            raise ValueError(f"overlay: text run {index} needs a non-empty 'text'")
+        body = _ass_lines(str(run["text"]), strip=False)
+        color = run.get("color")
+        if color:
+            # `\c` wants the &H..& override form; _ass_color returns the bare
+            # Style-field form, so the closing & is added here.
+            ass = _ass_color(color, f"overlay.text[{index}].color")
+            body = f"{{\\c{ass}&}}{body}{{\\r}}"
+        parts.append(body)
+    return "".join(parts)
+
+
 def _text_ass(
     params: dict[str, Any],
     ctx: RunContext,
@@ -94,10 +150,8 @@ def _text_ass(
     if text_size <= 0:
         raise ValueError("overlay: size must be > 0")
     font = fonts.family(params.get("font"))
-    raw = str(params["text"])
-    lines = [escape_text(ln.strip()) for ln in raw.replace("\\n", "\n").splitlines() if ln.strip()]
-    if not lines:
-        raise ValueError("overlay: 'text' is empty")
+    body = _ass_body(params["text"])
+    line_count = body.count("\\N") + 1
 
     band = params.get("band")
     position = str(band.get("position", "top")).lower() if isinstance(band, dict) else "top"
@@ -105,7 +159,7 @@ def _text_ass(
     if isinstance(band, dict):
         # Centre the text block vertically inside the band.
         band_h = int(band.get("height", _DEFAULT_BAND_HEIGHT))
-        margin = max((band_h - text_size * len(lines)) // 2, 0)
+        margin = max((band_h - text_size * line_count) // 2, 0)
     else:
         margin = int(params.get("margin", _DEFAULT_MARGIN))
 
@@ -117,10 +171,10 @@ def _text_ass(
             font=font,
             size=text_size,
             margin=margin,
-            text=r"\N".join(lines),
+            text=body,
             start=_ass_timestamp(start),
             end=_ass_timestamp(end) if end is not None else _TITLE_FOREVER,
-            primary=_ass_color(params.get("color")),
+            primary=_ass_color(params.get("color"), "overlay.color"),
             align=align,
             border=1,
             outline="&H00000000",

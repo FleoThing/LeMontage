@@ -9,6 +9,16 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `overlay` coloured runs: `text` also takes a list of `{text, color}` runs, so
+  a paragraph can highlight its key phrases in different colours instead of
+  being one flat block. Runs are concatenated verbatim (the spaces between them
+  are the ones you write) and a run without a `color` falls back to the
+  overlay's. The pipeline only ever *names* a colour — it goes through the same
+  strict parser as `title_color`, the block emits the renderer tags, and run
+  text keeps going through the existing escaping, so an untrusted pipeline still
+  cannot inject render directives. A bad colour names the run it came from.
+  See `examples/pipeline_overlay.yaml`.
+
 - `detect_clips` `method: beat`: music-synced cuts. Reads a `track`'s beats
   (librosa PLP — follows tempo drift, no fixed BPM) and tiles the source into
   clips `beats_per_clip` beats long, so the concatenated reel cuts on the beat;

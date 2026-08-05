@@ -729,7 +729,7 @@ The clip is re-encoded, so run it before `export` in the chain.
 |---|---|---|---|
 | `from` | channel | — | Channel of clips to map over. |
 | `input` | path | pipeline input | Source video (single mode). |
-| `text` | string | required | The overlay text. Real newlines or literal `\n` split it into lines. |
+| `text` | string \| list | required | The overlay text. A string: real newlines or literal `\n` split it into lines. A list of `{text, color}` runs colours each phrase independently (see below). |
 | `band` | mapping | — | A uniform full-width band drawn behind the text. Keys: `color` (name or `#RRGGBB`, default `black`), `height` (px, default `210`), `position` (`top` or `bottom`, default `top`). Omit for text without a band. |
 | `show` | mapping | whole clip | Time window the overlay is visible: `from` (default `0`) and `to`, as time values (§13.1). Omit to keep it for the whole clip. |
 | `font` | string | `font1` | Text font: a preset alias `font1`…`font5` or an installed family name (same plumbing as `export.title_font`). |
@@ -740,6 +740,32 @@ The clip is re-encoded, so run it before `export` in the chain.
 The text follows the band's `position` (top-centre or bottom-centre of the
 frame). `show.except: transition` (hide during a concat transition) is
 reserved — the validator rejects it for now.
+
+**Coloured runs.** `color` paints the whole overlay one colour. For the
+highlighted-keyword look — a paragraph where each key phrase carries its own
+colour — give `text` a list of runs instead:
+
+```yaml
+- overlay:
+    from: clip_channel
+    size: 58
+    text:
+      - {text: "Apollo 11's", color: "#FFFF00"}
+      - {text: " flag never stayed standing. The "}
+      - {text: "exhaust", color: "#FF8A3D"}
+      - {text: " blew it "}
+      - {text: "flat", color: red}
+      - {text: "."}
+```
+
+Runs are concatenated **verbatim** — the spaces that separate them are the ones
+you write, as above. A run without a `color` uses the overlay's `color`. Lines
+still wrap on their own; `\n` inside a run forces a break.
+
+Colours are named, never written as renderer syntax: each one goes through the
+same strict parser as `title_color` (six hex digits or a known name), and a bad
+value names the run it came from. Run text itself is escaped exactly as before,
+so a pipeline from an untrusted source still cannot inject render directives.
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 

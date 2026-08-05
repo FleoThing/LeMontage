@@ -30,7 +30,23 @@ steps:
       band: {color: white, height: 210, position: top}
       show: {from: 0, to: 11s}
 
-  # 4. Vertical export
+  # 4. A second overlay, lower down, with per-phrase colours. Runs are joined
+  #    verbatim — the spaces between them are the ones written here. A run with
+  #    no `color` uses the overlay's `color` (white by default).
+  - id: keywords
+    overlay:
+      from: clips
+      size: 58
+      margin: 300
+      text:
+        - {text: "Apollo 11's", color: "#FFFF00"}
+        - {text: " flag never stayed standing. The "}
+        - {text: "exhaust", color: "#FF8A3D"}
+        - {text: " blew it "}
+        - {text: "flat", color: red}
+        - {text: "."}
+
+  # 5. Vertical export
   - export:
       from: clips
       format: vertical
