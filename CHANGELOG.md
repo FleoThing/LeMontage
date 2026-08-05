@@ -16,6 +16,16 @@ may still introduce breaking changes, and those changes must be called out here.
   coordinates are integers the block formats itself, and the frame must stay
   fully inside the canvas (a runtime error otherwise).
 
+- `overlay` `image`: composite a prepared image over a clip, transparency
+  preserved — a logo, a lower-third, a whole header card. Text and bands can
+  only draw glyphs and rectangles, so until now anything with real artwork in it
+  had to be baked into the source. `x`/`y` place the top-left corner, and a
+  negative value counts back from the right/bottom edge (`x: -40` = 40px in from
+  the right) so a corner watermark needs no knowledge of the frame size. The
+  existing `show` window gates the image too, and the layers compose band →
+  image → text. `text` is no longer required on its own: an overlay needs a
+  `text` and/or an `image`. See `examples/pipeline_overlay.yaml`.
+
 - `detect_clips` `method: beat`: music-synced cuts. Reads a `track`'s beats
   (librosa PLP — follows tempo drift, no fixed BPM) and tiles the source into
   clips `beats_per_clip` beats long, so the concatenated reel cuts on the beat;

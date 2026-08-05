@@ -1,6 +1,6 @@
 lemontage: "1.0"
 name: overlay
-description: "Burn a two-line title on a white band, visible only for the first 11 seconds"
+description: "Burn a two-line title on a white band for the first 11s, then a corner watermark PNG"
 
 input:
   type: video
@@ -30,7 +30,18 @@ steps:
       band: {color: white, height: 210, position: top}
       show: {from: 0, to: 11s}
 
-  # 4. Vertical export
+  # 4. A prepared PNG (transparency preserved) composited over the clip. Here a
+  #    corner watermark: negative x/y count back from the right/bottom edge, so
+  #    it lands 40px in from the right and 30px up from the bottom whatever the
+  #    frame size. The image is used at its own size — no rescaling.
+  - id: watermark
+    overlay:
+      from: clips
+      image: ./watermark.png
+      x: -40
+      y: -30
+
+  # 5. Vertical export
   - export:
       from: clips
       format: vertical

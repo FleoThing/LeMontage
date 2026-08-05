@@ -1,10 +1,16 @@
-"""``overlay`` — conditional title/band overlay on a clip (SPEC §6.12).
+"""``overlay`` — conditional title/band/image overlay on a clip (SPEC §6.12).
 
 Draws multi-line text — optionally on a uniform full-width colour band — over a
 time window of the clip. The band is an FFmpeg ``drawbox`` gated with
 ``enable='between(t,from,to)'``; the text reuses the export title's libass
 plumbing (the static FFmpeg build ships no ``drawtext``), with the ASS
 Dialogue start/end providing the same window.
+
+An ``image`` composites a prepared graphic (a transparent PNG: a logo, a
+lower-third, a whole header card) at a pixel position, gated by the same window.
+Text and libass can only ever draw glyphs, so anything with real artwork in it
+had to be baked into the source before this. The image is used at its own size —
+author it at the frame's resolution rather than asking the block to rescale it.
 """
 
 from __future__ import annotations
@@ -63,6 +69,13 @@ def _show_window(params: dict[str, Any]) -> tuple[float, float | None]:
     return start, end
 
 
+def _enable(start: float, end: float | None) -> str:
+    """The FFmpeg ``enable=`` gate for the show window, or "" for the whole clip."""
+    if end is None and start <= 0:
+        return ""
+    return f":enable='between(t,{start:g},{end if end is not None else 1e9:g})'"
+
+
 def _band_filter(band: dict[str, Any], height: int, start: float, end: float | None) -> str:
     """A full-width ``drawbox`` band, gated to the show window."""
     band_h = int(band.get("height", _DEFAULT_BAND_HEIGHT))
@@ -75,9 +88,50 @@ def _band_filter(band: dict[str, Any], height: int, start: float, end: float | N
     y = 0 if position == "top" else height - band_h
     color = _bg_pad_color(band.get("color", "black"))
     box = f"drawbox=x=0:y={y}:w=iw:h={band_h}:color={color}:t=fill"
-    if end is not None or start > 0:
-        box += f":enable='between(t,{start:g},{end if end is not None else 1e9:g})'"
-    return box
+    return box + _enable(start, end)
+
+
+def _image_path(value: object) -> str:
+    """The ``image`` file, checked up front so FFmpeg doesn't fail obscurely."""
+    path = Path(str(value))
+    if not path.is_file():
+        raise ValueError(f"overlay: image '{value}' not found")
+    return str(path)
+
+
+def _image_xy(params: dict[str, Any]) -> str:
+    """``x:y`` for the image's top-left corner.
+
+    A negative value counts back from the opposite edge (``x: -40`` = 40px in
+    from the right), which is how a corner watermark is expressed without
+    knowing the frame width. Both are integers we format into the expression
+    ourselves — the pipeline never supplies filtergraph syntax.
+    """
+    parts = []
+    for key, frame, img in (("x", "W", "w"), ("y", "H", "h")):
+        value = params.get(key, 0)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"overlay: {key} must be an integer (pixels)")
+        parts.append(str(value) if value >= 0 else f"{frame}-{img}{value}")
+    return ":".join(parts)
+
+
+def _image_graph(band: list[str], text: list[str], xy: str, gate: str) -> tuple[str, str]:
+    """The ``filter_complex`` compositing the image, and the label to map.
+
+    Order is band → image → text, so a caption stays readable on top of the
+    artwork rather than under it.
+    """
+    steps, current = [], "[0:v]"
+    if band:
+        steps.append(f"{current}{','.join(band)}[banded]")
+        current = "[banded]"
+    steps.append(f"{current}[1:v]overlay={xy}{gate}[composited]")
+    current = "[composited]"
+    if text:
+        steps.append(f"{current}{','.join(text)}[out]")
+        current = "[out]"
+    return ";".join(steps), current
 
 
 def _text_ass(
@@ -132,30 +186,37 @@ def _text_ass(
 
 
 def _overlay(media: str, params: dict[str, Any], ctx: RunContext, name: str, out: Path) -> None:
-    if not params.get("text"):
-        raise ValueError("overlay: 'text' is required")
+    image = params.get("image")
+    if not params.get("text") and not image:
+        raise ValueError("overlay: needs a 'text' and/or an 'image'")
     start, end = _show_window(params)
     size_wh = ffmpeg.probe_resolution(media)
-    chain: list[str] = []
+
+    band_chain: list[str] = []
     band = params.get("band")
     if band is not None:
         if not isinstance(band, dict):
             raise ValueError("overlay: 'band' must be a mapping (color/height/position)")
-        chain.append(_band_filter(band, size_wh[1], start, end))
-    fonts.ensure(params.get("font"))
-    chain.append(fonts.libass_filter(_text_ass(params, ctx, name, size_wh, start, end)))
-    ffmpeg.run(
-        [
-            "-i",
-            str(media),
-            "-vf",
-            ",".join(chain),
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-c:a",
-            "aac",
-            str(out),
-        ]
-    )
+        band_chain.append(_band_filter(band, size_wh[1], start, end))
+
+    text_chain: list[str] = []
+    if params.get("text"):
+        fonts.ensure(params.get("font"))
+        text_chain.append(fonts.libass_filter(_text_ass(params, ctx, name, size_wh, start, end)))
+
+    if image:
+        # A second input means a filter_complex, so the streams need mapping by
+        # hand; `0:a?` keeps the audio when the clip has one and skips it when
+        # it doesn't (a `still` clip is video-only).
+        graph, label = _image_graph(band_chain, text_chain, _image_xy(params), _enable(start, end))
+        args = [
+            "-i", str(media),
+            "-i", _image_path(image),
+            "-filter_complex", graph,
+            "-map", label,
+            "-map", "0:a?",
+        ]  # fmt: skip
+    else:
+        args = ["-i", str(media), "-vf", ",".join(band_chain + text_chain)]
+
+    ffmpeg.run([*args, "-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac", str(out)])
