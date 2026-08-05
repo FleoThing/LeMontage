@@ -22,13 +22,22 @@ def calls(monkeypatch):
 
     def fake_run(args):
         calls["args"] = args
-        calls["vf"] = args[args.index("-vf") + 1]
+        # an `image` overlay needs a second input, so it renders via filter_complex
+        key = "-filter_complex" if "-filter_complex" in args else "-vf"
+        calls["vf"] = args[args.index(key) + 1]
         Path(args[-1]).write_bytes(b"v")
 
     monkeypatch.setattr(ffmpeg, "run", fake_run)
     monkeypatch.setattr(ffmpeg, "probe_resolution", lambda _media: (1080, 1920))
     monkeypatch.setattr(fonts, "ensure", lambda _f: None)
     return calls
+
+
+@pytest.fixture()
+def png(tmp_path):
+    path = tmp_path / "card.png"
+    path.write_bytes(b"\x89PNG")
+    return str(path)
 
 
 def ass_text(vf: str) -> str:
@@ -72,9 +81,58 @@ def test_overlay_mapped_mode_over_channel(tmp_path, calls):
     assert res.outputs["clips"].endswith("ov-2.mp4")
 
 
-def test_overlay_requires_text(tmp_path, calls):
-    with pytest.raises(ValueError, match="text"):
+def test_overlay_requires_text_or_image(tmp_path, calls):
+    with pytest.raises(ValueError, match="'text' and/or an 'image'"):
         OverlayBlock().execute({}, ctx(tmp_path), "ov")
+
+
+# --- image ---------------------------------------------------------------------
+
+
+def test_overlay_image_alone_composites_at_origin(tmp_path, calls, png):
+    OverlayBlock().execute({"image": png}, ctx(tmp_path), "ov")
+    assert calls["vf"] == "[0:v][1:v]overlay=0:0[composited]"
+    assert calls["args"][calls["args"].index("-map") + 1] == "[composited]"
+    assert "0:a?" in calls["args"]  # audio survives, and a silent clip still works
+    assert png in calls["args"]
+    assert "ass=" not in calls["vf"]  # no text asked for, no libass pass
+
+
+def test_overlay_image_at_pixel_position(tmp_path, calls, png):
+    OverlayBlock().execute({"image": png, "x": 0, "y": 421}, ctx(tmp_path), "ov")
+    assert "overlay=0:421" in calls["vf"]
+
+
+def test_overlay_image_negative_xy_counts_from_far_edge(tmp_path, calls, png):
+    OverlayBlock().execute({"image": png, "x": -40, "y": -30}, ctx(tmp_path), "ov")
+    assert "overlay=W-w-40:H-h-30" in calls["vf"]
+
+
+def test_overlay_image_gated_by_show_window(tmp_path, calls, png):
+    params = {"image": png, "show": {"from": "2s", "to": "6s"}}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert "overlay=0:0:enable='between(t,2,6)'" in calls["vf"]
+
+
+def test_overlay_image_under_text_and_over_band(tmp_path, calls, png):
+    params = {"text": "hi", "image": png, "band": {"height": 200, "position": "top"}}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    graph = calls["vf"]
+    # band first, image on the banded frame, text last so it stays readable
+    assert graph.startswith("[0:v]drawbox=")
+    assert "[banded][1:v]overlay=" in graph
+    assert "[composited]ass=" in graph
+    assert graph.endswith("[out]")
+
+
+def test_overlay_missing_image_raises(tmp_path, calls):
+    with pytest.raises(ValueError, match="not found"):
+        OverlayBlock().execute({"image": str(tmp_path / "nope.png")}, ctx(tmp_path), "ov")
+
+
+def test_overlay_non_integer_xy_raises(tmp_path, calls, png):
+    with pytest.raises(ValueError, match="x must be an integer"):
+        OverlayBlock().execute({"image": png, "x": "12px"}, ctx(tmp_path), "ov")
 
 
 def test_overlay_rejects_bad_window(tmp_path, calls):
@@ -119,10 +177,16 @@ def test_validator_accepts_full_overlay():
     assert validate_doc(doc) == []
 
 
+def test_validator_accepts_image_only_overlay():
+    assert validate_doc(pipeline({"image": "./card.png", "x": 0, "y": 421})) == []
+
+
 @pytest.mark.parametrize(
     ("params", "needle"),
     [
-        ({}, "non-empty 'text'"),
+        ({}, "'text' and/or an 'image'"),
+        ({"image": 12}, "overlay.image must be a path"),
+        ({"image": "./c.png", "y": "421px"}, "overlay.y must be an integer"),
         ({"text": "t", "band": "white"}, "band must be a mapping"),
         ({"text": "t", "band": {"height": 0}}, "band.height"),
         ({"text": "t", "band": {"position": "left"}}, "band.position"),

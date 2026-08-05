@@ -709,12 +709,14 @@ Single mode (no `from:`) lays the music over the pipeline input (or `input:`).
 
 ---
 
-### 6.13 `overlay` — conditional title/band overlay
+### 6.13 `overlay` — conditional title/band/image overlay
 
 Burns multi-line text — optionally on a uniform full-width colour band — over
 the clip, either for the whole clip or only during a time window. More flexible
 than `export`'s `title`: it can sit on a solid band and appear/disappear at
-chosen times. Operates on the pipeline input, or maps over a channel of clips.
+chosen times. It also composites a prepared `image`, which is the only way to
+put real artwork on a clip — text and bands can draw glyphs and rectangles,
+nothing else. Operates on the pipeline input, or maps over a channel of clips.
 The clip is re-encoded, so run it before `export` in the chain.
 
 ```yaml
@@ -729,7 +731,10 @@ The clip is re-encoded, so run it before `export` in the chain.
 |---|---|---|---|
 | `from` | channel | — | Channel of clips to map over. |
 | `input` | path | pipeline input | Source video (single mode). |
-| `text` | string | required | The overlay text. Real newlines or literal `\n` split it into lines. |
+| `text` | string | — | The overlay text. Real newlines or literal `\n` split it into lines. A `text` and/or an `image` is required. |
+| `image` | path | — | A prepared image composited over the clip, transparency preserved (a PNG logo, lower-third or full header card). Used at its own size — author it at the frame's resolution, the block does not rescale. |
+| `x` | int | `0` | Image left edge, in px. Negative counts back from the right edge (`-40` = 40px in from the right), so a corner watermark needs no knowledge of the frame width. |
+| `y` | int | `0` | Image top edge, in px. Negative counts back from the bottom edge. |
 | `band` | mapping | — | A uniform full-width band drawn behind the text. Keys: `color` (name or `#RRGGBB`, default `black`), `height` (px, default `210`), `position` (`top` or `bottom`, default `top`). Omit for text without a band. |
 | `show` | mapping | whole clip | Time window the overlay is visible: `from` (default `0`) and `to`, as time values (§13.1). Omit to keep it for the whole clip. |
 | `font` | string | `font1` | Text font: a preset alias `font1`…`font5` or an installed family name (same plumbing as `export.title_font`). |
@@ -740,6 +745,22 @@ The clip is re-encoded, so run it before `export` in the chain.
 The text follows the band's `position` (top-centre or bottom-centre of the
 frame). `show.except: transition` (hide during a concat transition) is
 reserved — the validator rejects it for now.
+
+**Image overlay.** `show` gates the image exactly as it gates the text, and the
+two compose: band first, image over it, text last so a caption stays readable on
+top of the artwork. A corner watermark, held for the whole clip:
+
+```yaml
+- overlay:
+    from: clip_channel
+    image: ./watermark.png
+    x: -40                # 40px in from the right edge
+    y: -30                # 30px up from the bottom edge
+```
+
+Anything with real artwork in it — a fake-post header card, a diagram, an
+annotated callout — is authored outside LeMontage as a transparent PNG at the
+frame's resolution and dropped in at `0,0`.
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 

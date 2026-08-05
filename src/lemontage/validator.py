@@ -322,9 +322,18 @@ def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
 
 
 def _check_overlay(params: dict, label: str, errors: list[str]) -> None:
-    text = params.get("text")
-    if not isinstance(text, str) or not text.strip():
+    text, image = params.get("text"), params.get("image")
+    if text is None and image is None:
+        errors.append(f"{label}: overlay needs a 'text' and/or an 'image'")
+    if text is not None and (not isinstance(text, str) or not text.strip()):
         errors.append(f"{label}: overlay requires a non-empty 'text' string")
+    if image is not None and (not isinstance(image, str) or not image.strip()):
+        errors.append(f"{label}: overlay.image must be a path to an image file")
+
+    for key in ("x", "y"):
+        value = params.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+            errors.append(f"{label}: overlay.{key} must be an integer (pixels)")
 
     band = params.get("band")
     if band is not None:
