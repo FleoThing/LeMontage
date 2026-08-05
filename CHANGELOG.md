@@ -7,8 +7,16 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-05
+
 ### Added
 
+- `export` `fit: stretch`: scale each axis independently so a horizontal source
+  fills a vertical frame edge to edge — distorted on purpose, but nothing
+  cropped and no bars, which neither `contain` nor `cover` can do. `fit` also
+  takes a **list**, picking the mode per clip by position
+  (`fit: [cover, cover, stretch]` stretches only the 3rd), the same convention
+  as `mute`; positions past the end fall back to `contain`.
 - `export` `position`: an exact `X,Y` pixel offset inside the `canvas`, on top of
   the five named anchors. The anchors can't express a fixed layout — a video
   band seated under a header card is at neither the top nor the centre — so
