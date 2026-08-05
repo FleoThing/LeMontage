@@ -9,6 +9,13 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `export` `position`: an exact `X,Y` pixel offset inside the `canvas`, on top of
+  the five named anchors. The anchors can't express a fixed layout — a video
+  band seated under a header card is at neither the top nor the centre — so
+  `position: 0,421` now places the frame's top-left corner precisely. Both
+  coordinates are integers the block formats itself, and the frame must stay
+  fully inside the canvas (a runtime error otherwise).
+
 - `detect_clips` `method: beat`: music-synced cuts. Reads a `track`'s beats
   (librosa PLP — follows tempo drift, no fixed BPM) and tiles the source into
   clips `beats_per_clip` beats long, so the concatenated reel cuts on the beat;

@@ -410,7 +410,7 @@ Renders the final video(s) to disk.
 | `trim_bars` | bool | `true` | Auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source fills the frame. Applied with `fit: cover` (else the bars leak into the crop) and whenever a `bg` fill is set — `blur` (else the sharp foreground keeps its bars over the blur) or a colour (else the bars show as a black band inside the fill). Set `false` to keep them. |
 | `bg` | string | `black` | Fill for the `contain` bars: a colour (`white`, `#101010`) or `blur` — a blurred, zoomed copy of the source behind the sharp centred video (the classic vertical look). |
 | `canvas` | string | — | Place the export frame inside a larger canvas, e.g. `canvas: 1080x1920` with `resolution: 1080x1080` puts a square video on a vertical frame. The canvas becomes the final frame size and must be at least as large as the export frame. The empty area is filled with `bg` (a colour, default black; `bg: blur` only fills the fit bars, the canvas stays black). Applied after titles/author, so those stay on the export frame. |
-| `position` | enum | `center` | Where the export frame sits inside the `canvas`: `center` \| `top` \| `bottom` \| `left` \| `right`. |
+| `position` | enum \| string | `center` | Where the export frame sits inside the `canvas`: `center` \| `top` \| `bottom` \| `left` \| `right`, or an exact `X,Y` pixel offset of the frame's top-left corner (e.g. `0,421`). The frame must stay fully inside the canvas. |
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
 | `mute` | bool \| list | `false` | Silence the audio. `true` mutes every clip; a list of booleans mutes per clip by position (e.g. `[false, true]`). The (silent) audio track is kept so a later `concat` still works. |
@@ -451,6 +451,18 @@ hand-written ffmpeg `pad` needed. E.g. a square video centred on a vertical
     canvas: 1080x1920
     position: center      # center | top | bottom | left | right
     bg: "#101010"         # canvas fill colour (default black)
+```
+
+The five anchors cover the common cases, but a fixed layout needs an exact seat
+— a video band sitting under a header card is at neither the top nor the centre.
+`position` also takes an `X,Y` pixel offset for the frame's top-left corner:
+
+```yaml
+- export:
+    from: clip_channel
+    resolution: 720x553
+    canvas: 720x1280
+    position: 0,421       # band seated 421px down, rest of the canvas stays bg
 ```
 
 **Author label.** `author` burns a discreet always-on credit in a corner of the

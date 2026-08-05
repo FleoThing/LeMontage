@@ -229,11 +229,12 @@ def _check_block_params(
                 f"{label}: export.canvas must be a 'WIDTHxHEIGHT' string (e.g. 1080x1920)"
             )
         position = params.get("position")
-        if position is not None and (
-            not isinstance(position, str) or position.lower() not in spec.EXPORT_CANVAS_POSITIONS
-        ):
+        if position is not None and not _valid_canvas_position(position):
             valid = ", ".join(sorted(spec.EXPORT_CANVAS_POSITIONS))
-            errors.append(f"{label}: unknown export position '{position}' (choose from: {valid})")
+            errors.append(
+                f"{label}: unknown export position '{position}' "
+                f"(choose from: {valid}, or an 'X,Y' pixel offset)"
+            )
 
     if block == "filter":
         _check_filter_params(params, label, errors)
@@ -319,6 +320,19 @@ def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
 
     if look is None and eq is None:
         errors.append(f"{label}: filter needs a 'look' and/or an 'eq'")
+
+
+def _valid_canvas_position(position: object) -> bool:
+    """A named canvas anchor, or an ``X,Y`` pixel offset.
+
+    Only the shape is checked here — whether the offset actually fits inside the
+    canvas depends on the resolved export resolution, so that stays a runtime
+    check in the block.
+    """
+    if not isinstance(position, str):
+        return False
+    text = position.lower()
+    return text in spec.EXPORT_CANVAS_POSITIONS or bool(re.fullmatch(r"\d+,\d+", text))
 
 
 def _check_overlay(params: dict, label: str, errors: list[str]) -> None:

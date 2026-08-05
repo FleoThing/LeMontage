@@ -80,7 +80,8 @@ OVERLAY_BAND_POSITIONS = frozenset({"top", "bottom"})
 # How `export` fits the source into the target frame (see SPEC §6.6).
 EXPORT_FIT_MODES = frozenset({"contain", "cover"})
 
-# Where `export` places the frame inside a larger `canvas` (see SPEC §6.6).
+# Where `export` places the frame inside a larger `canvas` (see SPEC §6.6). An
+# explicit "X,Y" pixel offset is also accepted wherever these names are.
 EXPORT_CANVAS_POSITIONS = frozenset({"center", "top", "bottom", "left", "right"})
 
 # Motion effects `still` can apply while rendering an image to a clip (§6.11).
