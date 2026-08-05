@@ -335,12 +335,32 @@ def _valid_canvas_position(position: object) -> bool:
     return text in spec.EXPORT_CANVAS_POSITIONS or bool(re.fullmatch(r"\d+,\d+", text))
 
 
+def _valid_overlay_text(text: object) -> bool:
+    """A non-empty string, or a non-empty list of ``{text, color}`` runs.
+
+    Colour names are left to the block: they go through the same strict parser as
+    every other colour in the spec, and a runtime error there says exactly which
+    run is wrong.
+    """
+    if isinstance(text, str):
+        return bool(text.strip())
+    if not isinstance(text, list) or not text:
+        return False
+    return all(
+        isinstance(run, dict) and isinstance(run.get("text"), str) and run["text"].strip()
+        for run in text
+    )
+
+
 def _check_overlay(params: dict, label: str, errors: list[str]) -> None:
     text, image = params.get("text"), params.get("image")
     if text is None and image is None:
         errors.append(f"{label}: overlay needs a 'text' and/or an 'image'")
-    if text is not None and (not isinstance(text, str) or not text.strip()):
-        errors.append(f"{label}: overlay requires a non-empty 'text' string")
+    if text is not None and not _valid_overlay_text(text):
+        errors.append(
+            f"{label}: overlay requires a non-empty 'text' string, "
+            f"or a list of {{text, color}} runs"
+        )
     if image is not None and (not isinstance(image, str) or not image.strip()):
         errors.append(f"{label}: overlay.image must be a path to an image file")
 

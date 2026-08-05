@@ -312,17 +312,23 @@ _NAMED_COLORS = {
 }
 
 
-def _ass_color(value: object) -> str:
+def _ass_color(value: object, field: str = "export.title_color") -> str:
     """Convert a ``#RRGGBB`` hex or a colour name to an ASS ``&H00BBGGRR`` string.
 
     ASS stores the primary colour as ``&HAABBGGRR`` (alpha, then blue/green/red),
-    so we reorder the RGB bytes. Defaults to white when unset.
+    so we reorder the RGB bytes. Defaults to white when unset. ``field`` names the
+    offending key in the error — several blocks take colours now, and "invalid
+    title_color" is a poor thing to read when the typo was in an overlay run.
+
+    This is also the only gate a colour passes before being written into an ASS
+    override block, so it must stay strict: exactly six hex digits, or a name
+    from the table.
     """
     if not value:
         return "&H00FFFFFF"
     text = _NAMED_COLORS.get(str(value).strip().lower(), str(value).strip().lstrip("#").lower())
     if len(text) != 6 or any(c not in "0123456789abcdef" for c in text):
-        raise ValueError(f"export: invalid title_color '{value}' (use #RRGGBB or a colour name)")
+        raise ValueError(f"invalid {field} '{value}' (use #RRGGBB or a colour name)")
     rr, gg, bb = text[0:2], text[2:4], text[4:6]
     return f"&H00{bb}{gg}{rr}".upper()
 

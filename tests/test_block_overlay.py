@@ -135,6 +135,64 @@ def test_overlay_non_integer_xy_raises(tmp_path, calls, png):
         OverlayBlock().execute({"image": png, "x": "12px"}, ctx(tmp_path), "ov")
 
 
+# --- coloured runs -------------------------------------------------------------
+
+
+def test_overlay_runs_colour_each_phrase(tmp_path, calls):
+    params = {
+        "text": [
+            {"text": "Apollo 11's", "color": "#FFFF00"},
+            {"text": " flag never stayed "},
+            {"text": "standing", "color": "red"},
+        ]
+    }
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    line = [ln for ln in ass_text(calls["vf"]).splitlines() if ln.startswith("Dialogue:")][0]
+    # yellow is &H0000FFFF in ASS's BBGGRR order; \r returns to the style default
+    assert r"{\c&H0000FFFF&}Apollo 11's{\r} flag never stayed {\c&H000000FF&}standing{\r}" in line
+
+
+def test_overlay_runs_keep_their_own_spacing(tmp_path, calls):
+    params = {"text": [{"text": "a"}, {"text": " b"}]}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert "a b" in ass_text(calls["vf"])
+
+
+def test_overlay_run_without_colour_is_plain(tmp_path, calls):
+    OverlayBlock().execute({"text": [{"text": "plain"}]}, ctx(tmp_path), "ov")
+    ass = ass_text(calls["vf"])
+    assert "plain" in ass and r"\c&H" not in ass
+
+
+def test_overlay_runs_still_escape_user_text(tmp_path, calls):
+    """The colour tags are ours; the run's own braces must stay neutralised."""
+    params = {"text": [{"text": r"{\fscx300}pwned", "color": "white"}]}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    line = [ln for ln in ass_text(calls["vf"]).splitlines() if ln.startswith("Dialogue:")][0]
+    assert "fscx300" in line  # kept as literal text...
+    assert r"{\fscx300}" not in line  # ...but never as an override block
+    assert line.count("{") == 2 and line.count("}") == 2  # only our \c and \r
+
+
+def test_overlay_runs_multiline_centre_in_band(tmp_path, calls):
+    params = {"text": [{"text": "one\ntwo"}], "band": {"height": 300}, "size": 100}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    ass = ass_text(calls["vf"])
+    assert r"one\Ntwo" in ass
+    assert ",50,1" in ass  # (300 - 100*2) // 2 = 50, so both lines are counted
+
+
+def test_overlay_run_bad_colour_names_the_run(tmp_path, calls):
+    params = {"text": [{"text": "a"}, {"text": "b", "color": "fuschia"}]}
+    with pytest.raises(ValueError, match=r"overlay.text\[1\].color"):
+        OverlayBlock().execute(params, ctx(tmp_path), "ov")
+
+
+def test_overlay_empty_run_rejected(tmp_path, calls):
+    with pytest.raises(ValueError, match="text run 0"):
+        OverlayBlock().execute({"text": [{"color": "red"}]}, ctx(tmp_path), "ov")
+
+
 def test_overlay_rejects_bad_window(tmp_path, calls):
     with pytest.raises(ValueError, match="show.to"):
         params = {"text": "t", "show": {"from": "5s", "to": "2s"}}
@@ -181,12 +239,20 @@ def test_validator_accepts_image_only_overlay():
     assert validate_doc(pipeline({"image": "./card.png", "x": 0, "y": 421})) == []
 
 
+def test_validator_accepts_coloured_runs():
+    doc = pipeline({"text": [{"text": "a", "color": "yellow"}, {"text": " b"}]})
+    assert validate_doc(doc) == []
+
+
 @pytest.mark.parametrize(
     ("params", "needle"),
     [
         ({}, "'text' and/or an 'image'"),
         ({"image": 12}, "overlay.image must be a path"),
         ({"image": "./c.png", "y": "421px"}, "overlay.y must be an integer"),
+        ({"text": []}, "list of {text, color} runs"),
+        ({"text": ["a", "b"]}, "list of {text, color} runs"),
+        ({"text": [{"color": "red"}]}, "list of {text, color} runs"),
         ({"text": "t", "band": "white"}, "band must be a mapping"),
         ({"text": "t", "band": {"height": 0}}, "band.height"),
         ({"text": "t", "band": {"position": "left"}}, "band.position"),
