@@ -7,6 +7,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-10
+
 ### Fixed
 
 - Mapped blocks placed **after** `export` (`filter`, `speed`, `reverse`,
