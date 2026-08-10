@@ -16,6 +16,7 @@ from .speed import SpeedBlock
 from .still import StillBlock
 from .stills import StillsBlock
 from .stt import SttBlock
+from .zoom import ZoomBlock
 
 # Maps a block name to its implementation. The executor looks blocks up here.
 REGISTRY: dict[str, Block] = {
@@ -34,6 +35,7 @@ REGISTRY: dict[str, Block] = {
         StillsBlock(),
         StillBlock(),
         MusicBlock(),
+        ZoomBlock(),
     )
 }
 

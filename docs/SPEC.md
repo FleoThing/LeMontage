@@ -848,6 +848,49 @@ re-encodes it once) and `cut → export → filter` grades the final frame.
 
 ---
 
+### 6.15 `zoom` — punch in on a clip
+
+Zoom a **video** clip: the frame snaps closer on a punchline and back out, or
+simply sits tighter for the whole clip. `still` has `motion: zoomin` for images;
+this is the same move for footage. Works on the pipeline input or maps over a
+channel. FFmpeg-only, no extra dependency.
+
+```yaml
+# a punch in at 2.4s and back out at 5s
+- zoom:
+    from: clip_channel
+    amount: 1.15
+    at: [2.4, 5]
+    duration: 0.15s
+
+# no `at`: one framing per clip — every jump cut changes the shot size
+- zoom:
+    from: clip_channel
+    amount: [1.0, 1.12, 1.0, 1.2]
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `amount` | float / list | `1.15` | Zoom factor (`1.15` = 15% closer, must be >= 1.0). A **list** sets it per clip by position (like `export.fit` / `mute`); a position past the end means no punch, so a short list cycles a reel of any length. |
+| `at` | list | — | Times (clip-relative, §13.1) where the frame punches. They **alternate**: the 1st zooms in, the 2nd back out, the 3rd in again. Omit for a static punch over the whole clip. |
+| `duration` | duration | `0.15s` | How long each punch takes, eased in and out. `0.15s` reads as a snap; `0.6s` as a slow push. |
+| `from` | channel | — | Map over a channel of clips instead of the input. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+Without `at` the block is a `crop` + `scale` — exact, cheap, no artefacts. With
+`at` it is a `zoompan` whose zoom is a sum of eased ramps; it renders at the
+**source's** frame rate (giving it another one would silently retime the clip).
+
+Where to place it: before `export` punches the source-shaped clip (the export
+then re-encodes it once anyway); after `export` punches the final frame — but
+note it crops the reframed image, so anything already at the edge (captions
+burned before it) is cut off. A mapped `zoom` reads the exported `file` when
+there is one, else the cut `clip`, like `captions`.
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
