@@ -7,6 +7,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-10
+
 ### Fixed
 
 - `export` `smart_crop` framing no longer breathes. The window used to be
