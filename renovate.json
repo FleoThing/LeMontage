@@ -2,5 +2,14 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "mediapipe 1.x removed the `mediapipe.solutions` API that export: smart_crop uses, so a fresh [smartcrop] install would break on the first run. Lift this cap only together with the port to the Tasks API.",
+      "matchPackageNames": [
+        "mediapipe"
+      ],
+      "allowedVersions": "<1.0"
+    }
   ]
 }
