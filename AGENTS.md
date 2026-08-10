@@ -70,7 +70,9 @@ false` = music only (drops the source audio); `start_at` skips into the track,
 ### Subtitles / captions
 Run `captions` **after** `export` so they're burned at full size on the
 reframed (e.g. vertical) clip. Pass `words` from the `stt` step; `style: tiktok`
-for karaoke word-highlighting. See §6.5.
+for karaoke word-highlighting. For the short-form look add `uppercase: true` and
+`pop: true` (the spoken word scales up, not just recolours) with a small
+`max_chars` so each pop lands on its own. See §6.5.
 
 ### Photo slideshow / carousel (images, not a video)
 `input: { type: images, source: ./photos/ }`, then `stills` (one channel item
