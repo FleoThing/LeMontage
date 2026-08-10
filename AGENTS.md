@@ -95,14 +95,22 @@ random` (seeded, reproducible B-roll).
 - **export** — final render: `format` (`vertical` | `horizontal` | `square`),
   `resolution`, `fps`, per-clip `mute`, and a `title` overlay with
   `{{ part }}` / `{{ index }}` tokens. To avoid black bars on a mismatched
-  aspect, use `fit: cover` (crop-to-fill) or `bg: blur` (blurred backdrop, the
-  classic vertical look) instead of the default `contain` (§6.6).
+  aspect, use `fit: contain` + `bg: blur` (blurred backdrop, the classic
+  vertical look) or `fit: cover` (crop-to-fill) instead of the bare default
+  `contain` (§6.6).
 - **zoom** — punch in on a clip: `at: [2.4, 5]` snaps closer then back out,
   `amount` as a list gives each clip its own framing so every jump cut changes
   the shot size. The short-form move `still: motion` only did for images (§6.15).
 - **sfx** — drop a sample at chosen times (`at: [0, 3.2]`, `gain: -8`), mixed
   under the existing audio without ducking it: a whoosh per cut, a ding on the
   punchline. `music` remains the one-continuous-track block (§6.16).
+- **One framing treatment for the whole edit.** When sources differ in aspect
+  ratio or resolution, put the *same* `fit`/`bg` on every `export` step —
+  default to `contain` + `bg: blur`. Never optimise per source (`cover` on the
+  1080p 16:9 ones, `contain` on the 480p 4:3 one): a look that changes mid-reel
+  reads as a glitch, and consistency across cuts beats a per-clip gain. Judge
+  the trade-off once, for the whole video; if a source really needs its own
+  treatment, say so instead of splitting the look silently.
 - **concat** — stitch a channel into one reel. `transitions:` crossfades each
   gap (`fade`, `fadeblack`, `zoomin`, `circleopen`/`circleclose`, `dissolve`,
   `radial`, slides/wipes — full list in §6.7); `transitions_at: boundaries`

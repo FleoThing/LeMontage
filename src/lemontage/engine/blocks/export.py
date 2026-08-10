@@ -25,6 +25,9 @@ from .base import Block, BlockResult, ItemResult
 
 # Sanity bounds so a pipeline can't ask FFmpeg for an absurd allocation.
 _MAX_DIMENSION = 7680  # 8K per side
+# EBU R128 target used by `normalize_audio` (the streaming platforms' -14 LUFS).
+_LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11"
+
 _MAX_FPS = 240
 _MAX_TITLE_SIZE = 2000
 
@@ -650,5 +653,11 @@ def _render(
     # concat / crossfade still finds audio on every clip.
     if mute:
         args += ["-af", "volume=0"]
+    elif params.get("normalize_audio"):
+        # One-pass EBU R128 to the streaming target (-14 LUFS): clips cut from
+        # different parts of a recording arrive at the same loudness, so a reel
+        # doesn't jump in level at every join. Two-pass would be more precise
+        # but needs a measuring run per clip.
+        args += ["-af", _LOUDNORM]
     args += ["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac", str(out)]
     ffmpeg.run(args)

@@ -1,0 +1,86 @@
+lemontage: "1.0"
+name: hormozi
+description: "Clipping, short-form talking-head style: silences dropped (jump cuts), vertical reframe that follows the face, karaoke captions filling the frame"
+
+# One short, end to end: transcribe, keep only the spoken spans (the silences
+# jump), reframe to 9:16 on the speaker, grade, burn karaoke captions, stitch.
+#
+# Point `input.source` at your own file (`.mp4`) — LeMontage never downloads
+# anything, you pick the video and the moment. To clip one passage rather than
+# the opening, cut it out first (`ffmpeg -ss 30:00 -t 3:00 -i talk.mp4 …`) or
+# swap `detect_clips` for `method: agent` with the spans you want.
+#
+#   lemontage validate examples/pipeline_hormozi.yaml
+#   lemontage run examples/pipeline_hormozi.yaml --clean
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # 1. Word-level transcript. `small` over `base`: the captions are read frame
+  #    by frame, a wrong word shows. `vad_filter` keeps Whisper from inventing
+  #    text over the blanks.
+  - id: transcript
+    stt:
+      model: small
+      lang: auto
+      vad_filter: true
+
+  # 2. The spoken spans. A wide `max_duration` keeps a span whole (one clip per
+  #    block of speech, so every cut lands in a silence); `min_duration` drops
+  #    isolated breaths. `silence_gap: 0.35s` is tighter than the default 0.5s —
+  #    it removes the short pauses too, which is what makes the edit feel fast.
+  #    `max_clips` bounds the length of the short: 3 spans ≈ 60s on a talk.
+  - id: takes
+    detect_clips:
+      method: silence
+      silence_gap: 0.35s
+      min_duration: 0.7s
+      max_duration: 45s
+      max_clips: 3
+      words: "{{ steps.transcript.words }}" # cut edges land on whole words
+      emit: takes
+
+  - cut:
+      from: takes
+
+  # 3. Punchy grade — deliberately light, past this it burns skin tones.
+  - filter:
+      from: takes
+      eq:
+        contrast: 1.06
+        saturation: 1.12
+        gamma: 0.98
+      look: [sharpen]
+
+  # 4. Vertical reframe that follows the face: no black bars, no fixed centre
+  #    crop that loses the speaker the moment they move. `normalize_audio`
+  #    brings every clip to the same loudness, so the reel doesn't jump in level
+  #    at the joins.
+  - export:
+      from: takes
+      format: vertical
+      resolution: 1080x1920
+      fps: 30
+      smart_crop: true
+      normalize_audio: true
+
+  # 5. Captions AFTER the export, so they are burned on the final vertical frame
+  #    at full size (before it, the reframe would shrink them).
+  - captions:
+      from: takes
+      words: "{{ steps.transcript.words }}"
+      style: tiktok # heavy black outline, bold
+      font: font1 # Anton — the condensed weight this style is built on
+      position: bottom
+      caption_margin: 700 # ~2/3 down the frame: under the chin, above the player UI
+      max_chars: 12 # two words a line, read at a glance
+      caption_size: 140 # ~7% of the height — the text carries the frame
+      highlight: "&H0000FFFF" # spoken word yellow, the rest white
+
+  - concat:
+      from: takes
+      output: "./output/{{ name }}-reel.mp4"
+
+output:
+  dir: ./output/hormozi

@@ -31,6 +31,9 @@ from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult
 
+_SILENCE_DB = -30.0  # below this level counts as silence
+_SILENCE_GAP = 0.5  # …for at least this long (seconds)
+
 _SILENCE_START = re.compile(r"silence_start:\s*([\d.]+)")
 _SILENCE_END = re.compile(r"silence_end:\s*([\d.]+)")
 _SCENE_PTS = re.compile(r"pts_time:([\d.]+)")
@@ -75,7 +78,12 @@ class DetectClipsBlock(Block):
             timeline = _loudness_timeline(media)
             clips = _select_loud_clips(timeline, total, min_dur, max_dur, max_clips)
         elif method == "silence":
-            spans = _speech_spans_from_silence(media, total)
+            spans = _speech_spans_from_silence(
+                media,
+                total,
+                noise_db=float(params.get("silence_db", _SILENCE_DB)),
+                gap=parse_seconds(params.get("silence_gap", _SILENCE_GAP)),
+            )
             clips = _windowed_clips(spans, min_dur, max_dur, max_clips)
         elif method == "scene_change":
             spans = _spans_from_scene_cuts(media, total)
@@ -216,9 +224,26 @@ def _clip_item(
     return item
 
 
-def _speech_spans_from_silence(media: str, total: float) -> list[tuple[float, float]]:
+def _speech_spans_from_silence(
+    media: str, total: float, noise_db: float = _SILENCE_DB, gap: float = _SILENCE_GAP
+) -> list[tuple[float, float]]:
+    """The spoken spans: everything `silencedetect` did not call silence.
+
+    ``noise_db``/``gap`` are the detector's two knobs, and they decide how tight
+    the edit is: the defaults only drop a real pause, while ``gap: 0.25`` also
+    removes the breaths between sentences (the jump-cut look) and a higher
+    ``noise_db`` treats a noisy room as silence.
+    """
     stderr = ffmpeg.run_capture(
-        ["-i", str(media), "-af", "silencedetect=noise=-30dB:d=0.5", "-f", "null", "-"]
+        [
+            "-i",
+            str(media),
+            "-af",
+            f"silencedetect=noise={noise_db}dB:d={gap:.3f}",
+            "-f",
+            "null",
+            "-",
+        ]
     )
     starts = [float(m) for m in _SILENCE_START.findall(stderr)]
     ends = [float(m) for m in _SILENCE_END.findall(stderr)]
