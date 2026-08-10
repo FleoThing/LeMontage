@@ -7,6 +7,8 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-10
+
 ### Added
 
 - `zoom` block: punch in on a **video** clip — the move that carries short-form
@@ -45,7 +47,6 @@ may still introduce breaking changes, and those changes must be called out here.
 - `examples/pipeline_hormozi.yaml`: the short-form clipping pipeline end to end
   — transcript, silence-dropped jump cuts, subject-following vertical reframe,
   light grade, karaoke captions burned on the final frame, one reel out.
-
 - `make audit`: a release-time static-analysis pass. Runs the ruff rule sets the
   project does not gate on (security, complexity, smells, dead code) as advisory
   output, then `scripts/audit_blocks.py`, which fails when a block is registered

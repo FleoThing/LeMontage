@@ -23,19 +23,16 @@ better.
 
 ## Next up
 
-Nothing committed. The CLI rebuild on Typer + Rich shipped in v0.6.0; what comes
-next gets picked from the pool below when it genuinely helps.
+Nothing committed. v0.7.0 finished the short-form clipping set (`zoom`, `sfx`,
+caption pop, loudness normalisation); what comes next gets picked from the pool
+below when it genuinely helps.
 
 ## Ideas (pool — no commitment, no order)
 
-- **Beat-sync**: lock cuts to the music's strong beats (a beat grid, even on
-  irregular tempo), exposed to `method: agent`.
 - **Perception++ (VSO)**: sharper visual scoring; `scenedetect` / `silero-vad`
   if FFmpeg's shot splitting / dead-air detection prove too coarse.
-- **Vertical smart-crop**: fill the 9:16 frame by following the subject instead
-  of black bars — for real TikTok framing.
-- **`filter` block**: per-clip looks (black & white, vignette, `eq`, grain,
-  sharpen).
+- **Smart-crop on the Tasks API**: port face tracking off `mediapipe.solutions`,
+  which 1.x removed — the `[smartcrop]` extra is capped below 1.0 until then.
 - **Full Ken Burns**: horizontal pan / free drift on stills.
 - **Observability**: structured logs, run summaries, cache reporting.
 - **Long videos**: memory-friendly `reverse`, resumable runs.
