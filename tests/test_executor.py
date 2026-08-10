@@ -371,6 +371,20 @@ def test_cache_isolates_by_input_source(patch_registry, tmp_path):
     assert block.calls == 2  # different sources must not share a cache entry
 
 
+def test_cache_invalidated_when_the_source_file_changes(patch_registry, tmp_path):
+    """Re-cutting the source to the same path must not replay the old run."""
+    block = RecordingBlock("stt")
+    patch_registry["stt"] = block
+    source = tmp_path / "ep.mp4"
+    source.write_bytes(b"take one")
+    steps = [{"id": "a", "stt": {"model": "tiny"}}]
+    doc = base_doc(steps, input={"source": str(source)}, output={"dir": str(tmp_path)})
+    run(doc, reporter=lambda m: None)
+    source.write_bytes(b"a different take entirely")
+    run(doc, reporter=lambda m: None)
+    assert block.calls == 2  # same path, new content → the step reruns
+
+
 def test_cache_invalidated_by_param_change(patch_registry, tmp_path):
     """Changing a step's params must rerun it (no stale cache hit)."""
     block = RecordingBlock("stt")

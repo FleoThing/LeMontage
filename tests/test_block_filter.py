@@ -81,3 +81,22 @@ def test_validator_requires_something():
 
 def test_validator_accepts_valid_filter():
     assert validate_doc(_doc({"look": ["bw", "grain"], "eq": {"brightness": 0.1}})) == []
+
+
+def test_filter_after_export_grades_the_exported_file(tmp_path, captured):
+    """A `filter` step placed after `export` must grade the rendered file.
+
+    It used to read the item's cut `clip` and write the grade back to that key,
+    which nothing downstream reads once an export exists — the grade vanished.
+    """
+    item = {"index": 0, "clip": "cut-0.mp4", "file": "exported-0.mp4"}
+    result = FilterBlock().execute_item({"look": "bw"}, item, ctx(tmp_path), "f")
+    assert captured["args"][captured["args"].index("-i") + 1] == "exported-0.mp4"
+    assert "file" in result.item and "clip" not in result.item
+
+
+def test_filter_before_export_still_grades_the_cut_clip(tmp_path, captured):
+    item = {"index": 0, "clip": "cut-0.mp4"}
+    result = FilterBlock().execute_item({"look": "bw"}, item, ctx(tmp_path), "f")
+    assert captured["args"][captured["args"].index("-i") + 1] == "cut-0.mp4"
+    assert "clip" in result.item

@@ -13,7 +13,7 @@ from typing import Any
 
 from .. import ffmpeg
 from ..context import RunContext
-from .base import Block, BlockResult, ItemResult
+from .base import Block, BlockResult, ItemResult, current_clip
 
 
 class SpeedBlock(Block):
@@ -30,12 +30,10 @@ class SpeedBlock(Block):
     def execute_item(
         self, params: dict[str, Any], item: dict[str, Any], ctx: RunContext, step_id: str
     ) -> ItemResult:
-        clip = item.get("clip")
-        if clip is None:
-            raise ValueError("speed: channel item has no 'clip' (run 'cut' first)")
+        key, clip = current_clip(item, "speed")
         out = ctx.work_dir() / f"{step_id}-{item['index']}.mp4"
         _retime(clip, _factor(params), out)
-        return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
+        return ItemResult(item={key: str(out)}, outputs={"clips": str(out)})
 
 
 _MAX_FACTOR = 100.0  # bounds the atempo chain length; well beyond any real use

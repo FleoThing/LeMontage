@@ -335,7 +335,12 @@ class _Cache:
         # upstream invalidates every dependent step's cache entry.
         parents = [self._sigs[i] for i in sorted(node.deps) if i in self._sigs]
         sig = _signature_str(
-            {"block": node.block, "params": params, "source": source, "parents": parents}
+            {
+                "block": node.block,
+                "params": params,
+                "source": _source_stamp(source),
+                "parents": parents,
+            }
         )
         self._sigs[node.index] = sig
         return sig
@@ -374,6 +379,23 @@ class _Cache:
         }
         self._dir.mkdir(parents=True, exist_ok=True)
         self._path(node).write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _source_stamp(source: Any) -> Any:
+    """The input source as the cache should see it: path **plus** size and mtime.
+
+    Keying on the path alone made the checkpoint lie whenever the file behind it
+    changed — re-cut an excerpt to the same name and every step replayed the old
+    run's transcript and clips. Size + mtime catches that without reading (and
+    hashing) a multi-gigabyte video on every step.
+    """
+    if not isinstance(source, str):
+        return source
+    try:
+        stat = Path(source).stat()
+    except OSError:  # not a local file (or gone) — the path is all we have
+        return source
+    return [source, stat.st_size, int(stat.st_mtime)]
 
 
 def _signature_str(value: Any) -> str:

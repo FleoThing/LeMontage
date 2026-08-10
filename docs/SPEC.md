@@ -146,7 +146,7 @@ Every step accepts these fields alongside its block-specific params:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `id` | string | block name | Identifier for referencing this step's outputs. Must be unique across steps: two steps resolving to the same id (explicit duplicates, or two anonymous steps of the same block) is a validation error. |
-| `cache` | bool | `true` | Skip the step if its output already exists (checkpoint). The cache key hashes the step's resolved params, the input source and its upstream steps' keys — changing a param reruns the step *and* every step downstream of it. |
+| `cache` | bool | `true` | Skip the step if its output already exists (checkpoint). The cache key hashes the step's resolved params, the input source (its path **and** its size/mtime, so re-cutting a file to the same name reruns the step) and its upstream steps' keys — changing a param reruns the step *and* every step downstream of it. |
 | `on_failure` | enum | `abort` | `abort` \| `skip` \| `retry`. |
 | `retries` | int | `0` | Number of retries when `on_failure: retry`. |
 | `requires` | string | — | Gate the step on another step's state, e.g. `transcript.success`. |
@@ -838,6 +838,11 @@ dependency.
 
 At least one of `look` / `eq` is required. `eq` runs first (the grade), then the
 looks in listed order.
+
+Like `captions`, a mapped `filter` grades whatever the chain is carrying: the
+**exported** file when the step runs after `export`, the cut clip before it. So
+`cut → filter → export` grades the source-shaped clip (cheaper, and the export
+re-encodes it once) and `cut → export → filter` grades the final frame.
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
