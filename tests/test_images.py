@@ -159,6 +159,38 @@ def test_still_zoomin_reverses_the_curve(tmp_path, monkeypatch):
     assert "zoompan=z='1.1-(1.1-1)*pow(1-min(on/59,1),2)'" in graph  # 1.0 -> amount
 
 
+def test_still_zoom_aims_at_the_focal_point(tmp_path, monkeypatch):
+    """A punch-in into the middle of a portrait lands on the torso, not the face —
+    the window centres on `focal_point` instead, clamped to the image."""
+    from lemontage.engine.blocks import still as still_mod
+
+    captured = {}
+    monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
+    monkeypatch.setattr(still_mod.ffmpeg, "probe_resolution", lambda _f: (1080, 1920))
+    monkeypatch.setattr(still_mod.smartcrop, "focal_point", lambda _i: (0.8, 0.2))
+    item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
+    StillBlock().execute_item({"motion": "zoomin", "fps": 30}, item, ctx(tmp_path), "sc")
+
+    graph = captured["args"][captured["args"].index("-vf") + 1]
+    assert "x='max(0,min(iw-iw/zoom,0.8000*iw-(iw/zoom/2)))'" in graph
+    assert "y='max(0,min(ih-ih/zoom,0.2000*ih-(ih/zoom/2)))'" in graph
+
+
+def test_still_zoom_without_a_focal_point_stays_centred(tmp_path, monkeypatch):
+    """No OpenCV / unreadable image -> the old centred move, not a crash."""
+    from lemontage.engine.blocks import still as still_mod
+
+    captured = {}
+    monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
+    monkeypatch.setattr(still_mod.ffmpeg, "probe_resolution", lambda _f: (1080, 1920))
+    monkeypatch.setattr(still_mod.smartcrop, "focal_point", lambda _i: None)
+    item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
+    StillBlock().execute_item({"motion": "zoomout", "fps": 30}, item, ctx(tmp_path), "sc")
+
+    graph = captured["args"][captured["args"].index("-vf") + 1]
+    assert "0.5000*iw-(iw/zoom/2)" in graph  # == iw/2-(iw/zoom/2)
+
+
 def test_still_panup_is_a_pure_scroll(tmp_path, monkeypatch):
     from lemontage.engine.blocks import still as still_mod
 

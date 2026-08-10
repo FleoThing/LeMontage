@@ -9,9 +9,11 @@ An optional ``motion`` effect animates the image while it is on screen, driven
 by FFmpeg's ``zoompan``: ``zoomout`` starts slightly punched-in and pulls back
 to the full frame (the classic shorts/reels look); ``zoomin`` is the reverse,
 pushing from the full frame into the punch-in. Both move fast at first and
-brake just before landing. ``panup`` / ``pandown`` are a pure scroll: a
-full-width, native-resolution band slides vertically across the image at
-constant speed — no zoom involved.
+brake just before landing, and both aim at the picture's subject rather than the
+middle of the frame (:func:`smartcrop.focal_point` — the same face detector the
+podcast reframe uses). ``panup`` / ``pandown`` are a pure scroll: a full-width,
+native-resolution band slides vertically across the image at constant speed —
+no zoom involved.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...spec import STILL_MOTIONS
-from .. import ffmpeg
+from .. import ffmpeg, smartcrop
 from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult, ItemResult
@@ -189,7 +191,14 @@ def _render_zoom(
     if motion_dur is not None:
         span = min(max(int(round(motion_dur * fps)), 1), span)
     progress = f"min(on/{span},1)"
-    x, y = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+    # Aim the punch-in at the subject: the window centres on the focal point,
+    # clamped to the image, so `zoomin` lands on the face and `zoomout` starts
+    # from it. The clamp does the taming for free — at zoom 1.0 the window is
+    # the whole image and can only sit at 0, so the move ends (or starts) on the
+    # full frame whatever the focal point is. Centre point => the old expression.
+    fx, fy = smartcrop.focal_point(image) or (0.5, 0.5)
+    x = f"max(0,min(iw-iw/zoom,{fx:.4f}*iw-(iw/zoom/2)))"
+    y = f"max(0,min(ih-ih/zoom,{fy:.4f}*ih-(ih/zoom/2)))"
     if name == "zoomout":
         zoom = f"1+({amount}-1)*pow(1-{progress},2)"
     else:

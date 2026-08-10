@@ -710,6 +710,14 @@ track); `concat` tolerates this and drops audio for the join.
 | `motion_amount` | float | `1.1` | For the zooms: the punched-in zoom factor (must be > 1.0; `1.1` = a 10% punch-in). For the pans: the crop ratio — the visible band is `height / motion_amount` tall, so a larger value scrolls further. |
 | `motion_duration` | time | clip length | How long the motion lasts; the image then holds the landing frame for the rest of the clip. Shorter = snappier zoom / faster scroll. |
 
+**The zooms aim at the subject.** `zoomin` / `zoomout` do not push into the
+middle of the frame — on a portrait that lands on the torso, on a wide scene on
+nothing. The zoom window centres on the picture's focal point instead (clamped to
+the image, so the full-frame end of the move is unchanged): the largest face when
+there is one — the same mediapipe detector `smart_crop` uses — otherwise the
+most detailed part of the image. Without the `[smartcrop]` extra the move is
+centred as before, no error. `panup` / `pandown` are unaffected.
+
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
 ---

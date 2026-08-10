@@ -141,3 +141,31 @@ def test_mediapipe_1x_raises_a_version_error(monkeypatch):
     monkeypatch.setitem(sys.modules, "mediapipe", types.SimpleNamespace(__version__="1.0.0"))
     with pytest.raises(ValueError, match="mediapipe < 1.0"):
         smartcrop._track_subject("in.mp4")
+
+
+def test_focal_point_falls_back_to_the_busiest_part(tmp_path, monkeypatch):
+    """No face (a battle scene, a landscape) -> aim at the detail, not the centre.
+
+    A flat grey field with one noisy patch bottom-right: the energy *centroid*
+    would sit back near the middle, the per-cell maximum lands on the patch.
+    """
+    cv2 = pytest.importorskip("cv2")
+    import numpy as np
+
+    frame = np.full((800, 800, 3), 128, dtype=np.uint8)
+    frame[600:750, 600:750] = np.random.default_rng(0).integers(
+        0, 255, (150, 150, 3), dtype=np.uint8
+    )
+    path = tmp_path / "scene.png"
+    cv2.imwrite(str(path), frame)
+    monkeypatch.setattr(smartcrop, "_largest_face", lambda _c, _f: None)
+
+    x, y = smartcrop.focal_point(str(path))
+    assert x > 0.6 and y > 0.6
+
+
+def test_focal_point_on_a_non_image_is_none(tmp_path):
+    """Unreadable file -> None, and `still` keeps its centred move."""
+    bad = tmp_path / "nope.png"
+    bad.write_bytes(b"not an image")
+    assert smartcrop.focal_point(str(bad)) is None

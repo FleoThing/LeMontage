@@ -23,6 +23,9 @@ works — hold, then move only when the subject really left the middle:
    seconds. A jump wider than ``_SNAP_JUMP`` is treated as a camera cut and
    snapped in ``_SNAP_RAMP``.
 
+The same face detector also answers a smaller question for ``still``:
+:func:`focal_point` — where a zoom on a photo should aim (see §6.11).
+
 mediapipe + OpenCV are behind the optional ``[smartcrop]`` extra.
 """
 
@@ -39,6 +42,7 @@ _SNAP_JUMP = 0.30  # |Δx| / crop width above which the move is a cut, not a pan
 _SNAP_RAMP = 0.12  # glide time for those (a snap)
 _LOCK_RADIUS = 0.22  # a face this close (0..1 of frame width) to the last one is "the same"
 _MAX_KEYFRAMES = 240  # ponytail: expression length ceiling; widen the deadzone past it
+_GRID = 8  # focal_point: cells per side when looking for the busiest part of a photo
 
 
 def crop_filters(media: str, target_w: int, target_h: int) -> list[str]:
@@ -68,6 +72,74 @@ def crop_filters(media: str, target_w: int, target_h: int) -> list[str]:
         f"scale={scaled_w}:{target_h}",
         f"crop={target_w}:{target_h}:x='{_x_expr(keys)}':y=0",
     ]
+
+
+def focal_point(image: str) -> tuple[float, float] | None:
+    """Where a ``still`` zoom should aim, as (x, y) in 0..1 — or None to stay centred.
+
+    Zooming into the middle of the frame is the slideshow tic: on a portrait the
+    move drifts off the face, on a wide scene it lands on nothing. Same idea as
+    the podcast reframe above, minus the tracking — one image, one point:
+
+    1. the largest face, when there is one (a portrait, a group);
+    2. otherwise the busiest cell of the picture — the coarse edge-energy grid,
+       which on a battle scene or a landscape lands on the figures rather than
+       the sky;
+    3. None when neither can be computed (no OpenCV, unreadable file), and the
+       caller keeps the plain centred move.
+    """
+    try:
+        import cv2
+    except ImportError:  # pragma: no cover - exercised only without the extra
+        return None
+    frame = cv2.imread(str(image))
+    if frame is None:  # not an image, or unreadable
+        return None
+    small = _downscale(cv2, frame)
+    return _largest_face(cv2, small) or _busiest_cell(cv2, small)
+
+
+def _largest_face(cv2, frame) -> tuple[float, float] | None:
+    """Centre (x, y in 0..1) of the biggest face in a single frame, or None."""
+    try:
+        import mediapipe as mp
+    except ImportError:  # pragma: no cover - exercised only without the extra
+        return None
+    if not hasattr(mp, "solutions"):  # pragma: no cover - depends on the version
+        return None
+    detector = mp.solutions.face_detection.FaceDetection(
+        model_selection=1, min_detection_confidence=0.5
+    )
+    try:
+        result = detector.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    finally:
+        detector.close()
+    detections = getattr(result, "detections", None)
+    if not detections:
+        return None
+    # Largest, not nearest-to-last: a photo has no previous frame to lock onto.
+    box = max((d.location_data.relative_bounding_box for d in detections), key=lambda b: b.width)
+    return (
+        _clamp(box.xmin + box.width / 2, 0.0, 1.0),
+        _clamp(box.ymin + box.height / 2, 0.0, 1.0),
+    )
+
+
+def _busiest_cell(cv2, frame) -> tuple[float, float] | None:
+    """Centre of the highest-detail cell of a coarse grid over the frame.
+
+    The energy *centroid* would be useless here — averaged over a whole painting
+    it sits back in the middle. Averaging per cell and taking the brightest one
+    picks a region instead: where the detail is.
+    """
+    grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    energy = cv2.convertScaleAbs(cv2.Laplacian(cv2.GaussianBlur(grey, (5, 5), 0), cv2.CV_32F))
+    cells = cv2.resize(energy, (_GRID, _GRID), interpolation=cv2.INTER_AREA)
+    flat = cells.reshape(-1)
+    best = int(flat.argmax())
+    if not flat[best]:  # a flat colour field — nothing to aim at
+        return None
+    return (best % _GRID + 0.5) / _GRID, (best // _GRID + 0.5) / _GRID
 
 
 def _track_subject(media: str) -> list[tuple[float, float]]:
