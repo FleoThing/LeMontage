@@ -7,6 +7,18 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- `zoom` block: punch in on a **video** clip — the move that carries short-form
+  talking-head edits, and until now only `still` could do it (to images). `at:
+  [2.4, 5]` snaps the frame closer then back out (alternating, eased over
+  `duration`, `0.15s` by default); with no `at` the punch is static for the
+  whole clip, and `amount` as a **list** frames each clip differently so every
+  jump cut changes the shot size instead of replaying one locked-off take.
+  Static punches render as `crop`+`scale`, animated ones as `zoompan` at the
+  source's own frame rate. FFmpeg-only, no new dependency. See
+  `examples/pipeline_zoom_punch_video.yaml`.
+
 ## [0.6.2] - 2026-08-10
 
 ### Fixed

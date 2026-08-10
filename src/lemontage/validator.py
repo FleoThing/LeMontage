@@ -241,6 +241,9 @@ def _check_block_params(
     if block == "filter":
         _check_filter_params(params, label, errors)
 
+    if block == "zoom":
+        _check_zoom_params(params, label, errors)
+
     if block == "overlay":
         _check_overlay(params, label, errors)
 
@@ -296,6 +299,35 @@ def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
                 errors.append(f"{label}: music.{field} must be >= 0")
         except (ValueError, TypeError):
             errors.append(f"{label}: music.{field} must be a time value (e.g. 2s)")
+
+
+def _check_zoom_params(params: dict, label: str, errors: list[str]) -> None:
+    amount = params.get("amount")
+    # A list sets the punch per clip by position (like `export.fit` / `mute`).
+    for one in amount if isinstance(amount, list) else [amount]:
+        if one is None:
+            continue
+        if isinstance(one, bool) or not isinstance(one, (int, float)) or one < 1.0:
+            errors.append(f"{label}: zoom.amount must be a number >= 1.0 (or a list of them)")
+
+    at = params.get("at")
+    if at is not None:
+        if not isinstance(at, list) or not at:
+            errors.append(f"{label}: zoom.at must be a non-empty list of times")
+        else:
+            for value in at:
+                try:
+                    parse_seconds(value)
+                except (ValueError, TypeError):
+                    errors.append(f"{label}: zoom.at '{value}' is not a time (e.g. 2.4 or 0:02)")
+
+    duration = params.get("duration")
+    if duration is not None:
+        try:
+            if parse_seconds(duration) <= 0:
+                errors.append(f"{label}: zoom.duration must be > 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: zoom.duration must be a duration (e.g. 0.15s)")
 
 
 def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
