@@ -1300,3 +1300,54 @@ def test_build_transition_filters_chains_after_hard_cut():
         "[vs0][2:v:0]xfade=transition=fade:duration=0.5:offset=19.500[vs1]",
     ]
     assert out_v == "vs1"
+
+
+# --- small knobs -----------------------------------------------------------
+
+
+def test_silence_detection_knobs_reach_ffmpeg(monkeypatch):
+    """`silence_db` / `silence_gap` decide how tight the jump cuts are."""
+    from lemontage.engine.blocks import detect_clips
+
+    seen = {}
+
+    def fake_capture(args):
+        seen["af"] = args[args.index("-af") + 1]
+        return ""
+
+    monkeypatch.setattr(ffmpeg, "run_capture", fake_capture)
+    monkeypatch.setattr(ffmpeg, "probe_duration", lambda m: 10.0)
+    detect_clips.DetectClipsBlock().execute(
+        {"method": "silence", "silence_db": -24, "silence_gap": "0.25s", "min_duration": 1},
+        ctx(Path(".")),
+        "d",
+    )
+    assert seen["af"] == "silencedetect=noise=-24.0dB:d=0.250"
+
+
+def test_silence_detection_defaults_are_unchanged(monkeypatch):
+    from lemontage.engine.blocks import detect_clips
+
+    seen = {}
+    monkeypatch.setattr(
+        ffmpeg, "run_capture", lambda args: seen.setdefault("af", args[args.index("-af") + 1]) or ""
+    )
+    monkeypatch.setattr(ffmpeg, "probe_duration", lambda m: 10.0)
+    detect_clips.DetectClipsBlock().execute(
+        {"method": "silence", "min_duration": 1}, ctx(Path(".")), "d"
+    )
+    assert seen["af"] == "silencedetect=noise=-30.0dB:d=0.500"
+
+
+def test_normalize_audio_adds_loudnorm(tmp_path, monkeypatch):
+    args = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    ExportBlock().execute({"normalize_audio": True}, ctx(tmp_path), "e")
+    assert args["a"][args["a"].index("-af") + 1] == "loudnorm=I=-14:TP=-1.5:LRA=11"
+
+
+def test_mute_wins_over_normalize_audio(tmp_path, monkeypatch):
+    args = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    ExportBlock().execute({"normalize_audio": True, "mute": True}, ctx(tmp_path), "e")
+    assert args["a"][args["a"].index("-af") + 1] == "volume=0"

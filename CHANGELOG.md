@@ -34,6 +34,17 @@ may still introduce breaking changes, and those changes must be called out here.
 - `captions` `uppercase`: draw every line in capitals — applied to the text
   itself, so the `.srt` sidecar matches and `max_chars` still counts what is
   drawn.
+- `detect_clips` `silence_db` / `silence_gap`: the silence detector's two knobs
+  were hard-coded at `-30dB` / `0.5s`, so the only edit it could produce was
+  "drop the real pauses". `silence_gap: 0.25s` now also removes the breaths
+  between sentences (the jump-cut look) and `silence_db` copes with a noisy
+  room. Defaults unchanged.
+- `export` `normalize_audio`: bring each clip to the streaming loudness target
+  (EBU R128, -14 LUFS, one pass) so clips cut from different parts of a
+  recording sit at the same level instead of the reel jumping at every join.
+- `examples/pipeline_hormozi.yaml`: the short-form clipping pipeline end to end
+  — transcript, silence-dropped jump cuts, subject-following vertical reframe,
+  light grade, karaoke captions burned on the final frame, one reel out.
 
 ## [0.6.2] - 2026-08-10
 

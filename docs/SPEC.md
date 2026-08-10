@@ -252,6 +252,8 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 | `beats_per_clip` | int | `4` | (`beat` only) How many beats each clip spans — `4` = one bar (a cut per bar), `1` = a cut on every beat. |
 | `start_at` | duration | `0` | (`beat` only) Ignore beats before this offset; set it to the `music` step's own `start_at` so the grid and the laid-over track agree. |
 | `source_start` | duration | `0` | (`beat` only) Where in the **source video** the beat clips start walking forward — set it past an intro handled by another channel (e.g. `source_start: 8` after a fixed 0–8s intro clip). |
+| `silence_db` | number | `-30` | (`silence` only) Level below which audio counts as silence, in dB. Raise it (`-24`) when the room is noisy. |
+| `silence_gap` | duration | `0.5s` | (`silence` only) How long the level must stay down to be a silence. Lower it (`0.25s`) to also drop the breaths between sentences — the jump-cut look; raise it to keep natural pauses. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
@@ -431,6 +433,7 @@ Renders the final video(s) to disk.
 | `position` | enum \| string | `center` | Where the export frame sits inside the `canvas`: `center` \| `top` \| `bottom` \| `left` \| `right`, or an exact `X,Y` pixel offset of the frame's top-left corner (e.g. `0,421`). The frame must stay fully inside the canvas. |
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
+| `normalize_audio` | bool | `false` | Bring the clip to the streaming loudness target (EBU R128, -14 LUFS, one pass) so clips cut from different parts of a recording sit at the same level and the reel doesn't jump at every join. Ignored when the clip is muted. |
 | `mute` | bool \| list | `false` | Silence the audio. `true` mutes every clip; a list of booleans mutes per clip by position (e.g. `[false, true]`). The (silent) audio track is kept so a later `concat` still works. |
 | `title` | string | — | Title banner at the top of the frame. Shown for the whole clip unless a window is set below. `\n` splits lines. |
 | `title_start` | duration | `0` | When the title appears (relative to each clip). |

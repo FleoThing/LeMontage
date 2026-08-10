@@ -198,6 +198,20 @@ def _check_block_params(
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
         if method == "agent" and not isinstance(params.get("clips"), list):
             errors.append(f"{label}: detect_clips.method 'agent' requires a 'clips' list")
+        for key in ("silence_db",):
+            value = params.get(key)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+            ):
+                errors.append(f"{label}: detect_clips.{key} must be a number (dB, e.g. -30)")
+        gap = params.get("silence_gap")
+        if gap is not None:
+            try:
+                if parse_seconds(gap) <= 0:
+                    errors.append(f"{label}: detect_clips.silence_gap must be > 0")
+            except (ValueError, TypeError):
+                errors.append(f"{label}: detect_clips.silence_gap must be a duration (e.g. 0.25s)")
+
         if method == "beat":
             track = params.get("track")
             if not isinstance(track, str) or not track:
@@ -223,6 +237,9 @@ def _check_block_params(
         smart = params.get("smart_crop")
         if smart is not None and not isinstance(smart, bool):
             errors.append(f"{label}: export.smart_crop must be a boolean")
+        normalize = params.get("normalize_audio")
+        if normalize is not None and not isinstance(normalize, bool):
+            errors.append(f"{label}: export.normalize_audio must be a boolean")
         canvas = params.get("canvas")
         if canvas is not None and (
             not isinstance(canvas, str) or not re.fullmatch(r"\d+x\d+", canvas.lower())
