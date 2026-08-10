@@ -1,0 +1,39 @@
+lemontage: "1.0"
+name: sfx
+description: "Drop a whoosh on every cut and a ding on the punchline, mixed under the voice"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  - id: moments
+    detect_clips:
+      method: silence
+      max_clips: 3
+      emit: takes
+
+  - cut:
+      from: takes
+
+  # A whoosh at the top of each clip — `at` is clip-relative, so mapping over
+  # the channel lands one on every cut of the finished reel. `gain` keeps it
+  # under the voice; the voice itself is never ducked.
+  - sfx:
+      from: takes
+      source: ./whoosh.mp3
+      at: [0]
+      gain: -8
+
+  - export:
+      from: takes
+      format: vertical
+      resolution: 1080x1920
+      fit: cover
+
+  - concat:
+      from: takes
+      output: "./output/{{ name }}-reel.mp4"
+
+output:
+  dir: ./output/sfx

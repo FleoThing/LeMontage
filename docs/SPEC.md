@@ -891,6 +891,39 @@ there is one, else the cut `clip`, like `captions`.
 
 ---
 
+### 6.16 `sfx` — sound effects at chosen moments
+
+`music` lays one continuous track over a reel. `sfx` is the opposite: the same
+short sample dropped at **exact times** and mixed under whatever audio is
+already there — a whoosh on a cut, a ding on the punchline, a riser under a
+reveal. Operates on the pipeline input, or maps over a channel (then `at` is
+relative to each clip, so one step puts an effect on every cut).
+
+```yaml
+- sfx:
+    from: clip_channel
+    source: ./whoosh.mp3
+    at: [0, 3.2]      # clip-relative times
+    gain: -8          # dB, under the voice
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `source` | path | **required** | Audio file to drop (mp3, wav, …). |
+| `at` | list | `[0]` | Times the effect fires (§13.1). Clip-relative when mapping a channel. |
+| `gain` | number | `0` | Level change in dB, applied to every hit (`-8` sits it under a voice). |
+| `from` | channel | — | Map over a channel of clips. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+The sample is decoded once and split per hit. The mix never normalises, so the
+original audio keeps its level — the default would duck the voice by 1/N every
+time an effect fires. Effects never extend the clip: a hit near the end is cut
+with it.
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:

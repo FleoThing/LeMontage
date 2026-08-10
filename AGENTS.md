@@ -98,6 +98,9 @@ random` (seeded, reproducible B-roll).
 - **zoom** — punch in on a clip: `at: [2.4, 5]` snaps closer then back out,
   `amount` as a list gives each clip its own framing so every jump cut changes
   the shot size. The short-form move `still: motion` only did for images (§6.15).
+- **sfx** — drop a sample at chosen times (`at: [0, 3.2]`, `gain: -8`), mixed
+  under the existing audio without ducking it: a whoosh per cut, a ding on the
+  punchline. `music` remains the one-continuous-track block (§6.16).
 - **concat** — stitch a channel into one reel. `transitions:` crossfades each
   gap (`fade`, `fadeblack`, `zoomin`, `circleopen`/`circleclose`, `dissolve`,
   `radial`, slides/wipes — full list in §6.7); `transitions_at: boundaries`

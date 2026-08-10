@@ -32,6 +32,7 @@ BUILTIN_BLOCKS = frozenset(
         "still",
         "music",
         "zoom",
+        "sfx",
     }
 )
 

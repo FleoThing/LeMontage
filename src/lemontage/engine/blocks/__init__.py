@@ -12,6 +12,7 @@ from .filter import FilterBlock
 from .music import MusicBlock
 from .overlay import OverlayBlock
 from .reverse import ReverseBlock
+from .sfx import SfxBlock
 from .speed import SpeedBlock
 from .still import StillBlock
 from .stills import StillsBlock
@@ -36,6 +37,7 @@ REGISTRY: dict[str, Block] = {
         StillBlock(),
         MusicBlock(),
         ZoomBlock(),
+        SfxBlock(),
     )
 }
 

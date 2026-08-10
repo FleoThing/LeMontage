@@ -238,6 +238,21 @@ def _check_block_params(
                 f"(choose from: {valid}, or an 'X,Y' pixel offset)"
             )
 
+    if block == "sfx":
+        source = params.get("source")
+        if not isinstance(source, str) or not source:
+            errors.append(f"{label}: sfx.source (path to an audio file) is required")
+        at = params.get("at")
+        for value in at if isinstance(at, list) else ([] if at is None else [at]):
+            try:
+                if parse_seconds(value) < 0:
+                    errors.append(f"{label}: sfx.at times must be >= 0")
+            except (ValueError, TypeError):
+                errors.append(f"{label}: sfx.at '{value}' is not a time (e.g. 2.4 or 0:02)")
+        gain = params.get("gain")
+        if gain is not None and (isinstance(gain, bool) or not isinstance(gain, (int, float))):
+            errors.append(f"{label}: sfx.gain must be a number (dB, e.g. -6)")
+
     if block == "filter":
         _check_filter_params(params, label, errors)
 
