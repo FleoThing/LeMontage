@@ -7,6 +7,19 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Mapped blocks placed **after** `export` (`filter`, `speed`, `reverse`,
+  `overlay`) worked on the pre-export cut clip and wrote the result to a key
+  nothing downstream reads — the grade, the retime or the overlay was silently
+  thrown away, since `captions` and `concat` both prefer the exported `file`.
+  They now all read (and write back) the latest clip in the chain, like
+  `captions` already did.
+- The step cache keyed the input source on its **path** only, so overwriting a
+  file with new content (re-cutting an excerpt to the same name) replayed the
+  previous run's transcript and clips. The key now includes the source's size
+  and mtime.
+
 ## [0.6.1] - 2026-08-10
 
 ### Fixed

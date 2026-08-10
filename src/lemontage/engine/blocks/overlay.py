@@ -29,7 +29,7 @@ from .. import ffmpeg, fonts
 from ..assformat import escape_text
 from ..context import RunContext
 from ..timecode import parse_seconds
-from .base import Block, BlockResult, ItemResult
+from .base import Block, BlockResult, ItemResult, current_clip
 from .export import _ASS_TEMPLATE, _TITLE_FOREVER, _ass_color, _ass_timestamp, _bg_pad_color
 
 _DEFAULT_SIZE = 72
@@ -51,12 +51,10 @@ class OverlayBlock(Block):
     def execute_item(
         self, params: dict[str, Any], item: dict[str, Any], ctx: RunContext, step_id: str
     ) -> ItemResult:
-        clip = item.get("clip")
-        if clip is None:
-            raise ValueError("overlay: channel item has no 'clip' (run 'cut' first)")
+        key, clip = current_clip(item, "overlay")
         out = ctx.work_dir() / f"{step_id}-{item['index']}.mp4"
         _overlay(clip, params, ctx, f"{step_id}-{item['index']}", out)
-        return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
+        return ItemResult(item={key: str(out)}, outputs={"clips": str(out)})
 
 
 def _show_window(params: dict[str, Any]) -> tuple[float, float | None]:
