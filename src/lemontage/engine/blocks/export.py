@@ -121,8 +121,7 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=0, step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-title", index=0)
         author = _author_ass(params, ctx, f"{step_id}-author", index=0)
-        crop_cmd = _crop_cmd(params, ctx, f"{step_id}-0")
-        _render(media, params, out, title, author, mute=_muted(params, 0), crop_cmd=crop_cmd)
+        _render(media, params, out, title, author, mute=_muted(params, 0))
         return BlockResult(outputs={"files": [str(out)]})
 
     def execute_item(
@@ -134,7 +133,6 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=item["index"], step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-{item['index']}-title", index=item["index"])
         author = _author_ass(params, ctx, f"{step_id}-{item['index']}-author", index=item["index"])
-        crop_cmd = _crop_cmd(params, ctx, f"{step_id}-{item['index']}")
         _render(
             clip,
             params,
@@ -142,7 +140,6 @@ class ExportBlock(Block):
             title,
             author,
             mute=_muted(params, item["index"]),
-            crop_cmd=crop_cmd,
             index=item["index"],
         )
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
@@ -593,13 +590,6 @@ def _bg_pad_color(bg: object) -> str:
     return text.replace("#", "0x") if text.startswith("#") else text
 
 
-def _crop_cmd(params: dict[str, Any], ctx: RunContext, name: str) -> Path | None:
-    """Path for a `smart_crop` sendcmd script, or None when not requested."""
-    if not params.get("smart_crop"):
-        return None
-    return ctx.work_dir() / f"{name}-crop.cmd"
-
-
 def _muted(params: dict[str, Any], index: int) -> bool:
     """Whether this clip's audio should be silenced.
 
@@ -619,7 +609,6 @@ def _render(
     title: Path | None = None,
     author: Path | None = None,
     mute: bool = False,
-    crop_cmd: Path | None = None,
     index: int = 0,
 ) -> None:
     width, height = _target_size(params)
@@ -631,7 +620,7 @@ def _render(
         # since it height-matches and pans rather than barring or centre-cropping.
         from .. import smartcrop
 
-        fit_filters = smartcrop.crop_filters(media, width, height, crop_cmd)
+        fit_filters = smartcrop.crop_filters(media, width, height)
     else:
         # Strip the source's own baked-in letterbox bars first (default on) so a
         # letterboxed source fills the frame instead of carrying its bars into the

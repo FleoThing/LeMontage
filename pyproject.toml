@@ -38,8 +38,9 @@ beat = [
 ]
 # Subject-following vertical crop for `export: smart_crop: true`. mediapipe
 # tracks the face on CPU; OpenCV decodes the sampled frames. Opt-in.
+# Capped below 1.0: mediapipe 1.x removed the `mediapipe.solutions` API this uses.
 smartcrop = [
-    "mediapipe>=0.10",
+    "mediapipe>=0.10,<1.0",
     "opencv-python-headless>=4.8",
 ]
 dev = [

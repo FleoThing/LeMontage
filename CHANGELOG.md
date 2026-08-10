@@ -7,6 +7,26 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `export` `smart_crop` framing no longer breathes. The window used to be
+  re-positioned at every sample (4×/s, stepwise via `sendcmd`) and to lock onto
+  the *largest* face, so a two-shot made it ping-pong between speakers and a
+  talking head drifted continuously — the clip read as amateur. It now tracks
+  one subject (the face nearest the previous one), median-filters the samples,
+  **holds** while the subject stays within ~8% of the crop width, and glides in
+  ~0.7s (eased) when it really has to move; a jump wider than ~30% of the crop
+  reads as a camera cut and snaps. On a 30s two-speaker interview: 8 deliberate
+  moves instead of ~120 steps. The trajectory is now a per-frame `crop` x
+  expression, so there is no `sendcmd` script and no stepping between samples.
+- `smart_crop` tracking is also ~5× faster: frames are read sequentially and
+  downscaled to 640px before detection instead of seeking per sample at full
+  resolution.
+- `smart_crop` with mediapipe 1.x failed with `module 'mediapipe' has no
+  attribute 'solutions'` (1.0 removed that API). The `[smartcrop]` extra now
+  pins `mediapipe<1.0`, and an already-installed 1.x raises an error that says
+  which version to install.
+
 ## [0.6.0] - 2026-08-05
 
 ### Added
