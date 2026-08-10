@@ -24,12 +24,16 @@ v0.2.0
 3. Run local quality checks:
 
 ```bash
-ruff check src tests
-ruff format --check src tests
-pytest -q
+make check          # ruff check + ruff format --check + pytest -q
+make audit          # advisory static analysis + block/doc consistency
 docker compose -f infrastructure/local/compose.yaml config
 docker build -t lemontage:release-check .
 ```
+
+`make audit` is advisory except for its last section: `scripts/audit_blocks.py`
+exits non-zero when a block is registered without a SPEC section, missing from
+the man page, or when the SPEC §6 numbering has drifted. Fix those before
+tagging; the ruff sections above them are noisy by design (see the Makefile).
 
 4. Verify install docs in `README.md` and `docs/INSTALL.md`.
 5. Check-up `man` docs and the windows docs

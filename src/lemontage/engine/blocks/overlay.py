@@ -26,11 +26,11 @@ from typing import Any
 
 from ...spec import OVERLAY_BAND_POSITIONS
 from .. import ffmpeg, fonts
-from ..assformat import escape_text
+from ..assformat import escape_text, timestamp
 from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult, ItemResult, current_clip
-from .export import _ASS_TEMPLATE, _TITLE_FOREVER, _ass_color, _ass_timestamp, _bg_pad_color
+from .export import _ASS_TEMPLATE, _TITLE_FOREVER, _ass_color, _bg_pad_color
 
 _DEFAULT_SIZE = 72
 _DEFAULT_BAND_HEIGHT = 210
@@ -224,8 +224,8 @@ def _text_ass(
             size=text_size,
             margin=margin,
             text=body,
-            start=_ass_timestamp(start),
-            end=_ass_timestamp(end) if end is not None else _TITLE_FOREVER,
+            start=timestamp(start),
+            end=timestamp(end) if end is not None else _TITLE_FOREVER,
             primary=_ass_color(params.get("color"), "overlay.color"),
             align=align,
             border=1,

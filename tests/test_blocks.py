@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 from lemontage.engine import ffmpeg, fonts, providers
+from lemontage.engine.assformat import timestamp
 from lemontage.engine.blocks.captions import (
     CaptionsBlock,
-    _ass_time,
     _build_lines,
     _dialogue,
     _events,
@@ -335,7 +335,13 @@ def test_dialogue_plain_text_for_segment_fallback():
 
 
 def test_ass_time_format():
-    assert _ass_time(75.5) == "0:01:15.50"
+    assert timestamp(75.5) == "0:01:15.50"
+
+
+def test_ass_time_clamps_negative_input():
+    # Unclamped, -0.5 formats as "-1:59:59.50" — libass reads it as a valid time
+    # two hours in, so the line never shows instead of erroring.
+    assert timestamp(-0.5) == "0:00:00.00"
 
 
 def test_build_lines_prefers_words_over_segments():

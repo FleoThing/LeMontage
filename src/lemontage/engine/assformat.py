@@ -21,3 +21,17 @@ def escape_text(text: str) -> str:
     user text *before* wrapping it with those tags.
     """
     return text.replace("\\", "").replace("{", "(").replace("}", ")")
+
+
+def timestamp(seconds: float) -> str:
+    """Format ``seconds`` as an ASS timestamp ``H:MM:SS.cc`` (centiseconds).
+
+    Negative input is clamped to zero: ASS has no notation for it, and the
+    naive formatting of ``-0.5`` is ``-1:59:59.50`` — a time libass reads as
+    valid but far past the clip, so the line silently never shows.
+    """
+    cs = int(round(max(0.0, seconds) * 100))
+    hours, cs = divmod(cs, 360000)
+    minutes, cs = divmod(cs, 6000)
+    secs, cs = divmod(cs, 100)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"

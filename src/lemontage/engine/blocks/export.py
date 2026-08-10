@@ -18,7 +18,7 @@ from typing import Any
 
 from ...spec import EXPORT_CANVAS_POSITIONS, EXPORT_FIT_MODES
 from .. import ffmpeg, fonts, safepath
-from ..assformat import escape_text
+from ..assformat import escape_text, timestamp
 from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult, ItemResult
@@ -388,19 +388,10 @@ def _title_window(params: dict[str, Any]) -> tuple[str, str]:
     elif "title_duration" in params:
         end = start + parse_seconds(params["title_duration"])
     else:
-        return _ass_timestamp(start), _TITLE_FOREVER
+        return timestamp(start), _TITLE_FOREVER
     if end <= start:
         raise ValueError("export: title window end must be after title_start")
-    return _ass_timestamp(start), _ass_timestamp(end)
-
-
-def _ass_timestamp(seconds: float) -> str:
-    """Format seconds as an ASS timestamp ``H:MM:SS.cc`` (centiseconds)."""
-    cs = int(round(seconds * 100))
-    hours, cs = divmod(cs, 360000)
-    minutes, cs = divmod(cs, 6000)
-    secs, cs = divmod(cs, 100)
-    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
+    return timestamp(start), timestamp(end)
 
 
 def _author_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 0) -> Path | None:
