@@ -862,6 +862,7 @@ def test_render_cover_and_mute_reach_ffmpeg(tmp_path, monkeypatch):
     calls = {}
     monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
     monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: None)  # no source bars
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # the stub media has a track
     ExportBlock().execute(
         {"format": "vertical", "fit": "cover", "mute": True, "output": str(tmp_path / "o.mp4")},
         ctx(tmp_path),
@@ -1348,12 +1349,31 @@ def test_silence_detection_defaults_are_unchanged(monkeypatch):
 def test_normalize_audio_adds_loudnorm(tmp_path, monkeypatch):
     args = {}
     monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)
     ExportBlock().execute({"normalize_audio": True}, ctx(tmp_path), "e")
-    assert args["a"][args["a"].index("-af") + 1] == "loudnorm=I=-14:TP=-1.5:LRA=11"
+    # loudnorm outputs 192 kHz, which the AAC encoder clamps to 96 kHz — a track
+    # most players render silent. The resample back to 48 kHz is not optional.
+    assert args["a"][args["a"].index("-af") + 1] == (
+        "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000"
+    )
 
 
 def test_mute_wins_over_normalize_audio(tmp_path, monkeypatch):
     args = {}
     monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)
     ExportBlock().execute({"normalize_audio": True, "mute": True}, ctx(tmp_path), "e")
     assert args["a"][args["a"].index("-af") + 1] == "volume=0"
+
+
+def test_silent_source_gets_a_synthetic_track(tmp_path, monkeypatch):
+    """A rendered `still` has no audio at all — `-af` cannot invent one, and
+    `concat` keeps audio only when every clip has a track. Without the anullsrc
+    input, one photo mutes the spoken clip it is joined to."""
+    args = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: False)
+    ExportBlock().execute({"mute": True}, ctx(tmp_path), "e")
+    assert "anullsrc=r=48000:cl=stereo" in args["a"]
+    assert "-shortest" in args["a"]  # else the silence never ends
+    assert "-af" not in args["a"]  # nothing to filter, and volume=0 would be dropped
