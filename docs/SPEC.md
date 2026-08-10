@@ -406,7 +406,7 @@ Renders the final video(s) to disk.
 | `format` | enum | `vertical` | `vertical` (9:16) \| `horizontal` (16:9) \| `square` (1:1). |
 | `resolution` | string | per-format | e.g. `1080x1920`. |
 | `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars); `stretch` scales each axis independently so a horizontal source fills a vertical frame entirely — distorted, but nothing cropped. A **list** sets the mode per clip by position (`fit: [cover, cover, stretch]` stretches only the 3rd clip), so one clip in the middle of the edit can be distorted on purpose; missing positions fall back to `contain`. |
-| `smart_crop` | bool | `false` | Fill the frame by **following the subject** instead of barring or centre-cropping: the crop window slides to keep the main face in shot (mediapipe, smoothed). For a landscape → vertical reframe (real TikTok framing). Overrides `fit`/`bg`. Needs `pip install 'lemontage[smartcrop]'`; falls back to a centre crop when the source is not wider than the target or no face is found. |
+| `smart_crop` | bool | `false` | Fill the frame by **following the subject** instead of barring or centre-cropping: the crop window holds still and slides only when the tracked face really leaves the middle (mediapipe). For a landscape → vertical reframe (real TikTok framing). Overrides `fit`/`bg`. Needs `pip install 'lemontage[smartcrop]'`; falls back to a centre crop when the source is not wider than the target or no face is found. |
 | `trim_bars` | bool | `true` | Auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source fills the frame. Applied with `fit: cover` (else the bars leak into the crop) and whenever a `bg` fill is set — `blur` (else the sharp foreground keeps its bars over the blur) or a colour (else the bars show as a black band inside the fill). Set `false` to keep them. |
 | `bg` | string | `black` | Fill for the `contain` bars: a colour (`white`, `#101010`) or `blur` — a blurred, zoomed copy of the source behind the sharp centred video (the classic vertical look). |
 | `canvas` | string | — | Place the export frame inside a larger canvas, e.g. `canvas: 1080x1920` with `resolution: 1080x1080` puts a square video on a vertical frame. The canvas becomes the final frame size and must be at least as large as the export frame. The empty area is filled with `bg` (a colour, default black; `bg: blur` only fills the fit bars, the canvas stays black). Applied after titles/author, so those stay on the export frame. |
@@ -439,6 +439,16 @@ Renders the final video(s) to disk.
 **Title tokens.** Inside `title`, `author`, `output` and overlays you can use
 `{{ part }}` (1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and
 `{{ name }}` (pipeline name).
+
+**Framing that holds still.** A crop window that follows every head movement is
+worse than a static one — the frame breathes and the clip looks cheap. So
+`smart_crop` frames like a camera operator: it **locks onto one subject** (the
+face nearest the previous one, not the biggest — otherwise a two-shot makes the
+frame ping-pong between speakers), **holds** its position while the subject stays
+within ~8% of the crop width, and only then **glides** across in ~0.7s, eased in
+and out. A jump wider than ~30% of the crop reads as a camera cut and snaps
+instead of sliding. Nothing to tune: on a talking head the window is static most
+of the time and moves a handful of times per clip.
 
 **Canvas placement.** `canvas` puts the export inside a larger frame — no
 hand-written ffmpeg `pad` needed. E.g. a square video centred on a vertical
