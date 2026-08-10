@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import ffmpeg, fonts
-from ..assformat import escape_text
+from ..assformat import escape_text, timestamp
 from ..context import RunContext
 from ..timecode import to_timecode
 from .base import Block, BlockResult, ItemResult
@@ -254,7 +254,7 @@ def _events(line: dict[str, Any], params: dict[str, Any], hi: str, base: str) ->
             _styled(word["text"], hi if j == i else base, pop if j == i else None)
             for j, word in enumerate(words)
         )
-        events.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Cap,,0,0,0,,{text}")
+        events.append(f"Dialogue: 0,{timestamp(start)},{timestamp(end)},Cap,,0,0,0,,{text}")
     return events or [_dialogue(line)]
 
 
@@ -284,7 +284,7 @@ def _pop_scale(params: dict[str, Any]) -> int | None:
 
 
 def _dialogue(line: dict[str, Any]) -> str:
-    start, end = _ass_time(line["start"]), _ass_time(line["end"])
+    start, end = timestamp(line["start"]), timestamp(line["end"])
     words = line["words"]
     if not words:  # segment fallback: plain text, no karaoke
         return f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{escape_text(line['text'])}"
@@ -296,15 +296,6 @@ def _dialogue(line: dict[str, Any]) -> str:
         # (from the transcript) can never inject an ASS override block.
         parts.append(f"{{\\k{cs}}}{escape_text(w['text'])} ")
     return f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{''.join(parts).rstrip()}"
-
-
-def _ass_time(seconds: float) -> str:
-    seconds = max(0.0, seconds)
-    cs = int(round(seconds * 100))
-    hours, cs = divmod(cs, 360000)
-    minutes, cs = divmod(cs, 6000)
-    secs, cs = divmod(cs, 100)
-    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
 def _write_srt(lines: list[dict[str, Any]], path: Path) -> Path:

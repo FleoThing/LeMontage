@@ -35,6 +35,20 @@ may still introduce breaking changes, and those changes must be called out here.
   itself, so the `.srt` sidecar matches and `max_chars` still counts what is
   drawn.
 
+- `make audit`: a release-time static-analysis pass. Runs the ruff rule sets the
+  project does not gate on (security, complexity, smells, dead code) as advisory
+  output, then `scripts/audit_blocks.py`, which fails when a block is registered
+  without a SPEC section, missing from the man page, or when the SPEC §6 section
+  numbers no longer run in order. `make check` stays the CI-equivalent gate.
+
+### Fixed
+
+- A negative time no longer renders as a valid-looking ASS timestamp. `export`
+  formatted `title_start: -0.5` as `-1:59:59.50` — libass reads that as two
+  hours in, so the title silently never appeared instead of erroring. The three
+  copies of the formatter (`captions`, `export`, `overlay`) are now one shared
+  `assformat.timestamp`, which clamps to zero like `captions` already did.
+
 ## [0.6.2] - 2026-08-10
 
 ### Fixed

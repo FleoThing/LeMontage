@@ -30,12 +30,14 @@ pre-commit result before pushing.
 Run the same checks expected by CI:
 
 ```bash
-ruff check src tests
-ruff format --check src tests
-pytest -q
+make check          # ruff check + ruff format --check + pytest -q
 docker build -t lemontage:local .
 docker compose -f infrastructure/local/compose.yaml config
 ```
+
+`make audit` runs a wider, advisory static-analysis pass (security, complexity,
+smells) plus a consistency check between the block registry, `docs/SPEC.md` and
+the man page. It is not a CI gate — read it before cutting a release.
 
 Run every pre-commit hook manually:
 
