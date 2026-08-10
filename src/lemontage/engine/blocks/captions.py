@@ -31,6 +31,8 @@ _DEFAULT_MAX_CHARS = 24  # short lines read better word-by-word
 _DEFAULT_MARGIN_H = 80  # left/right margins when the whole width is usable
 _MAX_WORDS_PER_LINE = 5
 _LINE_GAP = 1.2  # start a new line after a silence longer than this (seconds)
+_DEFAULT_POP = 115  # active-word scale (%) when `pop: true`
+_POP_MS = 90  # how long the pop takes to settle back to 100%
 # ASS colours are &HAABBGGRR. Default: spoken word yellow, upcoming word white.
 _HIGHLIGHT = "&H0000FFFF"
 _BASE = "&H00FFFFFF"
@@ -110,11 +112,26 @@ def _build_lines(params: dict[str, Any], offset: float) -> list[dict[str, Any]]:
     words = params.get("words")
     if isinstance(words, list) and words:
         max_chars = int(params.get("max_chars", _DEFAULT_MAX_CHARS))
-        return _lines_from_words(words, offset, max_chars)
-    segments = params.get("segments")
-    if not isinstance(segments, list):
-        raise ValueError("captions: provide 'words' (from stt) or 'segments'")
-    return _lines_from_segments(segments, offset)
+        lines = _lines_from_words(words, offset, max_chars)
+    else:
+        segments = params.get("segments")
+        if not isinstance(segments, list):
+            raise ValueError("captions: provide 'words' (from stt) or 'segments'")
+        lines = _lines_from_segments(segments, offset)
+    return _uppercased(lines) if params.get("uppercase") else lines
+
+
+def _uppercased(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Upper-case every caption line (and its words).
+
+    Done on the text, not with a renderer flag: the sidecar `.srt` gets the same
+    treatment, and `max_chars` still counts the characters that are drawn.
+    """
+    for line in lines:
+        line["text"] = line["text"].upper()
+        for word in line["words"]:
+            word["text"] = word["text"].upper()
+    return lines
 
 
 def _lines_from_words(
@@ -191,7 +208,9 @@ def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
     hi = params.get("highlight") or _HIGHLIGHT
     font = fonts.family(params.get("font"))
 
-    events = "\n".join(_dialogue(line) for line in lines)
+    events = "\n".join(
+        event for line in lines for event in _events(line, params, hi=hi, base=_BASE)
+    )
     path.write_text(
         _KARAOKE_ASS.format(
             w=width,
@@ -210,6 +229,58 @@ def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def _events(line: dict[str, Any], params: dict[str, Any], hi: str, base: str) -> list[str]:
+    """The ASS events for one caption line.
+
+    Normally one karaoke event (`\\k` recolours each word as it is spoken). With
+    `pop`, the line is emitted once **per word** instead: `\\k` can only change
+    colour, and the word has to *scale* — the beat that makes short-form captions
+    read as spoken rather than displayed. Each event draws the whole line, so the
+    wrapping never changes; only the active word is coloured and briefly enlarged.
+    """
+    pop = _pop_scale(params)
+    if pop is None or not line["words"]:
+        return [_dialogue(line)]
+    events = []
+    words = line["words"]
+    for i, w in enumerate(words):
+        start = w["start"] if i else line["start"]
+        end = words[i + 1]["start"] if i + 1 < len(words) else line["end"]
+        if end <= start:
+            continue
+        text = " ".join(
+            _styled(word["text"], hi if j == i else base, pop if j == i else None)
+            for j, word in enumerate(words)
+        )
+        events.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Cap,,0,0,0,,{text}")
+    return events or [_dialogue(line)]
+
+
+def _styled(text: str, colour: str, pop: int | None) -> str:
+    """One word with its colour, and — when it is the active one — a scale pop.
+
+    Every word carries an explicit colour tag rather than relying on `\\r`: the
+    style's primary colour *is* the highlight (the karaoke path needs that), so a
+    reset would leave the rest of the line highlighted.
+    """
+    if pop is None:
+        return f"{{\\c{colour}\\fscx100\\fscy100}}{escape_text(text)}"
+    return (
+        f"{{\\c{colour}\\fscx{pop}\\fscy{pop}"
+        f"\\t(0,{_POP_MS},\\fscx100\\fscy100)}}{escape_text(text)}"
+    )
+
+
+def _pop_scale(params: dict[str, Any]) -> int | None:
+    """The active-word scale in percent, or None when `pop` is off."""
+    pop = params.get("pop")
+    if pop is None or pop is False:
+        return None
+    if pop is True:
+        return _DEFAULT_POP
+    return int(pop)
 
 
 def _dialogue(line: dict[str, Any]) -> str:

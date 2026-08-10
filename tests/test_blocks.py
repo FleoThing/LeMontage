@@ -14,6 +14,7 @@ from lemontage.engine.blocks.captions import (
     _ass_time,
     _build_lines,
     _dialogue,
+    _events,
     _lines_from_words,
     _safe_margin_h,
     _write_karaoke_ass,
@@ -341,6 +342,43 @@ def test_build_lines_prefers_words_over_segments():
     params = {"words": _words((0.0, 0.5, "hi")), "segments": [{"start": 0, "end": 9, "text": "x"}]}
     lines = _build_lines(params, offset=0.0)
     assert lines[0]["words"]  # used word timing, not the segment
+
+
+def test_uppercase_applies_to_lines_and_words():
+    params = {"words": _words((0.0, 0.5, "hi"), (0.5, 0.9, "there")), "uppercase": True}
+    line = _build_lines(params, offset=0.0)[0]
+    assert line["text"] == "HI THERE"
+    assert [w["text"] for w in line["words"]] == ["HI", "THERE"]
+
+
+def _pop_line():
+    return {
+        "start": 0.0,
+        "end": 1.0,
+        "text": "a b",
+        "words": [{"start": 0.0, "end": 0.4, "text": "a"}, {"start": 0.5, "end": 1.0, "text": "b"}],
+    }
+
+
+def test_pop_emits_one_event_per_word_with_a_scale_transform():
+    events = _events(_pop_line(), {"pop": True}, hi="&H0000FFFF", base="&H00FFFFFF")
+    assert len(events) == 2  # one per word, not a single karaoke line
+    assert r"\fscx115\fscy115\t(0,90,\fscx100\fscy100)" in events[0]
+    # Every word carries an explicit colour: only the active one is highlighted.
+    assert events[0].count("&H0000FFFF") == 1 and events[0].count("&H00FFFFFF") == 1
+    # The whole line is drawn in each event, so the wrapping never shifts.
+    assert events[0].endswith("a {\\c&H00FFFFFF\\fscx100\\fscy100}b")
+    assert "\\k" not in events[0]
+
+
+def test_pop_scale_accepts_a_percent():
+    events = _events(_pop_line(), {"pop": 130}, hi="&H1", base="&H2")
+    assert r"\fscx130\fscy130" in events[0]
+
+
+def test_pop_off_keeps_the_karaoke_line():
+    events = _events(_pop_line(), {}, hi="&H1", base="&H2")
+    assert len(events) == 1 and r"\k" in events[0]
 
 
 def test_stt_forwards_vad_and_beam_options(tmp_path, monkeypatch):

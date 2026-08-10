@@ -25,6 +25,15 @@ may still introduce breaking changes, and those changes must be called out here.
   on every cut; `gain` sits it under the voice. The sample is decoded once and
   split per hit, and the mix never normalises — amix's default would duck the
   voice by 1/N every time an effect fired. See `examples/pipeline_sfx.yaml`.
+- `captions` `pop`: the active word scales up as it is spoken and settles back
+  over 90ms (`true` = 115%, or a percent). The karaoke tag can only change
+  colour, so a popped line is emitted once per word instead — each event still
+  draws the whole line, so the wrapping never shifts and only the active word
+  changes. It is the difference between captions that read as *spoken* and
+  captions that read as displayed.
+- `captions` `uppercase`: draw every line in capitals — applied to the text
+  itself, so the `.srt` sidecar matches and `max_chars` still counts what is
+  drawn.
 
 ## [0.6.2] - 2026-08-10
 

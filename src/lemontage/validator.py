@@ -253,6 +253,17 @@ def _check_block_params(
         if gain is not None and (isinstance(gain, bool) or not isinstance(gain, (int, float))):
             errors.append(f"{label}: sfx.gain must be a number (dB, e.g. -6)")
 
+    if block == "captions":
+        uppercase = params.get("uppercase")
+        if uppercase is not None and not isinstance(uppercase, bool):
+            errors.append(f"{label}: captions.uppercase must be a boolean")
+        pop = params.get("pop")
+        if pop is not None and not isinstance(pop, bool):
+            if not isinstance(pop, int) or not 100 <= pop <= 200:
+                errors.append(
+                    f"{label}: captions.pop must be a boolean or a scale percent 100..200"
+                )
+
     if block == "filter":
         _check_filter_params(params, label, errors)
 

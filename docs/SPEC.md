@@ -373,8 +373,26 @@ segment-level cues.
 | `caption_size` | int | `100` | Font size in pixels of the clip. |
 | `caption_margin` | int | ~5% of height | Distance from the edge (per `position`). |
 | `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
+| `uppercase` | bool | `false` | Draw every line in CAPITALS. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
+| `pop` | bool \| int | `false` | Scale the active word up as it is spoken, settling back over 90ms — the beat that makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`–`200`). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
+
+**Word pop.** `highlight` recolours the spoken word; `pop` also *scales* it.
+The two together are the short-form caption look:
+
+```yaml
+- captions:
+    from: clip_channel
+    words: "{{ steps.transcript.words }}"
+    uppercase: true
+    pop: true              # or a percent: pop: 130
+    max_chars: 12          # 2 words a line, so each pop lands on its own
+```
+
+Under the hood a popped line is emitted once **per word** instead of as one
+karaoke line (the karaoke tag can only change colour). Each event still draws the
+whole line, so the wrapping never moves — only the active word changes.
 
 **Order matters — caption before *or* after reframing.** `caption_size`/`caption_margin`
 are relative to the **height of the clip being captioned**. Placing `captions`
