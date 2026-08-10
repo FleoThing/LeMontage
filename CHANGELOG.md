@@ -19,6 +19,12 @@ may still introduce breaking changes, and those changes must be called out here.
   file with new content (re-cutting an excerpt to the same name) replayed the
   previous run's transcript and clips. The key now includes the source's size
   and mtime.
+- Re-pin `mediapipe<1.0` in the `[smartcrop]` extra. An automated dependency
+  bump (#86) moved it to `>=1,<1.1` — the very version that removed the
+  `mediapipe.solutions` API `export: smart_crop` is built on, so a fresh
+  `pip install 'lemontage[smartcrop]'` produced an install whose first
+  `smart_crop` run failed. Renovate is now told to hold mediapipe below 1.0;
+  the cap lifts with the port to the Tasks API, not before.
 
 ## [0.6.1] - 2026-08-10
 
