@@ -18,6 +18,13 @@ may still introduce breaking changes, and those changes must be called out here.
   Static punches render as `crop`+`scale`, animated ones as `zoompan` at the
   source's own frame rate. FFmpeg-only, no new dependency. See
   `examples/pipeline_zoom_punch_video.yaml`.
+- `sfx` block: drop a sample at chosen times — a whoosh on a cut, a ding on the
+  punchline, a riser under a reveal. `music` could only lay one continuous track
+  over a finished reel, so a one-shot effect at 3.2s was impossible. `at` is
+  clip-relative when the step maps a channel, so one `sfx` step puts an effect
+  on every cut; `gain` sits it under the voice. The sample is decoded once and
+  split per hit, and the mix never normalises — amix's default would duck the
+  voice by 1/N every time an effect fired. See `examples/pipeline_sfx.yaml`.
 
 ## [0.6.2] - 2026-08-10
 
