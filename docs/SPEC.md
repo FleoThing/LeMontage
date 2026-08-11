@@ -443,7 +443,8 @@ Renders the final video(s) to disk.
 | `title_fade` | duration \| list | — | Fade the title in/out by this much (e.g. `0.3s`) so it never pops. A list fades per clip by position (`[0, 0, 0.4]` = fade only the 3rd clip). |
 | `title_size` | int | `92` | Title font size, in pixels of the export resolution. |
 | `title_color` | string \| list | `white` | Title text colour: a `#RRGGBB` hex or a name (`white`, `yellow`, `red`, …). A list sets it per clip by position (e.g. `[red, null, blue]`). |
-| `title_position` | enum | `top` | Vertical placement: `top` \| `center` \| `bottom`. |
+| `title_position` | enum | `top` | Where the title sits, as one of the nine frame anchors: `top` / `center` / `bottom` (the centre column, as before), or `top-left`, `top-right`, `center-left`, `center-right`, `bottom-left`, `bottom-right`. |
+| `title_margin_x` | int | `40` | Distance from the left/right edges, in px. Only visible once the title is anchored to one of them (`title_position: top-left`); a centred title just gets the room. |
 | `title_box` | bool \| string | — | Draw an opaque box behind the title for legibility: `true` (semi-transparent black) or a colour name/hex. |
 | `title_box_pad` | int | `3` | Horizontal breathing room inside a `title_box`, as hard-space widths added each side (BorderStyle 3 pads all sides equally, so this is the only way to widen the box left/right without adding height). `0` = none. |
 | `title_outline` | number | `2` | Letter-outline (contour) thickness in px. Visible with a plain outline (`title_box: false`); with a box it widens the box padding instead. |
@@ -774,8 +775,9 @@ The clip is re-encoded, so run it before `export` in the chain.
 |---|---|---|---|
 | `from` | channel | — | Channel of clips to map over. |
 | `input` | path | pipeline input | Source video (single mode). |
-| `text` | string \| list | — | The overlay text. A string: real newlines or literal `\n` split it into lines. A list of `{text, color}` runs colours each phrase independently (see below). A `text` and/or an `image` is required. |
-| `image` | path | — | A prepared image composited over the clip, transparency preserved (a PNG logo, lower-third or full header card). Used at its own size — author it at the frame's resolution, the block does not rescale. |
+| `text` | string \| list | — | The overlay text. A string: real newlines or literal `\n` split it into lines. A list of `{text, color, size, font}` runs styles each phrase independently (see below). A `text` (or `cues`) and/or an `image` is required. |
+| `cues` | list | — | Several texts, each with its own window and its own style, drawn in **one** pass (see below). Replaces `text`. |
+| `image` | path \| list | — | A prepared image composited over the clip, transparency preserved (a PNG logo, lower-third or full header card). Used at its own size — author it at the frame's resolution, the block does not rescale. A **list** picks one per clip by position when mapping a channel; a clip past the end of the list gets no image (and, with no text either, passes through untouched). |
 | `x` | int | `0` | Image left edge, in px. Negative counts back from the right edge (`-40` = 40px in from the right), so a corner watermark needs no knowledge of the frame width. |
 | `y` | int | `0` | Image top edge, in px. Negative counts back from the bottom edge. |
 | `band` | mapping | — | A uniform full-width band drawn behind the text. Keys: `color` (name or `#RRGGBB`, default `black`), `height` (px, default `210`), `position` (`top` or `bottom`, default `top`). Omit for text without a band. |
@@ -784,6 +786,10 @@ The clip is re-encoded, so run it before `export` in the chain.
 | `size` | int | `72` | Text size in px of the source frame. |
 | `color` | string | `white` | Text colour: a name or `#RRGGBB`. |
 | `margin` | int | `60` | Distance from the frame edge, in px — only without a `band` (with one, the text is centred vertically inside the band). |
+| `position` | enum | follows `band` | Where the text sits, as one of the nine frame anchors: `top-left`, `top-center`, `top-right`, `center-left`, `center`, `center-right`, `bottom-left`, `bottom-center`, `bottom-right` (`top`/`center`/`bottom` are the centre column). Without it the text follows its `band` to the top or the bottom, as before. |
+| `margin_x` | int | `40` | Distance from the left/right edges, in px. This is what seats a flush-left column. |
+| `outline` | number | `0` | Letter-outline thickness in px. `0` is the flat look — right over a band or a card, unreadable over moving footage. |
+| `outline_color` | string | `black` | Outline colour: a name or `#RRGGBB`. |
 
 The text follows the band's `position` (top-centre or bottom-centre of the
 frame). `show.except: transition` (hide during a concat transition) is
@@ -814,6 +820,48 @@ Colours are named, never written as renderer syntax: each one goes through the
 same strict parser as `title_color` (six hex digits or a known name), and a bad
 value names the run it came from. Run text itself is escaped exactly as before,
 so a pipeline from an untrusted source still cannot inject render directives.
+
+A run also takes its own `size` and `font`, which is what a list needs — a big
+rank number and its small label sit on one line, in one text block:
+
+```yaml
+- overlay:
+    from: clip_channel
+    position: top-left
+    margin: 440
+    margin_x: 62
+    outline: 6
+    text:
+      - {text: "1.", size: 92, color: "#F4C711"}
+      - {text: "   Breath smelling like hot ass", size: 40}
+```
+
+**Several cues in one pass.** A text that appears, then a second one, then a
+third, is not several `overlay` steps: each step re-encodes the whole clip, so a
+five-step reveal costs five generations of compression. `cues` declares them all
+at once — they become several timed lines of a single subtitle file, one render:
+
+```yaml
+- overlay:
+    input: "{{ steps.reel.file }}"
+    outline: 6
+    cues:
+      - {text: "1.", position: top-left, size: 92, margin: 440, margin_x: 62}
+      - {text: "2.", position: top-left, size: 92, margin: 542, margin_x: 62}
+      - {text: "Like this lunatic", position: top-left, margin: 684, show: {from: 12}}
+      - {text: "Subscribe", position: bottom-center, size: 52, margin: 178}
+```
+
+Each cue takes its own `text` (string or runs), `show`, `position`, `size`,
+`font`, `color`, `outline`, `outline_color`, `margin` and `margin_x`; anything
+it leaves out falls back to the block's, then to the default. A cue without a
+`show` uses the block's window. `band` still applies to the whole overlay.
+
+Cues are **pinned** to the point their `position` and margins describe, while a
+lone `text` flows from its margins as before. The difference matters: the
+renderer nudges lines that would overlap, so a fixed column loses its spacing as
+soon as the text is big enough to collide with the line under it. Pinning is
+what keeps a 102px pitch a 102px pitch.
 
 **Image overlay.** `show` gates the image exactly as it gates the text, and the
 two compose: band first, image over it, text last so a caption stays readable on

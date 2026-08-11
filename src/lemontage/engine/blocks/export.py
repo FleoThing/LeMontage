@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...spec import EXPORT_CANVAS_POSITIONS, EXPORT_FIT_MODES
+from ...spec import EXPORT_CANVAS_POSITIONS, EXPORT_FIT_MODES, TEXT_POSITIONS
 from .. import ffmpeg, fonts, safepath
 from ..assformat import escape_text, timestamp
 from ..context import RunContext
@@ -39,6 +39,9 @@ _RESOLUTIONS = {
 
 _DEFAULT_TITLE_SIZE = 92
 _DEFAULT_TITLE_MARGIN = 120  # distance from the top edge (into the letterbox band)
+# Distance from the left/right edges. Only visible once the title is anchored to
+# one of them (`title_position: top-left`); centred titles just get the room.
+_DEFAULT_TITLE_MARGIN_X = 40
 # Hard spaces added on each side of a boxed title. BorderStyle 3 pads all four
 # sides equally by the Outline value, so this is the only way to widen the box
 # horizontally (breathing room left/right of the text) without adding height.
@@ -78,7 +81,8 @@ Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle,
 Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 """
     "Style: Title,{font},{size},{primary},&H000000FF,{outline},&H64000000,"
-    "-1,0,0,0,100,100,0,0,{border},{outline_w:g},{shadow:g},{align},40,40,{margin},1\n"
+    "-1,0,0,0,100,100,0,0,{border},{outline_w:g},{shadow:g},{align},"
+    "{margin_x},{margin_x},{margin},1\n"
     """\
 
 [Events]
@@ -240,6 +244,7 @@ def _title_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 
             font=font,
             size=size,
             margin=margin,
+            margin_x=int(params.get("title_margin_x", _DEFAULT_TITLE_MARGIN_X)),
             text=text,
             start=start,
             end=end,
@@ -274,17 +279,18 @@ def _title_shadow_depth(params: dict[str, Any]) -> float:
     return float(shadow)
 
 
-# ASS numpad alignment: centre column is 8 (top), 5 (middle), 2 (bottom).
-_TITLE_ALIGN = {"top": 8, "center": 5, "centre": 5, "middle": 5, "bottom": 2}
-
-
 def _title_align(params: dict[str, Any]) -> int:
-    """Map ``title_position`` (top/center/bottom) to an ASS alignment code."""
+    """Map ``title_position`` to an ASS alignment code.
+
+    ``top``/``center``/``bottom`` are the centre column, which is all this took
+    before; the hyphenated names (``top-left``, ``bottom-right``, …) reach the
+    six other anchors, for a title that sits flush against an edge.
+    """
     pos = str(params.get("title_position", "top")).lower()
-    if pos not in _TITLE_ALIGN:
-        valid = ", ".join(sorted(_TITLE_ALIGN))
+    if pos not in TEXT_POSITIONS:
+        valid = ", ".join(sorted(TEXT_POSITIONS))
         raise ValueError(f"export: unknown title_position '{pos}' (choose from: {valid})")
-    return _TITLE_ALIGN[pos]
+    return TEXT_POSITIONS[pos]
 
 
 def _title_border(params: dict[str, Any]) -> tuple[int, str]:

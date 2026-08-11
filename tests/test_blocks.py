@@ -500,6 +500,17 @@ def test_title_ass_writes_playres_and_lines(tmp_path):
     assert r"Line One\NLine Two" in content
 
 
+def test_title_ass_side_margins_default_to_40(tmp_path):
+    content = _title_ass({"title": "hi"}, ctx(tmp_path), "t").read_text()
+    assert ",8,40,40,120,1" in content  # align, MarginL, MarginR, MarginV
+
+
+def test_title_ass_margin_x_pins_a_corner_title(tmp_path):
+    params = {"title": "hi", "title_position": "bottom-left", "title_margin_x": 62}
+    content = _title_ass(params, ctx(tmp_path), "t").read_text()
+    assert ",1,62,62,120,1" in content
+
+
 def test_title_ass_accepts_literal_backslash_n(tmp_path):
     path = _title_ass({"title": "line one\\nline two"}, ctx(tmp_path), "t")
     assert r"line one\Nline two" in path.read_text()
@@ -824,6 +835,14 @@ def test_title_position_maps_to_alignment():
     assert _title_align({}) == 8  # top (default)
     assert _title_align({"title_position": "center"}) == 5
     assert _title_align({"title_position": "bottom"}) == 2
+
+
+def test_title_position_reaches_the_corner_anchors():
+    """The bare names stay the centre column; the hyphenated ones add the corners."""
+    assert _title_align({"title_position": "top-left"}) == 7
+    assert _title_align({"title_position": "top-center"}) == 8
+    assert _title_align({"title_position": "bottom-right"}) == 3
+    assert _title_align({"title_position": "center-left"}) == 4
 
 
 def test_title_position_unknown_raises():

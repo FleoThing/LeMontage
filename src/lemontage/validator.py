@@ -429,22 +429,46 @@ def _valid_overlay_text(text: object) -> bool:
     )
 
 
+def _check_text_position(position: object, field: str, label: str, errors: list[str]) -> None:
+    """`position` must be one of the nine frame anchors (see spec.TEXT_POSITIONS)."""
+    if position is None:
+        return
+    if not isinstance(position, str) or position.lower() not in spec.TEXT_POSITIONS:
+        valid = ", ".join(sorted(spec.TEXT_POSITIONS))
+        errors.append(f"{label}: unknown {field} '{position}' (choose from: {valid})")
+
+
+def _check_outline(outline: object, field: str, label: str, errors: list[str]) -> None:
+    """Letter-outline thickness in px — a number, never negative."""
+    if outline is None:
+        return
+    if isinstance(outline, bool) or not isinstance(outline, (int, float)) or outline < 0:
+        errors.append(f"{label}: {field} must be a number of pixels >= 0")
+
+
 def _check_overlay(params: dict, label: str, errors: list[str]) -> None:
-    text, image = params.get("text"), params.get("image")
-    if text is None and image is None:
-        errors.append(f"{label}: overlay needs a 'text' and/or an 'image'")
+    text, image, cues = params.get("text"), params.get("image"), params.get("cues")
+    if text is None and image is None and cues is None:
+        errors.append(f"{label}: overlay needs a 'text' (or 'cues') and/or an 'image'")
     if text is not None and not _valid_overlay_text(text):
         errors.append(
             f"{label}: overlay requires a non-empty 'text' string, "
             f"or a list of {{text, color}} runs"
         )
-    if image is not None and (not isinstance(image, str) or not image.strip()):
-        errors.append(f"{label}: overlay.image must be a path to an image file")
+    # A list picks one image per clip by position when mapping a channel; a
+    # shorter list simply leaves the remaining clips without one.
+    paths = image if isinstance(image, list) else ([] if image is None else [image])
+    usable = bool(paths) and all(isinstance(p, str) and p.strip() for p in paths)
+    if image is not None and not usable:
+        errors.append(f"{label}: overlay.image must be an image path, or a list of paths")
 
-    for key in ("x", "y"):
+    for key in ("x", "y", "margin", "margin_x", "size"):
         value = params.get(key)
         if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
             errors.append(f"{label}: overlay.{key} must be an integer (pixels)")
+    _check_outline(params.get("outline"), "overlay.outline", label, errors)
+    _check_text_position(params.get("position"), "overlay.position", label, errors)
+    _check_overlay_cues(cues, label, errors)
 
     band = params.get("band")
     if band is not None:
@@ -463,14 +487,18 @@ def _check_overlay(params: dict, label: str, errors: list[str]) -> None:
                     f"{label}: unknown overlay.band.position '{position}' (choose from: {valid})"
                 )
 
-    show = params.get("show")
+    _check_show(params.get("show"), "overlay.show", label, errors)
+
+
+def _check_show(show: object, field: str, label: str, errors: list[str]) -> None:
+    """The `from`/`to` window an overlay (or one of its cues) is visible for."""
     if show is None:
         return
     if not isinstance(show, dict):
-        errors.append(f"{label}: overlay.show must be a mapping with 'from'/'to'")
+        errors.append(f"{label}: {field} must be a mapping with 'from'/'to'")
         return
     if "except" in show:
-        errors.append(f"{label}: overlay.show.except is not supported yet (use from/to)")
+        errors.append(f"{label}: {field}.except is not supported yet (use from/to)")
     times = {}
     for key in ("from", "to"):
         if key not in show:
@@ -478,9 +506,35 @@ def _check_overlay(params: dict, label: str, errors: list[str]) -> None:
         try:
             times[key] = parse_seconds(show[key])
         except (ValueError, TypeError):
-            errors.append(f"{label}: overlay.show.{key} must be a time value (e.g. 11s)")
+            errors.append(f"{label}: {field}.{key} must be a time value (e.g. 11s)")
     if "from" in times and "to" in times and times["to"] <= times["from"]:
-        errors.append(f"{label}: overlay.show.to must be after show.from")
+        errors.append(f"{label}: {field}.to must be after {field}.from")
+
+
+def _check_overlay_cues(cues: object, label: str, errors: list[str]) -> None:
+    """`cues` is several timed texts drawn in a single pass — validate each one."""
+    if cues is None:
+        return
+    if not isinstance(cues, list) or not cues:
+        errors.append(f"{label}: overlay.cues must be a non-empty list of {{text, show}} mappings")
+        return
+    for index, cue in enumerate(cues):
+        field = f"overlay.cues[{index}]"
+        if not isinstance(cue, dict):
+            errors.append(f"{label}: {field} must be a mapping")
+            continue
+        if not _valid_overlay_text(cue.get("text")):
+            errors.append(
+                f"{label}: {field}.text must be a non-empty string, "
+                f"or a list of {{text, color}} runs"
+            )
+        for key in ("margin", "margin_x", "size"):
+            value = cue.get(key)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+                errors.append(f"{label}: {field}.{key} must be an integer (pixels)")
+        _check_outline(cue.get("outline"), f"{field}.outline", label, errors)
+        _check_text_position(cue.get("position"), f"{field}.position", label, errors)
+        _check_show(cue.get("show"), f"{field}.show", label, errors)
 
 
 def _check_concat_transitions(transitions: object, label: str, errors: list[str]) -> None:

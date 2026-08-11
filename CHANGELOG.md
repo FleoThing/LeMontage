@@ -7,6 +7,31 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- Text placement: `overlay.position` and `export.title_position` now reach all
+  **nine** frame anchors (`top-left`, `bottom-right`, …), with `margin_x` for
+  the distance to the side edge. Text was locked to the centre column, so a
+  flush-left ranking column or a score in a corner could not be written at all —
+  it had to be drawn outside LeMontage as a PNG and dropped in with
+  `overlay.image`. The bare `top`/`center`/`bottom` names keep meaning the
+  centre column, so existing titles are untouched.
+- `overlay.outline` / `overlay.outline_color`: a letter contour for overlay
+  text. It had none, which is fine over a band or a card and unreadable over
+  moving footage. Defaults to `0` — the previous look.
+- `overlay` text runs take their own `size` and `font`, alongside `color`. One
+  text block can now mix scales, which is what a big rank number followed by a
+  small label needs.
+- `overlay.cues`: several texts, each with its own window and style, rendered in
+  **one** pass instead of one `overlay` step (and one re-encode) per text. A
+  five-step reveal used to stack five generations of compression on the reel.
+  Cues are pinned to the point their `position` and margins describe — libass
+  nudges events that would overlap, which silently collapses the spacing of a
+  fixed column once the text is big enough to collide.
+- `overlay.image` accepts a **list**, read by clip position like
+  `export.title_color`. A clip past the end of the list gets no image, and with
+  no text either it passes through without a needless re-encode.
+
 ### Removed
 
 - The GitHub Pages documentation site and its `Docs site` workflow. It rendered
