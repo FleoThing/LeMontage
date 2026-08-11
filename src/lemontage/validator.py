@@ -9,6 +9,7 @@ is valid.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
@@ -182,13 +183,29 @@ def _check_common_fields(step: dict, label: str, errors: list[str]) -> None:
 def _check_block_params(
     block: str, params: object, label: str, errors: list[str], emitted: set[str]
 ) -> None:
+    """Validate one step's block params: the shared rules, then the block's own.
+
+    The per-block checks live in :data:`_BLOCK_CHECKS`, one function per block
+    with the uniform ``(params, label, errors)`` signature. A block absent from
+    the table simply has no params to check beyond the shared rules below.
+    """
     if params is None:
         return
     if not isinstance(params, dict):
         errors.append(f"{label}: block '{block}' params must be a mapping")
         return
 
-    # Cloud providers are reserved for a later phase.
+    _check_reserved_providers(params, label, errors)
+
+    check = _BLOCK_CHECKS.get(block)
+    if check is not None:
+        check(params, label, errors)
+
+    _check_emit(params.get("emit"), label, errors, emitted)
+
+
+def _check_reserved_providers(params: dict, label: str, errors: list[str]) -> None:
+    """Cloud providers are reserved for a later phase (v1 is local-only)."""
     for field in ("engine", "model"):
         value = params.get(field)
         if isinstance(value, str) and value.lower() in spec.CLOUD_PROVIDERS:
@@ -196,168 +213,159 @@ def _check_block_params(
                 f"{label}: provider '{value}' is reserved for a later phase (v1 is local-only)"
             )
 
-    if block == "detect_clips":
-        method = params.get("method")
-        if method in spec.RESERVED_DETECT_METHODS:
-            errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
-        if method == "agent" and not isinstance(params.get("clips"), list):
-            errors.append(f"{label}: detect_clips.method 'agent' requires a 'clips' list")
-        for key in ("silence_db",):
-            value = params.get(key)
-            if value is not None and (
-                isinstance(value, bool) or not isinstance(value, (int, float))
-            ):
-                errors.append(f"{label}: detect_clips.{key} must be a number (dB, e.g. -30)")
-        gap = params.get("silence_gap")
-        if gap is not None:
-            try:
-                if parse_seconds(gap) <= 0:
-                    errors.append(f"{label}: detect_clips.silence_gap must be > 0")
-            except (ValueError, TypeError):
-                errors.append(f"{label}: detect_clips.silence_gap must be a duration (e.g. 0.25s)")
 
-        if method == "beat":
-            track = params.get("track")
-            if not isinstance(track, str) or not track:
-                errors.append(
-                    f"{label}: detect_clips.method 'beat' requires a 'track' (music file path)"
-                )
-            bpc = params.get("beats_per_clip")
-            if bpc is not None and (isinstance(bpc, bool) or not isinstance(bpc, int) or bpc < 1):
-                errors.append(f"{label}: detect_clips.beats_per_clip must be an integer >= 1")
+def _check_emit(emit: object, label: str, errors: list[str], emitted: set[str]) -> None:
+    """Record the channel a step publishes, so `from:` refs can be resolved."""
+    if emit is None:
+        return
+    if not isinstance(emit, str):
+        errors.append(f"{label}: emit must be a channel name (string)")
+    else:
+        emitted.add(emit)
 
-    if block == "export":
-        fit = params.get("fit")
-        # A list sets the mode per clip by position (like `mute`).
-        for one in fit if isinstance(fit, list) else [fit]:
-            if one is not None and (
-                not isinstance(one, str) or one.lower() not in spec.EXPORT_FIT_MODES
-            ):
-                valid = ", ".join(sorted(spec.EXPORT_FIT_MODES))
-                errors.append(f"{label}: unknown export fit '{one}' (choose from: {valid})")
-        mute = params.get("mute")
-        if mute is not None and not isinstance(mute, (bool, list)):
-            errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
-        smart = params.get("smart_crop")
-        if smart is not None and not isinstance(smart, bool):
-            errors.append(f"{label}: export.smart_crop must be a boolean")
-        normalize = params.get("normalize_audio")
-        if normalize is not None and not isinstance(normalize, bool):
-            errors.append(f"{label}: export.normalize_audio must be a boolean")
-        canvas = params.get("canvas")
-        if canvas is not None and (
-            not isinstance(canvas, str) or not re.fullmatch(r"\d+x\d+", canvas.lower())
-        ):
+
+def _check_bool(value: object, field: str, label: str, errors: list[str]) -> None:
+    if value is not None and not isinstance(value, bool):
+        errors.append(f"{label}: {field} must be a boolean")
+
+
+def _check_int_min(value: object, field: str, label: str, errors: list[str], minimum: int) -> None:
+    """A whole count, never a bool (`isinstance(True, int)` would otherwise pass)."""
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        errors.append(f"{label}: {field} must be an integer >= {minimum}")
+
+
+def _check_detect_clips_params(params: dict, label: str, errors: list[str]) -> None:
+    method = params.get("method")
+    if method in spec.RESERVED_DETECT_METHODS:
+        errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
+    if method == "agent" and not isinstance(params.get("clips"), list):
+        errors.append(f"{label}: detect_clips.method 'agent' requires a 'clips' list")
+    silence_db = params.get("silence_db")
+    if silence_db is not None and (
+        isinstance(silence_db, bool) or not isinstance(silence_db, (int, float))
+    ):
+        errors.append(f"{label}: detect_clips.silence_db must be a number (dB, e.g. -30)")
+    gap = params.get("silence_gap")
+    if gap is not None:
+        try:
+            if parse_seconds(gap) <= 0:
+                errors.append(f"{label}: detect_clips.silence_gap must be > 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: detect_clips.silence_gap must be a duration (e.g. 0.25s)")
+
+    if method == "beat":
+        track = params.get("track")
+        if not isinstance(track, str) or not track:
             errors.append(
-                f"{label}: export.canvas must be a 'WIDTHxHEIGHT' string (e.g. 1080x1920)"
+                f"{label}: detect_clips.method 'beat' requires a 'track' (music file path)"
             )
-        position = params.get("position")
-        if position is not None and not _valid_canvas_position(position):
-            valid = ", ".join(sorted(spec.EXPORT_CANVAS_POSITIONS))
-            errors.append(
-                f"{label}: unknown export position '{position}' "
-                f"(choose from: {valid}, or an 'X,Y' pixel offset)"
-            )
+        _check_int_min(
+            params.get("beats_per_clip"), "detect_clips.beats_per_clip", label, errors, 1
+        )
 
-    if block == "sfx":
-        source = params.get("source")
-        if not isinstance(source, str) or not source:
-            errors.append(f"{label}: sfx.source (path to an audio file) is required")
-        at = params.get("at")
-        for value in at if isinstance(at, list) else ([] if at is None else [at]):
-            try:
-                if parse_seconds(value) < 0:
-                    errors.append(f"{label}: sfx.at times must be >= 0")
-            except (ValueError, TypeError):
-                errors.append(f"{label}: sfx.at '{value}' is not a time (e.g. 2.4 or 0:02)")
-        gain = params.get("gain")
-        if gain is not None and (isinstance(gain, bool) or not isinstance(gain, (int, float))):
-            errors.append(f"{label}: sfx.gain must be a number (dB, e.g. -6)")
 
-    if block == "captions":
-        uppercase = params.get("uppercase")
-        if uppercase is not None and not isinstance(uppercase, bool):
-            errors.append(f"{label}: captions.uppercase must be a boolean")
-        style = params.get("style")
-        if style is not None and (
-            not isinstance(style, str) or style.lower() not in CAPTION_STYLES
+def _check_export_params(params: dict, label: str, errors: list[str]) -> None:
+    fit = params.get("fit")
+    # A list sets the mode per clip by position (like `mute`).
+    for one in fit if isinstance(fit, list) else [fit]:
+        if one is not None and (
+            not isinstance(one, str) or one.lower() not in spec.EXPORT_FIT_MODES
         ):
-            valid = ", ".join(sorted(CAPTION_STYLES))
-            errors.append(f"{label}: unknown captions style '{style}' (choose from: {valid})")
-        case = params.get("case")
-        if case is not None and (not isinstance(case, str) or case.lower() not in _CASES):
-            errors.append(f"{label}: captions.case must be 'upper' or 'lower'")
-        pop = params.get("pop")
-        if (
-            pop is not None
-            and not isinstance(pop, bool)
-            and (not isinstance(pop, int) or not 100 <= pop <= 200)
-        ):
-            errors.append(f"{label}: captions.pop must be a boolean or a scale percent 100..200")
-        pop_duration = params.get("pop_duration")
-        if pop_duration is not None:
-            try:
-                if parse_seconds(pop_duration) <= 0:
-                    errors.append(f"{label}: captions.pop_duration must be > 0")
-            except (ValueError, TypeError):
-                errors.append(f"{label}: captions.pop_duration must be a duration (e.g. 0.06s)")
-        pop_on = params.get("pop_on")
-        if pop_on is not None and (not isinstance(pop_on, str) or pop_on.lower() not in _POP_ON):
-            errors.append(f"{label}: captions.pop_on must be 'word' or 'line'")
-        max_words = params.get("max_words")
-        if max_words is not None and (
-            isinstance(max_words, bool) or not isinstance(max_words, int) or max_words < 1
-        ):
-            errors.append(f"{label}: captions.max_words must be an integer >= 1")
-        outline = params.get("outline")
-        if outline is not None and (
-            isinstance(outline, bool) or not isinstance(outline, (int, float)) or outline < 0
-        ):
-            errors.append(f"{label}: captions.outline must be a number of pixels >= 0")
+            valid = ", ".join(sorted(spec.EXPORT_FIT_MODES))
+            errors.append(f"{label}: unknown export fit '{one}' (choose from: {valid})")
+    mute = params.get("mute")
+    if mute is not None and not isinstance(mute, (bool, list)):
+        errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
+    _check_bool(params.get("smart_crop"), "export.smart_crop", label, errors)
+    _check_bool(params.get("normalize_audio"), "export.normalize_audio", label, errors)
+    canvas = params.get("canvas")
+    if canvas is not None and (
+        not isinstance(canvas, str) or not re.fullmatch(r"\d+x\d+", canvas.lower())
+    ):
+        errors.append(f"{label}: export.canvas must be a 'WIDTHxHEIGHT' string (e.g. 1080x1920)")
+    position = params.get("position")
+    if position is not None and not _valid_canvas_position(position):
+        valid = ", ".join(sorted(spec.EXPORT_CANVAS_POSITIONS))
+        errors.append(
+            f"{label}: unknown export position '{position}' "
+            f"(choose from: {valid}, or an 'X,Y' pixel offset)"
+        )
 
-    if block == "filter":
-        _check_filter_params(params, label, errors)
 
-    if block == "zoom":
-        _check_zoom_params(params, label, errors)
+def _check_sfx_params(params: dict, label: str, errors: list[str]) -> None:
+    source = params.get("source")
+    if not isinstance(source, str) or not source:
+        errors.append(f"{label}: sfx.source (path to an audio file) is required")
+    at = params.get("at")
+    for value in at if isinstance(at, list) else ([] if at is None else [at]):
+        try:
+            if parse_seconds(value) < 0:
+                errors.append(f"{label}: sfx.at times must be >= 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: sfx.at '{value}' is not a time (e.g. 2.4 or 0:02)")
+    gain = params.get("gain")
+    if gain is not None and (isinstance(gain, bool) or not isinstance(gain, (int, float))):
+        errors.append(f"{label}: sfx.gain must be a number (dB, e.g. -6)")
 
-    if block == "overlay":
-        _check_overlay(params, label, errors)
 
-    if block == "still":
-        motion = params.get("motion")
-        if motion is not None and (not isinstance(motion, str) or motion not in spec.STILL_MOTIONS):
-            valid = ", ".join(sorted(spec.STILL_MOTIONS))
-            errors.append(f"{label}: unknown still motion '{motion}' (choose from: {valid})")
-        amount = params.get("motion_amount")
-        if amount is not None and (
-            isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount <= 1.0
-        ):
-            errors.append(f"{label}: still.motion_amount must be a number > 1.0")
-        motion_dur = params.get("motion_duration")
-        if motion_dur is not None:
-            try:
-                if parse_seconds(motion_dur) <= 0:
-                    errors.append(f"{label}: still.motion_duration must be > 0")
-            except (ValueError, TypeError):
-                errors.append(f"{label}: still.motion_duration must be a duration (e.g. 0.3s)")
+def _check_captions_params(params: dict, label: str, errors: list[str]) -> None:
+    _check_bool(params.get("uppercase"), "captions.uppercase", label, errors)
+    style = params.get("style")
+    if style is not None and (not isinstance(style, str) or style.lower() not in CAPTION_STYLES):
+        valid = ", ".join(sorted(CAPTION_STYLES))
+        errors.append(f"{label}: unknown captions style '{style}' (choose from: {valid})")
+    case = params.get("case")
+    if case is not None and (not isinstance(case, str) or case.lower() not in _CASES):
+        errors.append(f"{label}: captions.case must be 'upper' or 'lower'")
+    pop = params.get("pop")
+    if (
+        pop is not None
+        and not isinstance(pop, bool)
+        and (not isinstance(pop, int) or not 100 <= pop <= 200)
+    ):
+        errors.append(f"{label}: captions.pop must be a boolean or a scale percent 100..200")
+    pop_duration = params.get("pop_duration")
+    if pop_duration is not None:
+        try:
+            if parse_seconds(pop_duration) <= 0:
+                errors.append(f"{label}: captions.pop_duration must be > 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: captions.pop_duration must be a duration (e.g. 0.06s)")
+    pop_on = params.get("pop_on")
+    if pop_on is not None and (not isinstance(pop_on, str) or pop_on.lower() not in _POP_ON):
+        errors.append(f"{label}: captions.pop_on must be 'word' or 'line'")
+    _check_int_min(params.get("max_words"), "captions.max_words", label, errors, 1)
+    _check_outline(params.get("outline"), "captions.outline", label, errors)
 
-    if block == "music":
-        _check_music_params(params, label, errors)
 
-    if block == "concat":
-        _check_concat_transitions(params.get("transitions"), label, errors)
-        scope = params.get("transitions_at")
-        if scope is not None and scope not in ("all", "boundaries"):
-            errors.append(f"{label}: concat.transitions_at must be 'all' or 'boundaries'")
-        _check_concat_transition(params, label, errors)
+def _check_still_params(params: dict, label: str, errors: list[str]) -> None:
+    motion = params.get("motion")
+    if motion is not None and (not isinstance(motion, str) or motion not in spec.STILL_MOTIONS):
+        valid = ", ".join(sorted(spec.STILL_MOTIONS))
+        errors.append(f"{label}: unknown still motion '{motion}' (choose from: {valid})")
+    amount = params.get("motion_amount")
+    if amount is not None and (
+        isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount <= 1.0
+    ):
+        errors.append(f"{label}: still.motion_amount must be a number > 1.0")
+    motion_dur = params.get("motion_duration")
+    if motion_dur is not None:
+        try:
+            if parse_seconds(motion_dur) <= 0:
+                errors.append(f"{label}: still.motion_duration must be > 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: still.motion_duration must be a duration (e.g. 0.3s)")
 
-    emit = params.get("emit")
-    if emit is not None:
-        if not isinstance(emit, str):
-            errors.append(f"{label}: emit must be a channel name (string)")
-        else:
-            emitted.add(emit)
+
+def _check_concat_params(params: dict, label: str, errors: list[str]) -> None:
+    _check_concat_transitions(params.get("transitions"), label, errors)
+    scope = params.get("transitions_at")
+    if scope is not None and scope not in ("all", "boundaries"):
+        errors.append(f"{label}: concat.transitions_at must be 'all' or 'boundaries'")
+    _check_concat_transition(params, label, errors)
 
 
 def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
@@ -666,3 +674,20 @@ def _check_from(
             errors.append(f"{label}: 'from' entries must be channel names (strings)")
         elif name not in emitted:
             errors.append(f"{label}: 'from: {name}' references an unknown channel")
+
+
+# Per-block param checks, dispatched by :func:`_check_block_params`. A block with
+# nothing to check beyond the shared rules (stt, cut, speed, reverse, stills) is
+# deliberately absent rather than mapped to a no-op.
+_BLOCK_CHECKS: dict[str, Callable[[dict, str, list[str]], None]] = {
+    "captions": _check_captions_params,
+    "concat": _check_concat_params,
+    "detect_clips": _check_detect_clips_params,
+    "export": _check_export_params,
+    "filter": _check_filter_params,
+    "music": _check_music_params,
+    "overlay": _check_overlay,
+    "sfx": _check_sfx_params,
+    "still": _check_still_params,
+    "zoom": _check_zoom_params,
+}

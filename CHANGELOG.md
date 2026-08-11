@@ -7,6 +7,16 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Changed
+
+- **The validator dispatches per block instead of running one 180-line `if`
+  chain.** `_check_block_params` was complexity 55 for a threshold of 12; each
+  block now has its own `_check_<block>_params` behind a `_BLOCK_CHECKS` table.
+  No pipeline validates differently: the two implementations were diffed over
+  101 282 generated documents plus every pipeline in the repo and return the
+  same errors, in the same order. `captions` gained the param tests it never
+  had, and two tests now pin the dispatch table itself.
+
 ## [0.8.0] - 2026-08-11
 
 ### Changed
