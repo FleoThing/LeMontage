@@ -18,13 +18,22 @@ from typing import Any
 
 from ...spec import EXPORT_CANVAS_POSITIONS, EXPORT_FIT_MODES
 from .. import ffmpeg, fonts, safepath
-from ..assformat import escape_text
+from ..assformat import escape_text, timestamp
 from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult, ItemResult
 
 # Sanity bounds so a pipeline can't ask FFmpeg for an absurd allocation.
 _MAX_DIMENSION = 7680  # 8K per side
+# EBU R128 target used by `normalize_audio` (the streaming platforms' -14 LUFS).
+# `loudnorm` outputs at 192 kHz whatever comes in; the AAC encoder then clamps to
+# its 96 kHz maximum, and a 96 kHz AAC track plays silent on most players and
+# gets rejected by the short-form uploaders. Resample back to the delivery rate.
+# `aformat` pins the layout: loudnorm renegotiates the link when it flushes, and
+# an unpinned `aresample` then fails with "Cannot select channel layout" on
+# ffmpeg 4.x, killing the export.
+_LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=stereo"
+
 _MAX_FPS = 240
 _MAX_TITLE_SIZE = 2000
 
@@ -121,8 +130,7 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=0, step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-title", index=0)
         author = _author_ass(params, ctx, f"{step_id}-author", index=0)
-        crop_cmd = _crop_cmd(params, ctx, f"{step_id}-0")
-        _render(media, params, out, title, author, mute=_muted(params, 0), crop_cmd=crop_cmd)
+        _render(media, params, out, title, author, mute=_muted(params, 0))
         return BlockResult(outputs={"files": [str(out)]})
 
     def execute_item(
@@ -134,9 +142,14 @@ class ExportBlock(Block):
         out = _output_path(params, ctx, index=item["index"], step_id=step_id)
         title = _title_ass(params, ctx, f"{step_id}-{item['index']}-title", index=item["index"])
         author = _author_ass(params, ctx, f"{step_id}-{item['index']}-author", index=item["index"])
-        crop_cmd = _crop_cmd(params, ctx, f"{step_id}-{item['index']}")
         _render(
-            clip, params, out, title, author, mute=_muted(params, item["index"]), crop_cmd=crop_cmd
+            clip,
+            params,
+            out,
+            title,
+            author,
+            mute=_muted(params, item["index"]),
+            index=item["index"],
         )
         return ItemResult(item={"file": str(out)}, outputs={"files": str(out)})
 
@@ -312,17 +325,23 @@ _NAMED_COLORS = {
 }
 
 
-def _ass_color(value: object) -> str:
+def _ass_color(value: object, field: str = "export.title_color") -> str:
     """Convert a ``#RRGGBB`` hex or a colour name to an ASS ``&H00BBGGRR`` string.
 
     ASS stores the primary colour as ``&HAABBGGRR`` (alpha, then blue/green/red),
-    so we reorder the RGB bytes. Defaults to white when unset.
+    so we reorder the RGB bytes. Defaults to white when unset. ``field`` names the
+    offending key in the error — several blocks take colours now, and "invalid
+    title_color" is a poor thing to read when the typo was in an overlay run.
+
+    This is also the only gate a colour passes before being written into an ASS
+    override block, so it must stay strict: exactly six hex digits, or a name
+    from the table.
     """
     if not value:
         return "&H00FFFFFF"
     text = _NAMED_COLORS.get(str(value).strip().lower(), str(value).strip().lstrip("#").lower())
     if len(text) != 6 or any(c not in "0123456789abcdef" for c in text):
-        raise ValueError(f"export: invalid title_color '{value}' (use #RRGGBB or a colour name)")
+        raise ValueError(f"invalid {field} '{value}' (use #RRGGBB or a colour name)")
     rr, gg, bb = text[0:2], text[2:4], text[4:6]
     return f"&H00{bb}{gg}{rr}".upper()
 
@@ -375,19 +394,10 @@ def _title_window(params: dict[str, Any]) -> tuple[str, str]:
     elif "title_duration" in params:
         end = start + parse_seconds(params["title_duration"])
     else:
-        return _ass_timestamp(start), _TITLE_FOREVER
+        return timestamp(start), _TITLE_FOREVER
     if end <= start:
         raise ValueError("export: title window end must be after title_start")
-    return _ass_timestamp(start), _ass_timestamp(end)
-
-
-def _ass_timestamp(seconds: float) -> str:
-    """Format seconds as an ASS timestamp ``H:MM:SS.cc`` (centiseconds)."""
-    cs = int(round(seconds * 100))
-    hours, cs = divmod(cs, 360000)
-    minutes, cs = divmod(cs, 6000)
-    secs, cs = divmod(cs, 100)
-    return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
+    return timestamp(start), timestamp(end)
 
 
 def _author_ass(params: dict[str, Any], ctx: RunContext, name: str, index: int = 0) -> Path | None:
@@ -443,8 +453,30 @@ def _fill_title_tokens(text: str, index: int, name: str) -> str:
     return text
 
 
+def _fit_mode(params: dict[str, Any], index: int) -> str:
+    """The `fit` mode for this clip (0-based ``index``).
+
+    ``fit`` is normally one mode for the whole export; a list picks it per clip
+    by position (``fit: [cover, cover, stretch]`` stretches only the 3rd), so a
+    single clip in the middle of the edit can be distorted on purpose. Missing
+    positions fall back to ``contain``.
+    """
+    fit = params.get("fit", "contain")
+    if isinstance(fit, list):
+        fit = fit[index] if index < len(fit) else "contain"
+    fit = str(fit).lower()
+    if fit not in EXPORT_FIT_MODES:
+        valid = ", ".join(sorted(EXPORT_FIT_MODES))
+        raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
+    return fit
+
+
 def _scale_chain(
-    params: dict[str, Any], width: int, height: int, source_crop: str | None = None
+    params: dict[str, Any],
+    width: int,
+    height: int,
+    source_crop: str | None = None,
+    index: int = 0,
 ) -> list[str]:
     """Video filters that fit the source into width×height per the `fit` mode.
 
@@ -453,15 +485,17 @@ def _scale_chain(
       cover and blurred behind the sharp centred video (the classic vertical look).
     * ``cover`` — scale to fill, then centre-crop the overflow so there are no
       bars (the source edges are cropped instead).
+    * ``stretch`` — scale each axis independently to the target: a horizontal
+      source fills a vertical frame whole, distorted, nothing cropped.
 
     ``source_crop`` (a ``"w:h:x:y"`` spec) strips baked-in bars from the source
     *before* fitting, so a letterboxed source still fills the whole frame.
     """
-    fit = str(params.get("fit", "contain")).lower()
-    if fit not in EXPORT_FIT_MODES:
-        valid = ", ".join(sorted(EXPORT_FIT_MODES))
-        raise ValueError(f"export: unknown fit '{fit}' (choose from: {valid})")
+    fit = _fit_mode(params, index)
     chain = [f"crop={source_crop}"] if source_crop else []
+    if fit == "stretch":
+        # Deliberately distorts: fills the frame edge to edge, no bars, no crop.
+        return chain + [f"scale={width}:{height},setsar=1"]
     if fit == "cover":
         return chain + [
             f"scale={width}:{height}:force_original_aspect_ratio=increase",
@@ -495,13 +529,42 @@ _CANVAS_XY = {
 assert set(_CANVAS_XY) == EXPORT_CANVAS_POSITIONS
 
 
+def _canvas_xy(position: str, canvas: tuple[int, int], frame: tuple[int, int]) -> str:
+    """The ``pad`` ``x:y`` for ``position``: a named anchor, or an ``"X,Y"`` pixel offset.
+
+    The five anchors cover the common cases, but a fixed layout needs an exact
+    seat — a video band under a header card, say, sits at neither the top nor the
+    centre. ``"X,Y"`` places the frame's top-left corner at that pixel. Both
+    coordinates are integers we format ourselves, so nothing the pipeline writes
+    reaches the filtergraph verbatim.
+    """
+    if position in _CANVAS_XY:
+        return _CANVAS_XY[position]
+    try:
+        x_text, y_text = position.split(",")
+        x, y = int(x_text), int(y_text)
+    except ValueError:
+        valid = ", ".join(sorted(_CANVAS_XY))
+        raise ValueError(
+            f"export: unknown position '{position}' "
+            f"(choose from: {valid}, or an 'X,Y' pixel offset)"
+        ) from None
+    cw, ch = canvas
+    width, height = frame
+    if x < 0 or y < 0 or x + width > cw or y + height > ch:
+        raise ValueError(
+            f"export: position {x},{y} puts the {width}x{height} frame outside the {cw}x{ch} canvas"
+        )
+    return f"{x}:{y}"
+
+
 def _canvas_pad(params: dict[str, Any]) -> str | None:
     """A ``pad`` filter placing the export frame inside a larger ``canvas``.
 
     ``canvas: WxH`` sets the final frame size; ``position`` (default ``center``)
-    picks where the export sits in it. The empty area is filled with ``bg``
-    (a colour, default black — ``bg: blur`` only fills the fit bars, so the
-    canvas falls back to black).
+    picks where the export sits in it — a named anchor or an ``X,Y`` pixel
+    offset. The empty area is filled with ``bg`` (a colour, default black —
+    ``bg: blur`` only fills the fit bars, so the canvas falls back to black).
     """
     canvas = params.get("canvas")
     if not canvas:
@@ -513,12 +576,10 @@ def _canvas_pad(params: dict[str, Any]) -> str | None:
             f"export: canvas {cw}x{ch} is smaller than the export frame {width}x{height}"
         )
     position = str(params.get("position", "center")).lower()
-    if position not in _CANVAS_XY:
-        valid = ", ".join(sorted(_CANVAS_XY))
-        raise ValueError(f"export: unknown position '{position}' (choose from: {valid})")
+    xy = _canvas_xy(position, (cw, ch), (width, height))
     bg = params.get("bg")
     color = "black" if str(bg).lower() == "blur" else _bg_pad_color(bg)
-    return f"pad={cw}:{ch}:{_CANVAS_XY[position]}:color={color}"
+    return f"pad={cw}:{ch}:{xy}:color={color}"
 
 
 def _bg_pad_color(bg: object) -> str:
@@ -527,13 +588,6 @@ def _bg_pad_color(bg: object) -> str:
         return "black"
     text = str(bg)
     return text.replace("#", "0x") if text.startswith("#") else text
-
-
-def _crop_cmd(params: dict[str, Any], ctx: RunContext, name: str) -> Path | None:
-    """Path for a `smart_crop` sendcmd script, or None when not requested."""
-    if not params.get("smart_crop"):
-        return None
-    return ctx.work_dir() / f"{name}-crop.cmd"
 
 
 def _muted(params: dict[str, Any], index: int) -> bool:
@@ -555,18 +609,18 @@ def _render(
     title: Path | None = None,
     author: Path | None = None,
     mute: bool = False,
-    crop_cmd: Path | None = None,
+    index: int = 0,
 ) -> None:
     width, height = _target_size(params)
     fps = int(params.get("fps", 30))
     if not 0 < fps <= _MAX_FPS:
         raise ValueError(f"export: fps {fps} out of range (1..{_MAX_FPS})")
     if params.get("smart_crop"):
-        # Follow the subject to fill the frame (mediapipe); overrides fit/bg,
+        # Follow the subject to fill the frame; overrides fit/bg,
         # since it height-matches and pans rather than barring or centre-cropping.
         from .. import smartcrop
 
-        fit_filters = smartcrop.crop_filters(media, width, height, crop_cmd)
+        fit_filters = smartcrop.crop_filters(media, width, height)
     else:
         # Strip the source's own baked-in letterbox bars first (default on) so a
         # letterboxed source fills the frame instead of carrying its bars into the
@@ -574,12 +628,11 @@ def _render(
         # `bg` fill is set: with `blur` the sharp foreground would keep its bars
         # over the blur, and with a colour the bars show as a black band inside
         # the fill. Detected with FFmpeg's cropdetect — no extra dependency.
-        fit = str(params.get("fit", "contain")).lower()
-        wants_fill = fit == "cover" or bool(params.get("bg"))
+        wants_fill = _fit_mode(params, index) in ("cover", "stretch") or bool(params.get("bg"))
         source_crop = None
         if wants_fill and params.get("trim_bars", True):
             source_crop = ffmpeg.detect_content_crop(media)
-        fit_filters = _scale_chain(params, width, height, source_crop)
+        fit_filters = _scale_chain(params, width, height, source_crop, index)
     chain = [*fit_filters, f"fps={fps}"]
     if title is not None:
         fonts.ensure(params.get("title_font"))  # download preset / warn on missing
@@ -595,7 +648,19 @@ def _render(
     args = ["-i", str(media), "-vf", ",".join(chain)]
     # Keep a (silent) audio stream rather than dropping it (-an), so a later
     # concat / crossfade still finds audio on every clip.
-    if mute:
+    if not ffmpeg.has_audio(media):
+        # A rendered `still` has no audio track at all, and `-af` cannot invent
+        # one (ffmpeg drops the filter silently). `concat` keeps audio only when
+        # *every* clip has a track, so one photo would mute the spoken clip next
+        # to it. Mix in silence instead — `-shortest` stops it with the video.
+        args = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", *args, "-shortest"]
+    elif mute:
         args += ["-af", "volume=0"]
+    elif params.get("normalize_audio"):
+        # One-pass EBU R128 to the streaming target (-14 LUFS): clips cut from
+        # different parts of a recording arrive at the same loudness, so a reel
+        # doesn't jump in level at every join. Two-pass would be more precise
+        # but needs a measuring run per clip.
+        args += ["-af", _LOUDNORM]
     args += ["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac", str(out)]
     ffmpeg.run(args)

@@ -1,0 +1,39 @@
+lemontage: "1.0"
+name: zoom-punch-video
+description: "Punch in on a talking head: a snap zoom on the emphasis, and a different framing on every cut"
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  - id: clips
+    detect_clips:
+      method: silence
+      max_clips: 4
+      emit: takes
+
+  - cut:
+      from: takes
+
+  # The short-form move: `amount` as a list gives each clip its own framing, so
+  # every jump cut changes the shot size instead of replaying one locked-off
+  # take; `at` punches in at 2s and back out at 5s inside each clip.
+  - zoom:
+      from: takes
+      amount: [1.0, 1.12, 1.0, 1.2]
+      at: [2, 5]
+      duration: 0.15s
+
+  - export:
+      from: takes
+      format: vertical
+      resolution: 1080x1920
+      fit: cover
+
+  - concat:
+      from: takes
+      output: "./output/{{ name }}-reel.mp4"
+
+output:
+  dir: ./output/zoom-punch-video

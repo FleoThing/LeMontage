@@ -146,7 +146,7 @@ Every step accepts these fields alongside its block-specific params:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `id` | string | block name | Identifier for referencing this step's outputs. Must be unique across steps: two steps resolving to the same id (explicit duplicates, or two anonymous steps of the same block) is a validation error. |
-| `cache` | bool | `true` | Skip the step if its output already exists (checkpoint). The cache key hashes the step's resolved params, the input source and its upstream steps' keys — changing a param reruns the step *and* every step downstream of it. |
+| `cache` | bool | `true` | Skip the step if its output already exists (checkpoint). The cache key hashes the step's resolved params, the input source (its path **and** its size/mtime, so re-cutting a file to the same name reruns the step) and its upstream steps' keys — changing a param reruns the step *and* every step downstream of it. |
 | `on_failure` | enum | `abort` | `abort` \| `skip` \| `retry`. |
 | `retries` | int | `0` | Number of retries when `on_failure: retry`. |
 | `requires` | string | — | Gate the step on another step's state, e.g. `transcript.success`. |
@@ -252,6 +252,8 @@ Analyzes a long video and emits candidate clips as a **channel** (see §8).
 | `beats_per_clip` | int | `4` | (`beat` only) How many beats each clip spans — `4` = one bar (a cut per bar), `1` = a cut on every beat. |
 | `start_at` | duration | `0` | (`beat` only) Ignore beats before this offset; set it to the `music` step's own `start_at` so the grid and the laid-over track agree. |
 | `source_start` | duration | `0` | (`beat` only) Where in the **source video** the beat clips start walking forward — set it past an intro handled by another channel (e.g. `source_start: 8` after a fixed 0–8s intro clip). |
+| `silence_db` | number | `-30` | (`silence` only) Level below which audio counts as silence, in dB. Raise it (`-24`) when the room is noisy. |
+| `silence_gap` | duration | `0.5s` | (`silence` only) How long the level must stay down to be a silence. Lower it (`0.25s`) to also drop the breaths between sentences — the jump-cut look; raise it to keep natural pauses. |
 | `min_duration` | duration | `15s` | Minimum clip length. |
 | `max_duration` | duration | `60s` | Maximum clip length. |
 | `max_clips` | int | `5` | Cap on number of clips emitted. |
@@ -373,8 +375,26 @@ segment-level cues.
 | `caption_size` | int | `100` | Font size in pixels of the clip. |
 | `caption_margin` | int | ~5% of height | Distance from the edge (per `position`). |
 | `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
+| `uppercase` | bool | `false` | Draw every line in CAPITALS. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
+| `pop` | bool \| int | `false` | Scale the active word up as it is spoken, settling back over 90ms — the beat that makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`–`200`). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
+
+**Word pop.** `highlight` recolours the spoken word; `pop` also *scales* it.
+The two together are the short-form caption look:
+
+```yaml
+- captions:
+    from: clip_channel
+    words: "{{ steps.transcript.words }}"
+    uppercase: true
+    pop: true              # or a percent: pop: 130
+    max_chars: 12          # 2 words a line, so each pop lands on its own
+```
+
+Under the hood a popped line is emitted once **per word** instead of as one
+karaoke line (the karaoke tag can only change colour). Each event still draws the
+whole line, so the wrapping never moves — only the active word changes.
 
 **Order matters — caption before *or* after reframing.** `caption_size`/`caption_margin`
 are relative to the **height of the clip being captioned**. Placing `captions`
@@ -405,14 +425,15 @@ Renders the final video(s) to disk.
 |---|---|---|---|
 | `format` | enum | `vertical` | `vertical` (9:16) \| `horizontal` (16:9) \| `square` (1:1). |
 | `resolution` | string | per-format | e.g. `1080x1920`. |
-| `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars). |
-| `smart_crop` | bool | `false` | Fill the frame by **following the subject** instead of barring or centre-cropping: the crop window slides to keep the main face in shot (mediapipe, smoothed). For a landscape → vertical reframe (real TikTok framing). Overrides `fit`/`bg`. Needs `pip install 'lemontage[smartcrop]'`; falls back to a centre crop when the source is not wider than the target or no face is found. |
+| `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars); `stretch` scales each axis independently so a horizontal source fills a vertical frame entirely — distorted, but nothing cropped. A **list** sets the mode per clip by position (`fit: [cover, cover, stretch]` stretches only the 3rd clip), so one clip in the middle of the edit can be distorted on purpose; missing positions fall back to `contain`. |
+| `smart_crop` | bool | `false` | Fill the frame by **following the subject** instead of barring or centre-cropping: the crop window holds still and slides only when the tracked face really leaves the middle. For a landscape → vertical reframe (real TikTok framing). Overrides `fit`/`bg`. Needs `pip install 'lemontage[smartcrop]'`; falls back to a centre crop when the source is not wider than the target or no face is found. |
 | `trim_bars` | bool | `true` | Auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source fills the frame. Applied with `fit: cover` (else the bars leak into the crop) and whenever a `bg` fill is set — `blur` (else the sharp foreground keeps its bars over the blur) or a colour (else the bars show as a black band inside the fill). Set `false` to keep them. |
 | `bg` | string | `black` | Fill for the `contain` bars: a colour (`white`, `#101010`) or `blur` — a blurred, zoomed copy of the source behind the sharp centred video (the classic vertical look). |
 | `canvas` | string | — | Place the export frame inside a larger canvas, e.g. `canvas: 1080x1920` with `resolution: 1080x1080` puts a square video on a vertical frame. The canvas becomes the final frame size and must be at least as large as the export frame. The empty area is filled with `bg` (a colour, default black; `bg: blur` only fills the fit bars, the canvas stays black). Applied after titles/author, so those stay on the export frame. |
-| `position` | enum | `center` | Where the export frame sits inside the `canvas`: `center` \| `top` \| `bottom` \| `left` \| `right`. |
+| `position` | enum \| string | `center` | Where the export frame sits inside the `canvas`: `center` \| `top` \| `bottom` \| `left` \| `right`, or an exact `X,Y` pixel offset of the frame's top-left corner (e.g. `0,421`). The frame must stay fully inside the canvas. |
 | `from` | channel | — | Channel to export (one file per item). |
 | `fps` | int | `30` | Frames per second. |
+| `normalize_audio` | bool | `false` | Bring the clip to the streaming loudness target (EBU R128, -14 LUFS, one pass) so clips cut from different parts of a recording sit at the same level and the reel doesn't jump at every join. Ignored when the clip is muted. |
 | `mute` | bool \| list | `false` | Silence the audio. `true` mutes every clip; a list of booleans mutes per clip by position (e.g. `[false, true]`). The (silent) audio track is kept so a later `concat` still works. |
 | `title` | string | — | Title banner at the top of the frame. Shown for the whole clip unless a window is set below. `\n` splits lines. |
 | `title_start` | duration | `0` | When the title appears (relative to each clip). |
@@ -440,6 +461,16 @@ Renders the final video(s) to disk.
 `{{ part }}` (1-based clip number, e.g. `#1`, `#2`), `{{ index }}` (0-based) and
 `{{ name }}` (pipeline name).
 
+**Framing that holds still.** A crop window that follows every head movement is
+worse than a static one — the frame breathes and the clip looks cheap. So
+`smart_crop` frames like a camera operator: it **locks onto one subject** (the
+face nearest the previous one, not the biggest — otherwise a two-shot makes the
+frame ping-pong between speakers), **holds** its position while the subject stays
+within ~8% of the crop width, and only then **glides** across in ~0.7s, eased in
+and out. A jump wider than ~30% of the crop reads as a camera cut and snaps
+instead of sliding. Nothing to tune: on a talking head the window is static most
+of the time and moves a handful of times per clip.
+
 **Canvas placement.** `canvas` puts the export inside a larger frame — no
 hand-written ffmpeg `pad` needed. E.g. a square video centred on a vertical
 9:16 canvas:
@@ -451,6 +482,18 @@ hand-written ffmpeg `pad` needed. E.g. a square video centred on a vertical
     canvas: 1080x1920
     position: center      # center | top | bottom | left | right
     bg: "#101010"         # canvas fill colour (default black)
+```
+
+The five anchors cover the common cases, but a fixed layout needs an exact seat
+— a video band sitting under a header card is at neither the top nor the centre.
+`position` also takes an `X,Y` pixel offset for the frame's top-left corner:
+
+```yaml
+- export:
+    from: clip_channel
+    resolution: 720x553
+    canvas: 720x1280
+    position: 0,421       # band seated 421px down, rest of the canvas stays bg
 ```
 
 **Author label.** `author` burns a discreet always-on credit in a corner of the
@@ -663,9 +706,28 @@ track); `concat` tolerates this and drops audio for the join.
 | `image` | path | — | Source image (single mode). |
 | `duration` | time | `3s` | Clip length. Channel items carry their own duration; this is the fallback. |
 | `fps` | int | `30` | Frame rate of the rendered clip. |
-| `motion` | string | — | Animate the image while it is on screen: `zoomout` starts slightly punched-in and pulls back to the full frame; `zoomin` pushes from the full frame into the punch-in (both fast at first, braking just before landing — the classic shorts/reels look). `panup` / `pandown` are a pure vertical scroll — a full-width band slides across the image at constant speed, no zoom. Omit for a static clip. |
+| `motion` | string | — | Animate the image while it is on screen: `zoomout` starts slightly punched-in and pulls back to the full frame; `zoomin` pushes from the full frame into the punch-in. Both leave fast and **decelerate** into the landing (a cubic ease-out — the "smooth zoom" a CapCut edit gets from an Ease Out velocity curve, not a constant slide), and neither overshoots. `panup` / `pandown` are a pure vertical scroll — a full-width band slides across the image at constant speed, no zoom. Omit for a static clip. |
 | `motion_amount` | float | `1.1` | For the zooms: the punched-in zoom factor (must be > 1.0; `1.1` = a 10% punch-in). For the pans: the crop ratio — the visible band is `height / motion_amount` tall, so a larger value scrolls further. |
 | `motion_duration` | time | clip length | How long the motion lasts; the image then holds the landing frame for the rest of the clip. Shorter = snappier zoom / faster scroll. |
+
+**The zooms aim at the subject.** `zoomin` / `zoomout` do not push into the
+middle of the frame — on a portrait that lands on the torso, on a wide scene on
+nothing. They aim at the picture's focal point instead: `zoomin` pushes in and
+lands on it, `zoomout` starts on it and pulls back to the full frame.
+
+The move is a **straight line**. The window centre travels from the frame centre
+to the focal point in step with the zoom's own eased progress, so the framing
+arrives exactly when the zoom does. (Pinning the centre on the focal point at
+every zoom level instead makes the frame wander sideways mid-move — at zoom 1.0
+the window is the whole image and cannot be off-centre, so the clamp drags it.)
+The full-frame end of the move is unchanged either way.
+
+The focal point is, in order: the largest face — the same detector `smart_crop`
+uses, YuNet, which sees painted and engraved faces and not only photographed ones
+(its weights ship with the package, 227 KB, MIT, no download); else the most
+detailed part of the image, a deliberately weak last resort that on a portrait
+aims at the torso. Without the `[smartcrop]` extra the move is centred as before,
+no error. `panup` / `pandown` are unaffected.
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
@@ -709,12 +771,14 @@ Single mode (no `from:`) lays the music over the pipeline input (or `input:`).
 
 ---
 
-### 6.13 `overlay` — conditional title/band overlay
+### 6.13 `overlay` — conditional title/band/image overlay
 
 Burns multi-line text — optionally on a uniform full-width colour band — over
 the clip, either for the whole clip or only during a time window. More flexible
 than `export`'s `title`: it can sit on a solid band and appear/disappear at
-chosen times. Operates on the pipeline input, or maps over a channel of clips.
+chosen times. It also composites a prepared `image`, which is the only way to
+put real artwork on a clip — text and bands can draw glyphs and rectangles,
+nothing else. Operates on the pipeline input, or maps over a channel of clips.
 The clip is re-encoded, so run it before `export` in the chain.
 
 ```yaml
@@ -729,7 +793,10 @@ The clip is re-encoded, so run it before `export` in the chain.
 |---|---|---|---|
 | `from` | channel | — | Channel of clips to map over. |
 | `input` | path | pipeline input | Source video (single mode). |
-| `text` | string | required | The overlay text. Real newlines or literal `\n` split it into lines. |
+| `text` | string \| list | — | The overlay text. A string: real newlines or literal `\n` split it into lines. A list of `{text, color}` runs colours each phrase independently (see below). A `text` and/or an `image` is required. |
+| `image` | path | — | A prepared image composited over the clip, transparency preserved (a PNG logo, lower-third or full header card). Used at its own size — author it at the frame's resolution, the block does not rescale. |
+| `x` | int | `0` | Image left edge, in px. Negative counts back from the right edge (`-40` = 40px in from the right), so a corner watermark needs no knowledge of the frame width. |
+| `y` | int | `0` | Image top edge, in px. Negative counts back from the bottom edge. |
 | `band` | mapping | — | A uniform full-width band drawn behind the text. Keys: `color` (name or `#RRGGBB`, default `black`), `height` (px, default `210`), `position` (`top` or `bottom`, default `top`). Omit for text without a band. |
 | `show` | mapping | whole clip | Time window the overlay is visible: `from` (default `0`) and `to`, as time values (§13.1). Omit to keep it for the whole clip. |
 | `font` | string | `font1` | Text font: a preset alias `font1`…`font5` or an installed family name (same plumbing as `export.title_font`). |
@@ -740,6 +807,48 @@ The clip is re-encoded, so run it before `export` in the chain.
 The text follows the band's `position` (top-centre or bottom-centre of the
 frame). `show.except: transition` (hide during a concat transition) is
 reserved — the validator rejects it for now.
+
+**Coloured runs.** `color` paints the whole overlay one colour. For the
+highlighted-keyword look — a paragraph where each key phrase carries its own
+colour — give `text` a list of runs instead:
+
+```yaml
+- overlay:
+    from: clip_channel
+    size: 58
+    text:
+      - {text: "Apollo 11's", color: "#FFFF00"}
+      - {text: " flag never stayed standing. The "}
+      - {text: "exhaust", color: "#FF8A3D"}
+      - {text: " blew it "}
+      - {text: "flat", color: red}
+      - {text: "."}
+```
+
+Runs are concatenated **verbatim** — the spaces that separate them are the ones
+you write, as above. A run without a `color` uses the overlay's `color`. Lines
+still wrap on their own; `\n` inside a run forces a break.
+
+Colours are named, never written as renderer syntax: each one goes through the
+same strict parser as `title_color` (six hex digits or a known name), and a bad
+value names the run it came from. Run text itself is escaped exactly as before,
+so a pipeline from an untrusted source still cannot inject render directives.
+
+**Image overlay.** `show` gates the image exactly as it gates the text, and the
+two compose: band first, image over it, text last so a caption stays readable on
+top of the artwork. A corner watermark, held for the whole clip:
+
+```yaml
+- overlay:
+    from: clip_channel
+    image: ./watermark.png
+    x: -40                # 40px in from the right edge
+    y: -30                # 30px up from the bottom edge
+```
+
+Anything with real artwork in it — a fake-post header card, a diagram, an
+annotated callout — is authored outside LeMontage as a transparent PNG at the
+frame's resolution and dropped in at `0,0`.
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
@@ -764,11 +873,93 @@ dependency.
 | Param | Type | Default | Description |
 |---|---|---|---|
 | `look` | string / list | — | Named effect(s), applied in order: `bw` (black & white), `vignette` (darkened corners), `grain` (film grain), `sharpen` (luma sharpen). |
+| `grain` | number | `12` | Strength of the `grain` look, 0-100 (FFmpeg `noise=alls=`). `12` is texture you feel rather than see; `25`-`40` is a visible dirty-archive grain. Ignored unless `look` includes `grain`. |
 | `eq` | mapping | — | Colour grade via FFmpeg `eq`: any of `brightness`, `contrast`, `saturation`, `gamma` (plain numbers). Applied before the looks. |
 | `from` | channel | — | Map over a channel of clips instead of the input. |
 
 At least one of `look` / `eq` is required. `eq` runs first (the grade), then the
 looks in listed order.
+
+Like `captions`, a mapped `filter` grades whatever the chain is carrying: the
+**exported** file when the step runs after `export`, the cut clip before it. So
+`cut → filter → export` grades the source-shaped clip (cheaper, and the export
+re-encodes it once) and `cut → export → filter` grades the final frame.
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
+### 6.15 `zoom` — punch in on a clip
+
+Zoom a **video** clip: the frame snaps closer on a punchline and back out, or
+simply sits tighter for the whole clip. `still` has `motion: zoomin` for images;
+this is the same move for footage. Works on the pipeline input or maps over a
+channel. FFmpeg-only, no extra dependency.
+
+```yaml
+# a punch in at 2.4s and back out at 5s
+- zoom:
+    from: clip_channel
+    amount: 1.15
+    at: [2.4, 5]
+    duration: 0.15s
+
+# no `at`: one framing per clip — every jump cut changes the shot size
+- zoom:
+    from: clip_channel
+    amount: [1.0, 1.12, 1.0, 1.2]
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `amount` | float / list | `1.15` | Zoom factor (`1.15` = 15% closer, must be >= 1.0). A **list** sets it per clip by position (like `export.fit` / `mute`); a position past the end means no punch, so a short list cycles a reel of any length. |
+| `at` | list | — | Times (clip-relative, §13.1) where the frame punches. They **alternate**: the 1st zooms in, the 2nd back out, the 3rd in again. Omit for a static punch over the whole clip. |
+| `duration` | duration | `0.15s` | How long each punch takes, eased in and out. `0.15s` reads as a snap; `0.6s` as a slow push. |
+| `from` | channel | — | Map over a channel of clips instead of the input. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+Without `at` the block is a `crop` + `scale` — exact, cheap, no artefacts. With
+`at` it is a `zoompan` whose zoom is a sum of eased ramps; it renders at the
+**source's** frame rate (giving it another one would silently retime the clip).
+
+Where to place it: before `export` punches the source-shaped clip (the export
+then re-encodes it once anyway); after `export` punches the final frame — but
+note it crops the reframed image, so anything already at the edge (captions
+burned before it) is cut off. A mapped `zoom` reads the exported `file` when
+there is one, else the cut `clip`, like `captions`.
+
+**Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
+
+---
+
+### 6.16 `sfx` — sound effects at chosen moments
+
+`music` lays one continuous track over a reel. `sfx` is the opposite: the same
+short sample dropped at **exact times** and mixed under whatever audio is
+already there — a whoosh on a cut, a ding on the punchline, a riser under a
+reveal. Operates on the pipeline input, or maps over a channel (then `at` is
+relative to each clip, so one step puts an effect on every cut).
+
+```yaml
+- sfx:
+    from: clip_channel
+    source: ./whoosh.mp3
+    at: [0, 3.2]      # clip-relative times
+    gain: -8          # dB, under the voice
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `source` | path | **required** | Audio file to drop (mp3, wav, …). |
+| `at` | list | `[0]` | Times the effect fires (§13.1). Clip-relative when mapping a channel. |
+| `gain` | number | `0` | Level change in dB, applied to every hit (`-8` sits it under a voice). |
+| `from` | channel | — | Map over a channel of clips. |
+| `input` | path | pipeline input | Source video (single mode). |
+
+The sample is decoded once and split per hit. The mix never normalises, so the
+original audio keeps its level — the default would duck the voice by 1/N every
+time an effect fires. Effects never extend the clip: a hit near the end is cut
+with it.
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 

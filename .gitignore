@@ -11,6 +11,8 @@ build/
 output/
 .lemontage/
 models/
+# …except the face detector weights that ship in the wheel (227 KB, MIT).
+!src/lemontage/engine/models/
 
 # Media artifacts (don't commit heavy media)
 *.mp4

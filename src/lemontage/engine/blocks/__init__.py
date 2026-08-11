@@ -12,10 +12,12 @@ from .filter import FilterBlock
 from .music import MusicBlock
 from .overlay import OverlayBlock
 from .reverse import ReverseBlock
+from .sfx import SfxBlock
 from .speed import SpeedBlock
 from .still import StillBlock
 from .stills import StillsBlock
 from .stt import SttBlock
+from .zoom import ZoomBlock
 
 # Maps a block name to its implementation. The executor looks blocks up here.
 REGISTRY: dict[str, Block] = {
@@ -34,6 +36,8 @@ REGISTRY: dict[str, Block] = {
         StillsBlock(),
         StillBlock(),
         MusicBlock(),
+        ZoomBlock(),
+        SfxBlock(),
     )
 }
 

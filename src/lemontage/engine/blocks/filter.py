@@ -3,8 +3,10 @@
 Works on the pipeline input (single mode) or maps over a channel of clips. A
 ``look`` (or a list of looks, applied in order) picks a named FFmpeg effect —
 ``bw``, ``vignette``, ``grain``, ``sharpen`` — and an ``eq`` mapping grades
-colour (brightness / contrast / saturation / gamma). Everything is one FFmpeg
-video-filter chain, so no extra dependency.
+colour (brightness / contrast / saturation / gamma). ``grain`` takes its strength
+from the ``grain`` param, the one look whose intensity is worth dialling per edit
+(archive footage wants far more of it than a clean talking head). Everything is
+one FFmpeg video-filter chain, so no extra dependency.
 """
 
 from __future__ import annotations
@@ -13,16 +15,18 @@ from typing import Any
 
 from .. import ffmpeg
 from ..context import RunContext
-from .base import Block, BlockResult, ItemResult
+from .base import Block, BlockResult, ItemResult, current_clip
 
 # Named looks → their FFmpeg filter. Defaults are tuned to read on a phone
 # without wrecking the footage; `eq` is the knob for fine colour control.
 LOOKS = {
     "bw": "hue=s=0",  # desaturate to black & white
     "vignette": "vignette=PI/5",  # darkened corners
-    "grain": "noise=alls=12:allf=t",  # temporal film grain
+    "grain": "noise=alls={grain}:allf=t",  # temporal film grain, `grain` sets the strength
     "sharpen": "unsharp=5:5:1.0:5:5:0.0",  # luma sharpen
 }
+
+_DEFAULT_GRAIN = 12  # reads as texture on a phone; 25-40 is a visible dirty-archive grain
 
 # `eq` sub-keys → the eq= option name. Each is a plain number.
 _EQ_KEYS = {
@@ -47,12 +51,10 @@ class FilterBlock(Block):
     def execute_item(
         self, params: dict[str, Any], item: dict[str, Any], ctx: RunContext, step_id: str
     ) -> ItemResult:
-        clip = item.get("clip") or item.get("file")
-        if clip is None:
-            raise ValueError("filter: channel item has no 'clip' (run 'cut' first)")
+        key, clip = current_clip(item, "filter")
         out = ctx.work_dir() / f"{step_id}-{item['index']}.mp4"
         _apply(clip, _chain(params), out)
-        return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
+        return ItemResult(item={key: str(out)}, outputs={"clips": str(out)})
 
 
 def _chain(params: dict[str, Any]) -> str:
@@ -61,11 +63,14 @@ def _chain(params: dict[str, Any]) -> str:
     eq = _eq(params.get("eq"))
     if eq:
         filters.append(eq)
+    grain = params.get("grain", _DEFAULT_GRAIN)
+    if isinstance(grain, bool) or not isinstance(grain, (int, float)) or not 0 <= grain <= 100:
+        raise ValueError("filter: 'grain' must be a number between 0 and 100")
     for name in _looks(params.get("look")):
         if name not in LOOKS:
             valid = ", ".join(sorted(LOOKS))
             raise ValueError(f"filter: unknown look '{name}' (choose from: {valid})")
-        filters.append(LOOKS[name])
+        filters.append(LOOKS[name].format(grain=grain))
     if not filters:
         raise ValueError("filter: nothing to do — set 'look' and/or 'eq'")
     return ",".join(filters)

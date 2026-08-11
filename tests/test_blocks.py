@@ -9,11 +9,12 @@ from pathlib import Path
 import pytest
 
 from lemontage.engine import ffmpeg, fonts, providers
+from lemontage.engine.assformat import timestamp
 from lemontage.engine.blocks.captions import (
     CaptionsBlock,
-    _ass_time,
     _build_lines,
     _dialogue,
+    _events,
     _lines_from_words,
     _safe_margin_h,
     _write_karaoke_ass,
@@ -334,13 +335,56 @@ def test_dialogue_plain_text_for_segment_fallback():
 
 
 def test_ass_time_format():
-    assert _ass_time(75.5) == "0:01:15.50"
+    assert timestamp(75.5) == "0:01:15.50"
+
+
+def test_ass_time_clamps_negative_input():
+    # Unclamped, -0.5 formats as "-1:59:59.50" — libass reads it as a valid time
+    # two hours in, so the line never shows instead of erroring.
+    assert timestamp(-0.5) == "0:00:00.00"
 
 
 def test_build_lines_prefers_words_over_segments():
     params = {"words": _words((0.0, 0.5, "hi")), "segments": [{"start": 0, "end": 9, "text": "x"}]}
     lines = _build_lines(params, offset=0.0)
     assert lines[0]["words"]  # used word timing, not the segment
+
+
+def test_uppercase_applies_to_lines_and_words():
+    params = {"words": _words((0.0, 0.5, "hi"), (0.5, 0.9, "there")), "uppercase": True}
+    line = _build_lines(params, offset=0.0)[0]
+    assert line["text"] == "HI THERE"
+    assert [w["text"] for w in line["words"]] == ["HI", "THERE"]
+
+
+def _pop_line():
+    return {
+        "start": 0.0,
+        "end": 1.0,
+        "text": "a b",
+        "words": [{"start": 0.0, "end": 0.4, "text": "a"}, {"start": 0.5, "end": 1.0, "text": "b"}],
+    }
+
+
+def test_pop_emits_one_event_per_word_with_a_scale_transform():
+    events = _events(_pop_line(), {"pop": True}, hi="&H0000FFFF", base="&H00FFFFFF")
+    assert len(events) == 2  # one per word, not a single karaoke line
+    assert r"\fscx115\fscy115\t(0,90,\fscx100\fscy100)" in events[0]
+    # Every word carries an explicit colour: only the active one is highlighted.
+    assert events[0].count("&H0000FFFF") == 1 and events[0].count("&H00FFFFFF") == 1
+    # The whole line is drawn in each event, so the wrapping never shifts.
+    assert events[0].endswith("a {\\c&H00FFFFFF\\fscx100\\fscy100}b")
+    assert "\\k" not in events[0]
+
+
+def test_pop_scale_accepts_a_percent():
+    events = _events(_pop_line(), {"pop": 130}, hi="&H1", base="&H2")
+    assert r"\fscx130\fscy130" in events[0]
+
+
+def test_pop_off_keeps_the_karaoke_line():
+    events = _events(_pop_line(), {}, hi="&H1", base="&H2")
+    assert len(events) == 1 and r"\k" in events[0]
 
 
 def test_stt_forwards_vad_and_beam_options(tmp_path, monkeypatch):
@@ -617,6 +661,7 @@ def test_export_render_burns_author_label(tmp_path, monkeypatch):
         Path(args[-1]).write_bytes(b"v")
 
     monkeypatch.setattr(ffmpeg, "run", fake_run)
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     monkeypatch.setattr(fonts, "ensure", lambda _f: None)
     ExportBlock().execute(
         {"format": "vertical", "author": "@chaine", "output": str(tmp_path / "o.mp4")},
@@ -685,6 +730,20 @@ def test_scale_chain_cover_crops_without_bars(tmp_path):
     assert not any(f.startswith("pad=") for f in chain)  # no black bars
 
 
+def test_scale_chain_stretch_fills_without_crop_or_bars():
+    chain = _scale_chain({"fit": "stretch"}, 1080, 1920)
+    assert chain[0] == "scale=1080:1920,setsar=1"
+    assert not any(f.startswith(("pad=", "crop=")) for f in chain)
+
+
+def test_scale_chain_fit_list_is_per_clip():
+    params = {"fit": ["cover", "stretch"]}
+    assert any("aspect_ratio=increase" in f for f in _scale_chain(params, 1080, 1920, index=0))
+    assert _scale_chain(params, 1080, 1920, index=1)[0] == "scale=1080:1920,setsar=1"
+    # past the end of the list -> contain (letterboxed)
+    assert any(f.startswith("pad=") for f in _scale_chain(params, 1080, 1920, index=5))
+
+
 def test_scale_chain_unknown_fit_raises():
     with pytest.raises(ValueError, match="unknown fit"):
         _scale_chain({"fit": "zoom"}, 1080, 1920)
@@ -725,6 +784,21 @@ def test_canvas_positions_and_bg():
     # bg: blur only fills the fit bars; the canvas falls back to black
     blur = _canvas_pad({"resolution": "720x720", "canvas": "1080x1920", "bg": "blur"})
     assert "color=black" in blur
+
+
+def test_canvas_explicit_xy_offset():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    # a 720x553 band seated 421px down a 720x1280 canvas — neither top nor centre
+    pad = _canvas_pad({"resolution": "720x553", "canvas": "720x1280", "position": "0,421"})
+    assert pad == "pad=720:1280:0:421:color=black"
+
+
+def test_canvas_xy_offset_outside_canvas_raises():
+    from lemontage.engine.blocks.export import _canvas_pad
+
+    with pytest.raises(ValueError, match="outside the 720x1280 canvas"):
+        _canvas_pad({"resolution": "720x553", "canvas": "720x1280", "position": "0,900"})
 
 
 def test_canvas_absent_is_noop():
@@ -789,6 +863,7 @@ def test_render_cover_and_mute_reach_ffmpeg(tmp_path, monkeypatch):
     calls = {}
     monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
     monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: None)  # no source bars
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # the stub media has a track
     ExportBlock().execute(
         {"format": "vertical", "fit": "cover", "mute": True, "output": str(tmp_path / "o.mp4")},
         ctx(tmp_path),
@@ -802,6 +877,7 @@ def test_render_cover_and_mute_reach_ffmpeg(tmp_path, monkeypatch):
 def test_cover_strips_source_letterbox_bars(tmp_path, monkeypatch):
     calls = {}
     monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     # Source has baked-in bars: real content is 1920x800 at y=140.
     monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: "1920:800:0:140")
     ExportBlock().execute(
@@ -823,6 +899,7 @@ def test_cover_trim_bars_can_be_disabled(tmp_path, monkeypatch):
         return "1920:800:0:140"
 
     monkeypatch.setattr(ffmpeg, "run", lambda args: None)
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     monkeypatch.setattr(ffmpeg, "detect_content_crop", fake_detect)
     params = {
         "format": "vertical",
@@ -1120,6 +1197,7 @@ def test_export_renders_and_lists_file(tmp_path, monkeypatch):
         Path(args[-1]).write_bytes(b"v")
 
     monkeypatch.setattr(ffmpeg, "run", fake_run)
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     out = (
         ExportBlock()
         .execute({"format": "vertical", "output": str(tmp_path / "o.mp4")}, ctx(tmp_path), "exp")
@@ -1233,3 +1311,75 @@ def test_build_transition_filters_chains_after_hard_cut():
         "[vs0][2:v:0]xfade=transition=fade:duration=0.5:offset=19.500[vs1]",
     ]
     assert out_v == "vs1"
+
+
+# --- small knobs -----------------------------------------------------------
+
+
+def test_silence_detection_knobs_reach_ffmpeg(monkeypatch):
+    """`silence_db` / `silence_gap` decide how tight the jump cuts are."""
+    from lemontage.engine.blocks import detect_clips
+
+    seen = {}
+
+    def fake_capture(args):
+        seen["af"] = args[args.index("-af") + 1]
+        return ""
+
+    monkeypatch.setattr(ffmpeg, "run_capture", fake_capture)
+    monkeypatch.setattr(ffmpeg, "probe_duration", lambda m: 10.0)
+    detect_clips.DetectClipsBlock().execute(
+        {"method": "silence", "silence_db": -24, "silence_gap": "0.25s", "min_duration": 1},
+        ctx(Path(".")),
+        "d",
+    )
+    assert seen["af"] == "silencedetect=noise=-24.0dB:d=0.250"
+
+
+def test_silence_detection_defaults_are_unchanged(monkeypatch):
+    from lemontage.engine.blocks import detect_clips
+
+    seen = {}
+    monkeypatch.setattr(
+        ffmpeg, "run_capture", lambda args: seen.setdefault("af", args[args.index("-af") + 1]) or ""
+    )
+    monkeypatch.setattr(ffmpeg, "probe_duration", lambda m: 10.0)
+    detect_clips.DetectClipsBlock().execute(
+        {"method": "silence", "min_duration": 1}, ctx(Path(".")), "d"
+    )
+    assert seen["af"] == "silencedetect=noise=-30.0dB:d=0.500"
+
+
+def test_normalize_audio_adds_loudnorm(tmp_path, monkeypatch):
+    args = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)
+    ExportBlock().execute({"normalize_audio": True}, ctx(tmp_path), "e")
+    # loudnorm outputs 192 kHz, which the AAC encoder clamps to 96 kHz — a track
+    # most players render silent. The resample back to 48 kHz is not optional, and
+    # neither is the pinned layout (loudnorm's flush renegotiates the link and an
+    # unpinned aresample fails the whole export on ffmpeg 4.x).
+    assert args["a"][args["a"].index("-af") + 1] == (
+        "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=stereo"
+    )
+
+
+def test_mute_wins_over_normalize_audio(tmp_path, monkeypatch):
+    args = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)
+    ExportBlock().execute({"normalize_audio": True, "mute": True}, ctx(tmp_path), "e")
+    assert args["a"][args["a"].index("-af") + 1] == "volume=0"
+
+
+def test_silent_source_gets_a_synthetic_track(tmp_path, monkeypatch):
+    """A rendered `still` has no audio at all — `-af` cannot invent one, and
+    `concat` keeps audio only when every clip has a track. Without the anullsrc
+    input, one photo mutes the spoken clip it is joined to."""
+    args = {}
+    monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: False)
+    ExportBlock().execute({"mute": True}, ctx(tmp_path), "e")
+    assert "anullsrc=r=48000:cl=stereo" in args["a"]
+    assert "-shortest" in args["a"]  # else the silence never ends
+    assert "-af" not in args["a"]  # nothing to filter, and volume=0 would be dropped

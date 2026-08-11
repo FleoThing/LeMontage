@@ -198,6 +198,20 @@ def _check_block_params(
             errors.append(f"{label}: detect_clips.method '{method}' is reserved in v1")
         if method == "agent" and not isinstance(params.get("clips"), list):
             errors.append(f"{label}: detect_clips.method 'agent' requires a 'clips' list")
+        for key in ("silence_db",):
+            value = params.get(key)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+            ):
+                errors.append(f"{label}: detect_clips.{key} must be a number (dB, e.g. -30)")
+        gap = params.get("silence_gap")
+        if gap is not None:
+            try:
+                if parse_seconds(gap) <= 0:
+                    errors.append(f"{label}: detect_clips.silence_gap must be > 0")
+            except (ValueError, TypeError):
+                errors.append(f"{label}: detect_clips.silence_gap must be a duration (e.g. 0.25s)")
+
         if method == "beat":
             track = params.get("track")
             if not isinstance(track, str) or not track:
@@ -210,17 +224,22 @@ def _check_block_params(
 
     if block == "export":
         fit = params.get("fit")
-        if fit is not None and (
-            not isinstance(fit, str) or fit.lower() not in spec.EXPORT_FIT_MODES
-        ):
-            valid = ", ".join(sorted(spec.EXPORT_FIT_MODES))
-            errors.append(f"{label}: unknown export fit '{fit}' (choose from: {valid})")
+        # A list sets the mode per clip by position (like `mute`).
+        for one in fit if isinstance(fit, list) else [fit]:
+            if one is not None and (
+                not isinstance(one, str) or one.lower() not in spec.EXPORT_FIT_MODES
+            ):
+                valid = ", ".join(sorted(spec.EXPORT_FIT_MODES))
+                errors.append(f"{label}: unknown export fit '{one}' (choose from: {valid})")
         mute = params.get("mute")
         if mute is not None and not isinstance(mute, (bool, list)):
             errors.append(f"{label}: export.mute must be a boolean or a list of booleans")
         smart = params.get("smart_crop")
         if smart is not None and not isinstance(smart, bool):
             errors.append(f"{label}: export.smart_crop must be a boolean")
+        normalize = params.get("normalize_audio")
+        if normalize is not None and not isinstance(normalize, bool):
+            errors.append(f"{label}: export.normalize_audio must be a boolean")
         canvas = params.get("canvas")
         if canvas is not None and (
             not isinstance(canvas, str) or not re.fullmatch(r"\d+x\d+", canvas.lower())
@@ -229,14 +248,44 @@ def _check_block_params(
                 f"{label}: export.canvas must be a 'WIDTHxHEIGHT' string (e.g. 1080x1920)"
             )
         position = params.get("position")
-        if position is not None and (
-            not isinstance(position, str) or position.lower() not in spec.EXPORT_CANVAS_POSITIONS
-        ):
+        if position is not None and not _valid_canvas_position(position):
             valid = ", ".join(sorted(spec.EXPORT_CANVAS_POSITIONS))
-            errors.append(f"{label}: unknown export position '{position}' (choose from: {valid})")
+            errors.append(
+                f"{label}: unknown export position '{position}' "
+                f"(choose from: {valid}, or an 'X,Y' pixel offset)"
+            )
+
+    if block == "sfx":
+        source = params.get("source")
+        if not isinstance(source, str) or not source:
+            errors.append(f"{label}: sfx.source (path to an audio file) is required")
+        at = params.get("at")
+        for value in at if isinstance(at, list) else ([] if at is None else [at]):
+            try:
+                if parse_seconds(value) < 0:
+                    errors.append(f"{label}: sfx.at times must be >= 0")
+            except (ValueError, TypeError):
+                errors.append(f"{label}: sfx.at '{value}' is not a time (e.g. 2.4 or 0:02)")
+        gain = params.get("gain")
+        if gain is not None and (isinstance(gain, bool) or not isinstance(gain, (int, float))):
+            errors.append(f"{label}: sfx.gain must be a number (dB, e.g. -6)")
+
+    if block == "captions":
+        uppercase = params.get("uppercase")
+        if uppercase is not None and not isinstance(uppercase, bool):
+            errors.append(f"{label}: captions.uppercase must be a boolean")
+        pop = params.get("pop")
+        if pop is not None and not isinstance(pop, bool):
+            if not isinstance(pop, int) or not 100 <= pop <= 200:
+                errors.append(
+                    f"{label}: captions.pop must be a boolean or a scale percent 100..200"
+                )
 
     if block == "filter":
         _check_filter_params(params, label, errors)
+
+    if block == "zoom":
+        _check_zoom_params(params, label, errors)
 
     if block == "overlay":
         _check_overlay(params, label, errors)
@@ -295,6 +344,35 @@ def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
             errors.append(f"{label}: music.{field} must be a time value (e.g. 2s)")
 
 
+def _check_zoom_params(params: dict, label: str, errors: list[str]) -> None:
+    amount = params.get("amount")
+    # A list sets the punch per clip by position (like `export.fit` / `mute`).
+    for one in amount if isinstance(amount, list) else [amount]:
+        if one is None:
+            continue
+        if isinstance(one, bool) or not isinstance(one, (int, float)) or one < 1.0:
+            errors.append(f"{label}: zoom.amount must be a number >= 1.0 (or a list of them)")
+
+    at = params.get("at")
+    if at is not None:
+        if not isinstance(at, list) or not at:
+            errors.append(f"{label}: zoom.at must be a non-empty list of times")
+        else:
+            for value in at:
+                try:
+                    parse_seconds(value)
+                except (ValueError, TypeError):
+                    errors.append(f"{label}: zoom.at '{value}' is not a time (e.g. 2.4 or 0:02)")
+
+    duration = params.get("duration")
+    if duration is not None:
+        try:
+            if parse_seconds(duration) <= 0:
+                errors.append(f"{label}: zoom.duration must be > 0")
+        except (ValueError, TypeError):
+            errors.append(f"{label}: zoom.duration must be a duration (e.g. 0.15s)")
+
+
 def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
     look = params.get("look")
     names = look if isinstance(look, list) else ([look] if isinstance(look, str) else [])
@@ -304,6 +382,12 @@ def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
         if not isinstance(name, str) or name not in spec.FILTER_LOOKS:
             valid = ", ".join(sorted(spec.FILTER_LOOKS))
             errors.append(f"{label}: unknown filter look '{name}' (choose from: {valid})")
+
+    grain = params.get("grain")
+    if grain is not None and (
+        isinstance(grain, bool) or not isinstance(grain, (int, float)) or not 0 <= grain <= 100
+    ):
+        errors.append(f"{label}: filter.grain must be a number between 0 and 100")
 
     eq = params.get("eq")
     if eq is not None:
@@ -321,10 +405,52 @@ def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
         errors.append(f"{label}: filter needs a 'look' and/or an 'eq'")
 
 
+def _valid_canvas_position(position: object) -> bool:
+    """A named canvas anchor, or an ``X,Y`` pixel offset.
+
+    Only the shape is checked here — whether the offset actually fits inside the
+    canvas depends on the resolved export resolution, so that stays a runtime
+    check in the block.
+    """
+    if not isinstance(position, str):
+        return False
+    text = position.lower()
+    return text in spec.EXPORT_CANVAS_POSITIONS or bool(re.fullmatch(r"\d+,\d+", text))
+
+
+def _valid_overlay_text(text: object) -> bool:
+    """A non-empty string, or a non-empty list of ``{text, color}`` runs.
+
+    Colour names are left to the block: they go through the same strict parser as
+    every other colour in the spec, and a runtime error there says exactly which
+    run is wrong.
+    """
+    if isinstance(text, str):
+        return bool(text.strip())
+    if not isinstance(text, list) or not text:
+        return False
+    return all(
+        isinstance(run, dict) and isinstance(run.get("text"), str) and run["text"].strip()
+        for run in text
+    )
+
+
 def _check_overlay(params: dict, label: str, errors: list[str]) -> None:
-    text = params.get("text")
-    if not isinstance(text, str) or not text.strip():
-        errors.append(f"{label}: overlay requires a non-empty 'text' string")
+    text, image = params.get("text"), params.get("image")
+    if text is None and image is None:
+        errors.append(f"{label}: overlay needs a 'text' and/or an 'image'")
+    if text is not None and not _valid_overlay_text(text):
+        errors.append(
+            f"{label}: overlay requires a non-empty 'text' string, "
+            f"or a list of {{text, color}} runs"
+        )
+    if image is not None and (not isinstance(image, str) or not image.strip()):
+        errors.append(f"{label}: overlay.image must be a path to an image file")
+
+    for key in ("x", "y"):
+        value = params.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+            errors.append(f"{label}: overlay.{key} must be an integer (pixels)")
 
     band = params.get("band")
     if band is not None:

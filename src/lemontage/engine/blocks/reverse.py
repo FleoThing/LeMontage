@@ -12,7 +12,7 @@ from typing import Any
 
 from .. import ffmpeg
 from ..context import RunContext
-from .base import Block, BlockResult, ItemResult
+from .base import Block, BlockResult, ItemResult, current_clip
 
 
 class ReverseBlock(Block):
@@ -29,12 +29,10 @@ class ReverseBlock(Block):
     def execute_item(
         self, params: dict[str, Any], item: dict[str, Any], ctx: RunContext, step_id: str
     ) -> ItemResult:
-        clip = item.get("clip")
-        if clip is None:
-            raise ValueError("reverse: channel item has no 'clip' (run 'cut' first)")
+        key, clip = current_clip(item, "reverse")
         out = ctx.work_dir() / f"{step_id}-{item['index']}.mp4"
         _reverse(clip, out)
-        return ItemResult(item={"clip": str(out)}, outputs={"clips": str(out)})
+        return ItemResult(item={key: str(out)}, outputs={"clips": str(out)})
 
 
 def _reverse(media: str, out) -> None:

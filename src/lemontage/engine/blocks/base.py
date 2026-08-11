@@ -44,6 +44,22 @@ class ItemResult:
     outputs: dict[str, Any] = field(default_factory=dict)
 
 
+def current_clip(item: dict[str, Any], block: str) -> tuple[str, str]:
+    """The clip a mapped block should read, and the item key to write back.
+
+    A channel item carries the cut ``clip`` and, once ``export`` has run, the
+    rendered ``file``. Every mapped consumer must work on the **latest** one:
+    reading ``clip`` after an export re-processes the pre-export footage and
+    writes it to a key nothing downstream reads, so the work is silently thrown
+    away (`concat` and `captions` both prefer ``file``).
+    """
+    key = "file" if item.get("file") else "clip"
+    clip = item.get(key)
+    if clip is None:
+        raise ValueError(f"{block}: channel item has no 'clip' (run 'cut' first)")
+    return key, str(clip)
+
+
 class Block(ABC):
     """Base class for every built-in block."""
 

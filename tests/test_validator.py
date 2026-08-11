@@ -229,6 +229,12 @@ def test_export_bad_canvas_format_rejected():
     assert any("export.canvas" in e and "WIDTHxHEIGHT" in e for e in errors)
 
 
+def test_export_xy_position_passes():
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"][-1] = {"export": {"from": "clip_channel", "canvas": "720x1280", "position": "0,421"}}
+    assert validate_doc(d) == []
+
+
 def test_export_unknown_position_rejected():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"][-1] = {

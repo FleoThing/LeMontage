@@ -1,0 +1,40 @@
+lemontage: "1.0"
+name: ab-fades
+description: "A/B test for cut-edge fades — 11 spoken phrases, hard-concatenated (no transitions) so every join is exposed"
+
+input:
+  type: video
+  source: ./videouse-test/lotr-test.mp4
+
+steps:
+  # Phrase ranges lifted verbatim from `analyze --packed`; every edge is a word
+  # edge. No transitions on the concat — each join is a bare splice, which is
+  # exactly the case the 30ms fades are meant to fix.
+  - id: phrases
+    detect_clips:
+      method: agent
+      emit: beats
+      clips:
+        - { start: 0.00, end: 4.22 }
+        - { start: 4.96, end: 5.78 }
+        - { start: 7.85, end: 12.29 }
+        - { start: 14.44, end: 16.86 }
+        - { start: 17.90, end: 19.82 }
+        - { start: 20.86, end: 27.78 }
+        - { start: 28.34, end: 31.16 }
+        - { start: 31.84, end: 38.60 }
+        - { start: 41.19, end: 44.41 }
+        - { start: 45.91, end: 51.51 }
+        - { start: 52.51, end: 59.99 }
+
+  - id: extract
+    cut:
+      from: beats
+
+  - id: reel
+    concat:
+      from: beats
+      emit: final
+
+output:
+  dir: ./videouse-test/ab
