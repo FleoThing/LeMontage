@@ -56,7 +56,7 @@ _GRID = 8  # focal_point: cells per side when looking for the busiest part of a 
 
 def crop_filters(media: str, target_w: int, target_h: int) -> list[str]:
     """Return the FFmpeg video filters that crop ``media`` to
-    ``target_w``×``target_h`` following the subject. Falls back to a static centre
+    ``target_w``x``target_h`` following the subject. Falls back to a static centre
     crop when the source is not wider than the target (nothing to pan) or no
     subject is ever found."""
     src_w, src_h = ffmpeg.probe_resolution(media)
@@ -114,7 +114,7 @@ def focal_point(image: str) -> tuple[float, float] | None:
 
 
 def _detector(cv2, width: int, height: int):
-    """A YuNet detector sized for ``width``×``height`` frames, or None if unusable.
+    """A YuNet detector sized for ``width``x``height`` frames, or None if unusable.
 
     The input size is baked in at creation, which is why callers detect on frames
     already passed through :func:`_downscale` — one detector then serves a whole

@@ -1,6 +1,6 @@
 """``zoom`` — punch in on a video clip (SPEC §6.15).
 
-The move that carries short-form talking-head edits: the frame snaps 10–20%
+The move that carries short-form talking-head edits: the frame snaps 10-20%
 closer on a punchline, holds, and snaps back. `still` can already do this for
 images (`motion: zoomin`), but nothing could do it to *video* — the only zoom on
 a clip was whatever the camera did.

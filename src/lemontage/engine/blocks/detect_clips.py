@@ -20,6 +20,7 @@ emits centred clips directly, and ``random`` scatters clips across the timeline.
 
 from __future__ import annotations
 
+import itertools
 import random
 import re
 import statistics
@@ -189,7 +190,7 @@ def _beat_clips(
     """
     k = max(1, beats_per_clip)
     marks = beats[::k]
-    durations = [b - a for a, b in zip(marks, marks[1:], strict=False) if b > a]
+    durations = [b - a for a, b in itertools.pairwise(marks) if b > a]
     durations = durations[:max_clips]
     if not durations:
         return []
@@ -274,7 +275,7 @@ def _spans_from_scene_cuts(media: str, total: float) -> list[tuple[float, float]
     )
     cuts = sorted({float(m) for m in _SCENE_PTS.findall(stderr)})
     boundaries = [0.0, *cuts, total]
-    return [(a, b) for a, b in zip(boundaries, boundaries[1:], strict=False) if b > a]
+    return [(a, b) for a, b in itertools.pairwise(boundaries) if b > a]
 
 
 def _windowed_clips(

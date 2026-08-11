@@ -46,7 +46,7 @@ def _parse_timecode(text: str) -> float:
 
 def to_timecode(seconds: float) -> str:
     """Format seconds as ``HH:MM:SS.mmm`` (for SRT and ffmpeg)."""
-    millis = int(round(seconds * 1000))
+    millis = round(seconds * 1000)
     hours, millis = divmod(millis, 3_600_000)
     minutes, millis = divmod(millis, 60_000)
     secs, millis = divmod(millis, 1000)

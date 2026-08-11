@@ -13,6 +13,7 @@ Each step becomes a :class:`Node`. Edges are inferred from three sources:
 
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -124,7 +125,7 @@ def _add_channel_edges(nodes: list[Node], emitters: dict[str, Node]) -> None:
         for channel in node.consumes_list:
             consumers.setdefault(channel, []).append(node)
     for chain in consumers.values():
-        for prev, curr in zip(chain, chain[1:], strict=False):
+        for prev, curr in itertools.pairwise(chain):
             curr.deps.add(prev.index)
 
 

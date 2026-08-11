@@ -335,4 +335,4 @@ def _parse_var_overrides(var_args: list[str]) -> dict[str, str]:
     return overrides
 
 
-__all__ = ["main", "app", "validate_doc", "STARTER_PIPELINE"]
+__all__ = ["STARTER_PIPELINE", "app", "main", "validate_doc"]
