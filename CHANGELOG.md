@@ -7,6 +7,40 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Face detection is now YuNet via OpenCV, and `mediapipe` is gone** from the
+  `[smartcrop]` extra (−36 MB, one dependency instead of two). The mediapipe code
+  path was in fact dead: it needed `mp.solutions`, which mediapipe removed in
+  0.10.x — inside the `>=0.10,<1.0` range this project pinned. So `smart_crop`
+  silently fell back to a centre crop, and the `still` zooms to the edge-energy
+  grid, on a normal install. YuNet ships as vendored weights (227 KB, MIT) and
+  reads painted faces: 6/6 on a set of Napoleon portraits at ≥0.87, where the
+  grid had been aiming at the torso (y≈0.31-0.56) instead of the heads
+  (y≈0.13-0.29). `smart_crop` now needs OpenCV ≥ 4.5.4 and says so if it is
+  older, instead of quietly doing nothing.
+- `still` zooms aim at the subject in a **straight line**: the window centre
+  travels to the focal point in step with the zoom's easing, instead of being
+  pinned on it at every zoom level — which made the frame wander sideways
+  mid-push (the `zoomin` "detour"), because at zoom 1.0 the window is the whole
+  image and the clamp drags it. `zoomout` therefore starts *on* the subject and
+  pulls back.
+- `still` zoom easing is now **cubic** rather than quadratic, both directions: the
+  move spends its speed early and coasts into the landing, which is the "smooth
+  zoom" braking a CapCut Ease Out gives. No overshoot.
+
+### Added
+
+- `filter: grain: <0-100>` sets the strength of the `grain` look (default `12`,
+  unchanged). Archive-footage edits want far more grain than a clean talking
+  head, and the look was previously hard-coded.
+
+### Fixed
+
+- `export`: `normalize_audio: true` aborted the whole export on ffmpeg 4.x
+  (`Cannot select channel layout`) — `loudnorm` renegotiates the filter link when
+  it flushes and the following `aresample` did not pin a layout.
+
 ## [0.7.0] - 2026-08-10
 
 ### Added

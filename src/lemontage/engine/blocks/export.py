@@ -29,7 +29,10 @@ _MAX_DIMENSION = 7680  # 8K per side
 # `loudnorm` outputs at 192 kHz whatever comes in; the AAC encoder then clamps to
 # its 96 kHz maximum, and a 96 kHz AAC track plays silent on most players and
 # gets rejected by the short-form uploaders. Resample back to the delivery rate.
-_LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000"
+# `aformat` pins the layout: loudnorm renegotiates the link when it flushes, and
+# an unpinned `aresample` then fails with "Cannot select channel layout" on
+# ffmpeg 4.x, killing the export.
+_LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=stereo"
 
 _MAX_FPS = 240
 _MAX_TITLE_SIZE = 2000
@@ -613,7 +616,7 @@ def _render(
     if not 0 < fps <= _MAX_FPS:
         raise ValueError(f"export: fps {fps} out of range (1..{_MAX_FPS})")
     if params.get("smart_crop"):
-        # Follow the subject to fill the frame (mediapipe); overrides fit/bg,
+        # Follow the subject to fill the frame; overrides fit/bg,
         # since it height-matches and pans rather than barring or centre-cropping.
         from .. import smartcrop
 

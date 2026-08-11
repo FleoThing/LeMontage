@@ -1352,9 +1352,11 @@ def test_normalize_audio_adds_loudnorm(tmp_path, monkeypatch):
     monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)
     ExportBlock().execute({"normalize_audio": True}, ctx(tmp_path), "e")
     # loudnorm outputs 192 kHz, which the AAC encoder clamps to 96 kHz — a track
-    # most players render silent. The resample back to 48 kHz is not optional.
+    # most players render silent. The resample back to 48 kHz is not optional, and
+    # neither is the pinned layout (loudnorm's flush renegotiates the link and an
+    # unpinned aresample fails the whole export on ffmpeg 4.x).
     assert args["a"][args["a"].index("-af") + 1] == (
-        "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000"
+        "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=stereo"
     )
 
 
