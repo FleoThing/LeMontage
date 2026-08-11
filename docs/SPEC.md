@@ -1267,6 +1267,25 @@ lemontage analyze episode.mp4 --visual -o episode.vso.json
   others is soft/blurry or a static text card the agent can drop.
 - **motion** — mean dense optical-flow magnitude; low = a frozen/static shot.
 
+`--packed` emits a phrase-level markdown view instead of the JSON. `words` is
+the precise form but a poor reading form — hundreds of `{t, d, w}` objects the
+agent has to re-assemble into sentences. Packing them into phrases (breaking on
+any silence >= 0.5s) costs about a tenth of the tokens:
+
+```bash
+lemontage analyze episode.mp4 --packed -o takes.md
+```
+
+```
+## episode  (42.5s, 11 phrases)
+  [0020.86-0027.78] In the land of Mordor, in the fires of Mount Doom,
+  [0041.19-0044.41] One ring to rule them all.
+```
+
+Each phrase edge is a word edge, so a range can be replayed verbatim as a
+`method: agent` span. Requires the transcript — incompatible with
+`--no-transcribe`.
+
 ### 13.1 Time values
 
 Durations (`min_duration`, …) and timecodes (`start`, `end`) accept:
