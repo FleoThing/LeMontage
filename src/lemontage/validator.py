@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from . import spec
+from .engine.blocks.captions import CAPTION_STYLES
 from .engine.timecode import parse_seconds
 
 _POP_ON = {"word", "line"}
@@ -277,6 +278,12 @@ def _check_block_params(
         uppercase = params.get("uppercase")
         if uppercase is not None and not isinstance(uppercase, bool):
             errors.append(f"{label}: captions.uppercase must be a boolean")
+        style = params.get("style")
+        if style is not None and (
+            not isinstance(style, str) or style.lower() not in CAPTION_STYLES
+        ):
+            valid = ", ".join(sorted(CAPTION_STYLES))
+            errors.append(f"{label}: unknown captions style '{style}' (choose from: {valid})")
         case = params.get("case")
         if case is not None and (not isinstance(case, str) or case.lower() not in _CASES):
             errors.append(f"{label}: captions.case must be 'upper' or 'lower'")

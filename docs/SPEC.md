@@ -368,7 +368,7 @@ segment-level cues.
 | `segments` | ref | — | Segment timing (`steps.<stt>.segments`). Used if `words` is absent. |
 | `from` | channel | — | Channel of clips to caption. Reads the exported `file` if the step runs **after** `export`, else the cut `clip` (see note). |
 | `output` | path | — | Final file path (supports `{{ name }}`/`{{ part }}`). Set it when `captions` is the last step so the captioned clip lands at a known path. |
-| `style` | enum | `tiktok` | `default` \| `tiktok` \| `minimal` (outline/weight). |
+| `style` | enum | `style1` | A preset: `style1`–`style4`, or its name (see below). `tiktok`/`default`/`minimal` are the older look-only names. |
 | `font` | string | `font1` | Caption font: a preset `font1`–`font5` or an installed family. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
 | `max_chars` | int | `24` | Max characters per line (lines stay short for word-by-word reading). |
@@ -385,6 +385,26 @@ segment-level cues.
 | `pop_on` | enum | `word` | What `pop` scales: `word` (the active word, highlighted) or `line` (the whole phrase, once, when it changes). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
+
+**Styles.** `style` is a preset, named twice: `style1`–`style4` for reading a
+pipeline without knowing the vocabulary, and a word for the animation itself.
+Both spellings are the same preset.
+
+| `style` | Also | What it does | Sets |
+|---|---|---|---|
+| `style1` | `karaoke` | The spoken word recolours. Nothing moves. | outline 3, bold |
+| `style2` | `bounce` | The spoken word recolours **and** scales. | `pop: 115` |
+| `style3` | `zoom` | The whole phrase scales, once, on every change. | `pop: 130`, `pop_on: line`, `color: white`, `outline` 6, `max_words: 3`, `max_chars: 28` |
+| `style4` | `none` | A plain subtitle: no animation, no capitals. | `uppercase: false`, outline 1 |
+
+A preset only fills in what the pipeline leaves unset, so any parameter written
+by hand wins: `style: zoom` with `pop: 160` is the phrase pop at 160%. Nothing a
+preset sets is measured in pixels of the final frame, because `caption_size` and
+`caption_margin` depend on the export resolution and a preset cannot know it.
+
+`tiktok`, `default` and `minimal` are the names `style` accepted before the
+presets existed. They set the outline and the weight and nothing else, so a
+pipeline naming one of them renders exactly as it did.
 
 **Word pop.** `highlight` recolours the spoken word; `pop` also *scales* it.
 The two together are the short-form caption look:

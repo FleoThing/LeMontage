@@ -36,6 +36,14 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- **Caption styles are presets now**: `style1`-`style4`, each also reachable by
+  the name of its animation (`karaoke`, `bounce`, `zoom`, `none`). `style` used
+  to set the outline and the weight and nothing else, so the mode had to be
+  assembled by hand out of `pop`, `pop_on` and the colours, and reading a
+  pipeline meant reading the spec. A preset only fills in what the pipeline
+  leaves unset, so a parameter written by hand still wins, and it never sets
+  anything measured in pixels of the final frame. `tiktok`, `default` and
+  `minimal` keep their old look-only meaning.
 - `captions.pop_on: line`: the pop lands on the **phrase** instead of the active
   word. The whole line punches in and settles back every time it changes, with
   no highlight and no per-word event, which is the beat short-form captions are

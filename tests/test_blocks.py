@@ -18,6 +18,7 @@ from lemontage.engine.blocks.captions import (
     _events,
     _lines_from_words,
     _safe_margin_h,
+    _with_style,
     _write_karaoke_ass,
 )
 from lemontage.engine.blocks.detect_clips import (
@@ -390,6 +391,24 @@ def test_pop_emits_one_event_per_word_with_a_scale_transform():
     # The whole line is drawn in each event, so the wrapping never shifts.
     assert events[0].endswith("a {\\c&H00FFFFFF\\fscx100\\fscy100}b")
     assert "\\k" not in events[0]
+
+
+def test_style3_presets_the_phrase_pop_and_a_param_still_wins():
+    events = _events(_pop_line(), _with_style({"style": "style3"}), hi="&H1", base="&H2")
+    assert len(events) == 1 and r"\fscx130\fscy130" in events[0]  # the preset's scale
+    louder = _events(_pop_line(), _with_style({"style": "zoom", "pop": 160}), hi="&H1", base="&H2")
+    assert r"\fscx160\fscy160" in louder[0]  # written by hand, so it wins
+
+
+def test_style_names_and_numbers_are_the_same_preset():
+    assert _with_style({"style": "zoom"}) == _with_style({"style": "style3"}) | {"style": "zoom"}
+
+
+def test_legacy_style_names_stay_look_only():
+    # `tiktok` sets no mode, so a pipeline naming it renders as it always did.
+    assert _events(_pop_line(), _with_style({"style": "tiktok"}), hi="&H1", base="&H2") == _events(
+        _pop_line(), {}, hi="&H1", base="&H2"
+    )
 
 
 def test_pop_duration_shortens_the_settle():

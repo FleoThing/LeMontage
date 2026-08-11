@@ -21,10 +21,16 @@ from .export import _ass_color, _output_path
 # ASS Alignment is numpad-style: 2=bottom-centre, 5=middle, 8=top.
 _POSITION = {"bottom": 2, "center": 5, "top": 8}
 
-# Per-style (outline weight, bold). Colours/size are handled by the karaoke path.
+# Per-style (outline weight, bold). `outline` overrides the first of the two.
 _STYLES = {
-    "default": (1, 0),
+    "style1": (3, -1),
+    "style2": (3, -1),
+    "style3": (6, -1),
+    "style4": (1, 0),
+    # The three names that existed before the presets. Look only, no mode: a
+    # pipeline that names one of them renders exactly as it always did.
     "tiktok": (3, -1),
+    "default": (1, 0),
     "minimal": (1, 0),
 }
 
@@ -38,6 +44,35 @@ _POP_MS = 90  # how long the pop takes to settle back to 100%
 _HIGHLIGHT = "&H0000FFFF"
 _BASE = "&H00FFFFFF"
 _ASS_COLOUR = re.compile(r"&H[0-9A-Fa-f]{6,8}&?")
+
+# What each numbered style *is*, beyond its outline. Merged in as defaults, so
+# anything the pipeline writes by hand always wins. Nothing here is measured in
+# pixels of the final frame: `caption_size` and `caption_margin` depend on the
+# export resolution, and a preset cannot know it.
+_PRESETS: dict[str, dict[str, Any]] = {
+    "style1": {},  # karaoke: the spoken word recolours, nothing moves
+    "style2": {"pop": _DEFAULT_POP},  # the spoken word recolours *and* scales
+    "style3": {  # the whole phrase scales, once, on every change
+        "pop": 130,
+        "pop_on": "line",
+        "color": "white",
+        "max_words": 3,
+        "max_chars": 28,
+    },
+    "style4": {"uppercase": False},  # a plain subtitle: no effect, no capitals
+}
+
+# Spelled-out names for the same four, in the vocabulary CapCut uses for its
+# caption animations. Both spellings resolve to the same preset. `pop` is not
+# among them on purpose: it is already a parameter, and `style: pop` next to
+# `pop: 130` would be the same word meaning two things in one block.
+_STYLE_NAMES = {
+    "karaoke": "style1",
+    "bounce": "style2",
+    "zoom": "style3",
+    "none": "style4",
+}
+CAPTION_STYLES = frozenset(_STYLES) | frozenset(_STYLE_NAMES)
 
 _KARAOKE_ASS = (
     """\
@@ -98,6 +133,7 @@ class CaptionsBlock(Block):
         return ItemResult(item={key: str(out)}, outputs={"clips": str(out)})
 
     def _caption(self, media, params, ctx, name, offset, dest: Path | None = None) -> Path | None:
+        params = _with_style(params)
         lines = _build_lines(params, offset)
         if not lines:
             return None
@@ -107,6 +143,24 @@ class CaptionsBlock(Block):
         out = dest or ctx.work_dir() / f"{name}-captioned.mp4"
         _burn(media, ass, params, out)
         return out
+
+
+def _style_key(params: dict[str, Any]) -> str:
+    """The canonical name of the requested style (`style1`…`style4`)."""
+    key = str(params.get("style", "style1")).strip().lower()
+    return _STYLE_NAMES.get(key, key)
+
+
+def _with_style(params: dict[str, Any]) -> dict[str, Any]:
+    """``params`` with the style's defaults filled in for whatever it left unset.
+
+    The preset never overwrites: a pipeline that names a style *and* sets
+    `pop_duration` gets the style with its own timing, not an argument about it.
+    """
+    preset = _PRESETS.get(_style_key(params))
+    if not preset:
+        return params
+    return {**preset, **params}
 
 
 def _build_lines(params: dict[str, Any], offset: float) -> list[dict[str, Any]]:
@@ -219,7 +273,7 @@ def _safe_margin_h(params: dict[str, Any], width: int, height: int) -> int:
 
 def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
     width, height = ffmpeg.probe_resolution(media)
-    outline, bold = _STYLES.get(params.get("style", "tiktok"), _STYLES["tiktok"])
+    outline, bold = _STYLES.get(_style_key(params), _STYLES["style1"])
     outline = params.get("outline", outline)
     size = int(params.get("caption_size") or 100)
     align = _POSITION.get(params.get("position", "bottom"), 2)
