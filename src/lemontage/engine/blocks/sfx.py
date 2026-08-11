@@ -73,7 +73,7 @@ def mix_filter(times: list[float], gain: float, has_audio: bool) -> str:
     for i, (label, at) in enumerate(zip(labels, times, strict=True)):
         chain = [f"volume={gain:.2f}dB"] if gain else []
         if at > 0:
-            chain.append(f"adelay={int(round(at * 1000))}:all=1")
+            chain.append(f"adelay={round(at * 1000)}:all=1")
         hit = f"h{i}"
         parts.append(f"[{label}]{','.join(chain) or 'anull'}[{hit}]")
         hits.append(f"[{hit}]")

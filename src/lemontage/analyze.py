@@ -13,6 +13,8 @@ visual quality (motion/sharpness) is a later phase behind an ``[analyze]`` extra
 
 from __future__ import annotations
 
+import itertools
+
 from .engine import ffmpeg
 from .engine.blocks.detect_clips import (
     _loudness_timeline,
@@ -88,7 +90,7 @@ def _dead_air(path: str, duration: float) -> list[list[float]]:
 
 
 def _visual_scores(path: str, shots: list[dict], samples: int = 4) -> None:
-    """Add per-shot ``sharpness`` and ``motion`` (0–1, 1 = best in this video).
+    """Add per-shot ``sharpness`` and ``motion`` (0-1, 1 = best in this video).
 
     Both are relative *within* the video so an agent can rank shots: sharpness is
     the mean Laplacian variance of sampled frames (low = soft/blurry/text card),
@@ -153,7 +155,7 @@ def _mean_flow(frames: list, cv2, np) -> float:
     if len(frames) < 2:
         return 0.0
     mags = []
-    for a, b in zip(frames, frames[1:], strict=False):
+    for a, b in itertools.pairwise(frames):
         flow = cv2.calcOpticalFlowFarneback(a, b, None, 0.5, 3, 15, 3, 5, 1.2, 0)
         mags.append(float(np.mean(np.hypot(flow[..., 0], flow[..., 1]))))
     return sum(mags) / len(mags)

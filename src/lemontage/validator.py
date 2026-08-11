@@ -288,11 +288,12 @@ def _check_block_params(
         if case is not None and (not isinstance(case, str) or case.lower() not in _CASES):
             errors.append(f"{label}: captions.case must be 'upper' or 'lower'")
         pop = params.get("pop")
-        if pop is not None and not isinstance(pop, bool):
-            if not isinstance(pop, int) or not 100 <= pop <= 200:
-                errors.append(
-                    f"{label}: captions.pop must be a boolean or a scale percent 100..200"
-                )
+        if (
+            pop is not None
+            and not isinstance(pop, bool)
+            and (not isinstance(pop, int) or not 100 <= pop <= 200)
+        ):
+            errors.append(f"{label}: captions.pop must be a boolean or a scale percent 100..200")
         pop_duration = params.get("pop_duration")
         if pop_duration is not None:
             try:

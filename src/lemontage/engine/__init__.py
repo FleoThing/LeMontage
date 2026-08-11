@@ -8,4 +8,4 @@ from __future__ import annotations
 
 from .executor import RunResult, run_pipeline
 
-__all__ = ["run_pipeline", "RunResult"]
+__all__ = ["RunResult", "run_pipeline"]

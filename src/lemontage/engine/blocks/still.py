@@ -192,10 +192,10 @@ def _render_zoom(
     # the image's own (even) size afterwards.
     width, height = ffmpeg.probe_resolution(image)
     ow, oh = width - width % 2, height - height % 2
-    frames = max(int(round(duration * fps)), 2)
+    frames = max(round(duration * fps), 2)
     span = frames - 1
     if motion_dur is not None:
-        span = min(max(int(round(motion_dur * fps)), 1), span)
+        span = min(max(round(motion_dur * fps), 1), span)
     progress = f"min(on/{span},1)"
     # Aim the punch-in at the subject: the window centre travels in a straight
     # line between the frame centre (full frame, zoom 1.0) and the focal point

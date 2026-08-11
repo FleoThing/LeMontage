@@ -407,9 +407,12 @@ def _outputs_files_exist(outputs: dict[str, Any]) -> bool:
     """Every output that looks like a produced file path must still exist."""
     for value in outputs.values():
         for candidate in value if isinstance(value, list) else [value]:
-            if isinstance(candidate, str) and _looks_like_path(candidate):
-                if not Path(candidate).exists():
-                    return False
+            if (
+                isinstance(candidate, str)
+                and _looks_like_path(candidate)
+                and not Path(candidate).exists()
+            ):
+                return False
     return True
 
 

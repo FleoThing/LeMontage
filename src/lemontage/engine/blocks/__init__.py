@@ -41,4 +41,4 @@ REGISTRY: dict[str, Block] = {
     )
 }
 
-__all__ = ["Block", "BlockResult", "ItemResult", "REGISTRY"]
+__all__ = ["REGISTRY", "Block", "BlockResult", "ItemResult"]

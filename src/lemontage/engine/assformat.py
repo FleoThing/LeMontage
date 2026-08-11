@@ -115,7 +115,7 @@ def timestamp(seconds: float) -> str:
     naive formatting of ``-0.5`` is ``-1:59:59.50`` — a time libass reads as
     valid but far past the clip, so the line silently never shows.
     """
-    cs = int(round(max(0.0, seconds) * 100))
+    cs = round(max(0.0, seconds) * 100)
     hours, cs = divmod(cs, 360000)
     minutes, cs = divmod(cs, 6000)
     secs, cs = divmod(cs, 100)

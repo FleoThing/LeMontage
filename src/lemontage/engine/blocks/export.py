@@ -365,7 +365,7 @@ def _fade_tag(params: dict[str, Any], index: int) -> str:
         fade = fade[index] if index < len(fade) else 0
     if not fade:
         return ""
-    ms = int(round(parse_seconds(fade) * 1000))
+    ms = round(parse_seconds(fade) * 1000)
     return rf"{{\fad({ms},{ms})}}"
 
 
@@ -484,7 +484,7 @@ def _scale_chain(
     source_crop: str | None = None,
     index: int = 0,
 ) -> list[str]:
-    """Video filters that fit the source into width×height per the `fit` mode.
+    """Video filters that fit the source into widthxheight per the `fit` mode.
 
     * ``contain`` (default) — scale to fit, then fill the sides. ``bg`` chooses the
       fill: a colour (default black), or ``blur`` = the source itself scaled to

@@ -3,7 +3,7 @@
 Works on the pipeline input (single mode) or maps over a channel of clips.
 ``factor`` is the playback multiplier: ``2`` plays twice as fast, ``0.5`` is
 half-speed slow-motion. Video timestamps are rescaled with ``setpts`` and audio
-with ``atempo`` (chained so any factor outside FFmpeg's 0.5–2.0 per-filter range
+with ``atempo`` (chained so any factor outside FFmpeg's 0.5-2.0 per-filter range
 still works).
 """
 
@@ -49,7 +49,7 @@ def _factor(params: dict[str, Any]) -> float:
 
 
 def _atempo_chain(factor: float) -> str:
-    """Express any positive factor as a chain of atempo filters (each 0.5–2.0)."""
+    """Express any positive factor as a chain of atempo filters (each 0.5-2.0)."""
     remaining = factor
     steps: list[str] = []
     while remaining > 2.0:
