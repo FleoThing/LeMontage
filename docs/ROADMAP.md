@@ -23,9 +23,16 @@ better.
 
 ## Next up
 
-Nothing committed. v0.7.0 finished the short-form clipping set (`zoom`, `sfx`,
-caption pop, loudness normalisation); what comes next gets picked from the pool
-below when it genuinely helps.
+**v0.9.0 is about speed, not features.** The engine parallelises exactly one
+thing today (the items of a channel, 8 at a time); matrix cells, the analysis
+passes and independent DAG steps all run one after another. That gets fixed
+without touching the YAML: a pipeline is written and read exactly as it is now,
+and the concurrency happens underneath.
+
+v0.8.0 finished the caption set (style presets, phrase pop, colour and case);
+v0.7.0 finished the short-form clipping set (`zoom`, `sfx`, caption pop,
+loudness normalisation). Anything beyond v0.9.0 gets picked from the pool below
+when it genuinely helps.
 
 ## Ideas (pool — no commitment, no order)
 

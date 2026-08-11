@@ -5,7 +5,7 @@ All notable changes to LeMontage are tracked here.
 This project follows SemVer-style versioning while it is pre-1.0: minor versions
 may still introduce breaking changes, and those changes must be called out here.
 
-## [Unreleased]
+## [0.8.0] - 2026-08-11
 
 ### Changed
 
