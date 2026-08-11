@@ -18,6 +18,13 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Changed
 
+- **The channel worker pool grows with the machine**, instead of stopping at 8.
+  It is now `min(clips, max(8, os.cpu_count()))`, so a 32-core box no longer
+  renders 16 clips 8 at a time; on 8 cores or fewer nothing changes at all. The
+  new `LEMONTAGE_WORKERS` environment variable overrides it. Measured on the
+  channel control (16 clips, 4 cores): 38.30s at 2 workers, 36.14s at 4, 35.72s
+  at 8, 35.45s at 16 — so lowering the pool to the core count, which was the
+  original plan, is 1.2% slower rather than faster.
 - **The validator dispatches per block instead of running one 180-line `if`
   chain.** `_check_block_params` was complexity 55 for a threshold of 12; each
   block now has its own `_check_<block>_params` behind a `_BLOCK_CHECKS` table.

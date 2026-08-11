@@ -171,6 +171,13 @@ Cached title fonts (the \fBexport.title_font\fR presets). Drop your own
 .B LEMONTAGE_HOME
 Base directory for LeMontage's cached assets (e.g. title fonts under
 \fBfonts/\fR). Defaults to \fB~/.lemontage\fR.
+.TP
+.B LEMONTAGE_WORKERS
+How many clips of a channel to render at once. Defaults to the machine's core
+count, never below 8. Lower it on a machine that must stay responsive during a
+run, or where memory rather than CPU is the limit. It is an environment variable
+and not a pipeline field on purpose: this belongs to the machine, not to the
+edit, so the same pipeline renders the same output everywhere.
 .SH EXAMPLES
 .PP
 Generate, validate and run a starter pipeline:

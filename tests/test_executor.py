@@ -475,3 +475,47 @@ def test_remove_merged_parts_keeps_files_outside_output_dir(tmp_path):
     assert outside.exists()  # outside the tree -> kept by the safety guard
     assert reel.exists()  # the final reel is never a 'part'
     assert removed == 1
+
+
+# -- channel worker pool sizing (executor._pool_size) --------------------------
+
+
+def test_pool_size_never_exceeds_the_item_count():
+    """One clip must not open eight threads to render it."""
+    assert executor._pool_size(1) == 1
+    assert executor._pool_size(3) == 3
+
+
+def test_pool_size_keeps_the_floor_on_a_small_machine(monkeypatch):
+    """A 2-core box still runs 8 encodes: measured faster than 2, not slower."""
+    monkeypatch.setattr(executor.os, "cpu_count", lambda: 2)
+    assert executor._pool_size(100) == executor._MIN_WORKERS
+
+
+def test_pool_size_grows_with_a_big_machine(monkeypatch):
+    """The old min(8, n) left 24 of 32 cores idle."""
+    monkeypatch.setattr(executor.os, "cpu_count", lambda: 32)
+    assert executor._pool_size(100) == 32
+
+
+def test_pool_size_survives_an_unknown_core_count(monkeypatch):
+    """os.cpu_count() returns None on some platforms."""
+    monkeypatch.setattr(executor.os, "cpu_count", lambda: None)
+    assert executor._pool_size(100) == executor._MIN_WORKERS
+
+
+def test_pool_size_env_override(monkeypatch):
+    monkeypatch.setenv("LEMONTAGE_WORKERS", "3")
+    assert executor._pool_size(100) == 3
+    # Still capped by the work available.
+    assert executor._pool_size(2) == 2
+
+
+@pytest.mark.parametrize("value", ["0", "-4", "eight", "3.5", "  "])
+def test_pool_size_rejects_a_bad_override(monkeypatch, value):
+    monkeypatch.setenv("LEMONTAGE_WORKERS", value)
+    if value.strip() == "":  # blank is "unset", not an error
+        assert executor._pool_size(100) == executor._MIN_WORKERS
+        return
+    with pytest.raises(ValueError, match="LEMONTAGE_WORKERS"):
+        executor._pool_size(100)
