@@ -13,6 +13,7 @@ from lemontage.engine.assformat import timestamp
 from lemontage.engine.blocks.captions import (
     CaptionsBlock,
     _build_lines,
+    _colour,
     _dialogue,
     _events,
     _lines_from_words,
@@ -385,6 +386,27 @@ def test_pop_scale_accepts_a_percent():
 def test_pop_off_keeps_the_karaoke_line():
     events = _events(_pop_line(), {}, hi="&H1", base="&H2")
     assert len(events) == 1 and r"\k" in events[0]
+
+
+def test_pop_on_line_scales_the_whole_phrase_once():
+    events = _events(_pop_line(), {"pop": True, "pop_on": "line"}, hi="&H0000FFFF", base="&H2")
+    assert len(events) == 1  # one event per line, not per word
+    assert events[0].endswith(r"{\c&H2\fscx115\fscy115\t(0,90,\fscx100\fscy100)}a b")
+    assert "&H0000FFFF" not in events[0]  # no active word, so no highlight
+    assert "\\k" not in events[0]
+
+
+def test_max_words_caps_the_phrase_length():
+    words = _words((0.0, 0.2, "a"), (0.2, 0.4, "b"), (0.4, 0.6, "c"), (0.6, 0.8, "d"))
+    lines = _build_lines({"words": words, "max_words": 3}, offset=0.0)
+    assert [line["text"] for line in lines] == ["a b c", "d"]
+
+
+def test_color_accepts_a_name_and_rejects_junk():
+    assert _colour("white", "captions.color", "&H0") == "&H00FFFFFF"
+    assert _colour("&H0000FF00", "captions.color", "&H0") == "&H0000FF00"
+    with pytest.raises(ValueError):
+        _colour("&H00}{\\p1", "captions.color", "&H0")
 
 
 def test_stt_forwards_vad_and_beam_options(tmp_path, monkeypatch):

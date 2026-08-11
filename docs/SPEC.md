@@ -372,11 +372,15 @@ segment-level cues.
 | `font` | string | `font1` | Caption font: a preset `font1`–`font5` or an installed family. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
 | `max_chars` | int | `24` | Max characters per line (lines stay short for word-by-word reading). |
+| `max_words` | int | `5` | Max words per line. `3` gives the 2-3 word phrasing `pop_on: line` is made for. |
 | `caption_size` | int | `100` | Font size in pixels of the clip. |
 | `caption_margin` | int | ~5% of height | Distance from the edge (per `position`). |
-| `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
+| `color` | colour | white | Text colour: a name (`white`), `#RRGGBB`, or a raw ASS `&HBBGGRR`. |
+| `highlight` | colour | yellow | Active-word colour (`pop_on: word` and karaoke). Same forms as `color`. |
+| `outline` | int | per `style` | Black contour thickness in px (`tiktok` = 3). Raise it for a heavier border. |
 | `uppercase` | bool | `false` | Draw every line in CAPITALS. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
-| `pop` | bool \| int | `false` | Scale the active word up as it is spoken, settling back over 90ms — the beat that makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`–`200`). |
+| `pop` | bool \| int | `false` | Scale up on the beat, settling back over 90ms — what makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`-`200`). |
+| `pop_on` | enum | `word` | What `pop` scales: `word` (the active word, highlighted) or `line` (the whole phrase, once, when it changes). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
 
@@ -395,6 +399,24 @@ The two together are the short-form caption look:
 Under the hood a popped line is emitted once **per word** instead of as one
 karaoke line (the karaoke tag can only change colour). Each event still draws the
 whole line, so the wrapping never moves — only the active word changes.
+
+**Phrase pop.** `pop_on: line` moves the beat from the word to the line: no
+highlight, no per-word event, the whole phrase punches in at 115% and settles
+back every time it changes. It reads as a rhythm rather than a read-along, so the
+phrases have to be short:
+
+```yaml
+- captions:
+    from: clip_channel
+    words: "{{ steps.transcript.words }}"
+    uppercase: true
+    pop: true
+    pop_on: line
+    max_words: 3           # 2-3 words a phrase
+    max_chars: 18
+    color: white           # default; any name or #RRGGBB
+    outline: 6             # heavy black border, readable over anything
+```
 
 **Order matters — caption before *or* after reframing.** `caption_size`/`caption_margin`
 are relative to the **height of the clip being captioned**. Placing `captions`

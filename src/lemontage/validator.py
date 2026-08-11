@@ -16,6 +16,8 @@ import yaml
 from . import spec
 from .engine.timecode import parse_seconds
 
+_POP_ON = {"word", "line"}
+
 
 def validate_file(path: str | Path) -> list[str]:
     """Load a YAML file and validate it. Returns a list of error strings."""
@@ -280,6 +282,19 @@ def _check_block_params(
                 errors.append(
                     f"{label}: captions.pop must be a boolean or a scale percent 100..200"
                 )
+        pop_on = params.get("pop_on")
+        if pop_on is not None and (not isinstance(pop_on, str) or pop_on.lower() not in _POP_ON):
+            errors.append(f"{label}: captions.pop_on must be 'word' or 'line'")
+        max_words = params.get("max_words")
+        if max_words is not None and (
+            isinstance(max_words, bool) or not isinstance(max_words, int) or max_words < 1
+        ):
+            errors.append(f"{label}: captions.max_words must be an integer >= 1")
+        outline = params.get("outline")
+        if outline is not None and (
+            isinstance(outline, bool) or not isinstance(outline, (int, float)) or outline < 0
+        ):
+            errors.append(f"{label}: captions.outline must be a number of pixels >= 0")
 
     if block == "filter":
         _check_filter_params(params, label, errors)

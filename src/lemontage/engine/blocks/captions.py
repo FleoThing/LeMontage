@@ -7,6 +7,7 @@ CapCut look. Without word timing it falls back to segment-level SRT cues.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ from ..assformat import escape_text, timestamp
 from ..context import RunContext
 from ..timecode import to_timecode
 from .base import Block, BlockResult, ItemResult
-from .export import _output_path
+from .export import _ass_color, _output_path
 
 # ASS Alignment is numpad-style: 2=bottom-centre, 5=middle, 8=top.
 _POSITION = {"bottom": 2, "center": 5, "top": 8}
@@ -36,6 +37,7 @@ _POP_MS = 90  # how long the pop takes to settle back to 100%
 # ASS colours are &HAABBGGRR. Default: spoken word yellow, upcoming word white.
 _HIGHLIGHT = "&H0000FFFF"
 _BASE = "&H00FFFFFF"
+_ASS_COLOUR = re.compile(r"&H[0-9A-Fa-f]{6,8}&?")
 
 _KARAOKE_ASS = (
     """\
@@ -112,7 +114,8 @@ def _build_lines(params: dict[str, Any], offset: float) -> list[dict[str, Any]]:
     words = params.get("words")
     if isinstance(words, list) and words:
         max_chars = int(params.get("max_chars", _DEFAULT_MAX_CHARS))
-        lines = _lines_from_words(words, offset, max_chars)
+        max_words = int(params.get("max_words", _MAX_WORDS_PER_LINE))
+        lines = _lines_from_words(words, offset, max_chars, max_words)
     else:
         segments = params.get("segments")
         if not isinstance(segments, list):
@@ -135,7 +138,7 @@ def _uppercased(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _lines_from_words(
-    words: list[dict[str, Any]], offset: float, max_chars: int
+    words: list[dict[str, Any]], offset: float, max_chars: int, max_words: int = _MAX_WORDS_PER_LINE
 ) -> list[dict[str, Any]]:
     lines: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
@@ -149,7 +152,7 @@ def _lines_from_words(
         if not text:
             continue
         word = {"start": max(0.0, start), "end": end, "text": text}
-        too_long = length + len(text) + 1 > max_chars or len(current) >= _MAX_WORDS_PER_LINE
+        too_long = length + len(text) + 1 > max_chars or len(current) >= max_words
         big_gap = current and word["start"] - current[-1]["end"] > _LINE_GAP
         if current and (too_long or big_gap):
             lines.append(_line(current))
@@ -201,16 +204,16 @@ def _safe_margin_h(params: dict[str, Any], width: int, height: int) -> int:
 def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
     width, height = ffmpeg.probe_resolution(media)
     outline, bold = _STYLES.get(params.get("style", "tiktok"), _STYLES["tiktok"])
+    outline = params.get("outline", outline)
     size = int(params.get("caption_size") or 100)
     align = _POSITION.get(params.get("position", "bottom"), 2)
     marginv = int(params.get("caption_margin", round(height * 0.05)))
     marginh = _safe_margin_h(params, width, height)
-    hi = params.get("highlight") or _HIGHLIGHT
+    hi = _colour(params.get("highlight"), "captions.highlight", _HIGHLIGHT)
+    base = _colour(params.get("color"), "captions.color", _BASE)
     font = fonts.family(params.get("font"))
 
-    events = "\n".join(
-        event for line in lines for event in _events(line, params, hi=hi, base=_BASE)
-    )
+    events = "\n".join(event for line in lines for event in _events(line, params, hi=hi, base=base))
     path.write_text(
         _KARAOKE_ASS.format(
             w=width,
@@ -218,7 +221,7 @@ def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
             font=font,
             size=size,
             hi=hi,
-            base=_BASE,
+            base=base,
             bold=bold,
             outline=outline,
             align=align,
@@ -239,10 +242,18 @@ def _events(line: dict[str, Any], params: dict[str, Any], hi: str, base: str) ->
     colour, and the word has to *scale* — the beat that makes short-form captions
     read as spoken rather than displayed. Each event draws the whole line, so the
     wrapping never changes; only the active word is coloured and briefly enlarged.
+
+    With `pop_on: line` the *whole line* pops instead, once, when it appears: no
+    active word, no highlight, one flat-coloured phrase that punches in on every
+    change. Pair it with `max_words` to get the 2-3 word phrasing it is made for.
     """
     pop = _pop_scale(params)
     if pop is None or not line["words"]:
         return [_dialogue(line)]
+    if str(params.get("pop_on", "word")).lower() == "line":
+        text = _styled(line["text"], base, pop)
+        start, end = timestamp(line["start"]), timestamp(line["end"])
+        return [f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{text}"]
     events = []
     words = line["words"]
     for i, w in enumerate(words):
@@ -271,6 +282,24 @@ def _styled(text: str, colour: str, pop: int | None) -> str:
         f"{{\\c{colour}\\fscx{pop}\\fscy{pop}"
         f"\\t(0,{_POP_MS},\\fscx100\\fscy100)}}{escape_text(text)}"
     )
+
+
+def _colour(value: object, field: str, default: str) -> str:
+    """A caption colour: a name / ``#RRGGBB``, or a raw ASS ``&HAABBGGRR``.
+
+    Colours land inside ASS override blocks, so this is a trust boundary: the raw
+    form is kept (it is what `highlight` has always taken) but only when it really
+    is one, and anything else goes through the same strict parser as every other
+    block's colour.
+    """
+    if not value:
+        return default
+    text = str(value).strip()
+    if text[:2].upper() == "&H":
+        if not _ASS_COLOUR.fullmatch(text):
+            raise ValueError(f"invalid {field} '{value}' (use #RRGGBB, a name, or &HBBGGRR)")
+        return text
+    return _ass_color(text, field)
 
 
 def _pop_scale(params: dict[str, Any]) -> int | None:

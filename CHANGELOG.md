@@ -31,6 +31,19 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- `captions.pop_on: line`: the pop lands on the **phrase** instead of the active
+  word. The whole line punches in and settles back every time it changes, with
+  no highlight and no per-word event, which is the beat short-form captions are
+  cut to when they are read as rhythm rather than followed word by word.
+  `pop_on: word` (the default) is the existing behaviour.
+- `captions.max_words`: cap the words per line, previously a fixed 5. `3` gives
+  the 2-3 word phrasing `pop_on: line` needs, without having to guess a
+  `max_chars` that happens to break there.
+- `captions.color` and `captions.outline`: caption text colour (white by
+  default) and black contour thickness. Both `color` and `highlight` now take a
+  colour name or `#RRGGBB`, like every other block, alongside the raw ASS
+  `&HBBGGRR` form — which is now checked before it reaches the subtitle file
+  instead of being pasted in as-is.
 - Text placement: `overlay.position` and `export.title_position` now reach all
   **nine** frame anchors (`top-left`, `bottom-right`, …), with `margin_x` for
   the distance to the side edge. Text was locked to the centre column, so a
