@@ -82,7 +82,7 @@ def test_overlay_mapped_mode_over_channel(tmp_path, calls):
 
 
 def test_overlay_requires_text_or_image(tmp_path, calls):
-    with pytest.raises(ValueError, match="'text' and/or an 'image'"):
+    with pytest.raises(ValueError, match=r"needs a 'text' \(or 'cues'\) and/or an 'image'"):
         OverlayBlock().execute({}, ctx(tmp_path), "ov")
 
 
@@ -209,6 +209,219 @@ def test_overlay_rejects_bad_band_position(tmp_path, calls):
         OverlayBlock().execute({"text": "t", "band": {"position": "left"}}, ctx(tmp_path), "ov")
 
 
+# --- placement ---------------------------------------------------------------
+
+
+def style(vf: str) -> str:
+    return [ln for ln in ass_text(vf).splitlines() if ln.startswith("Style:")][0]
+
+
+def dialogues(vf: str) -> list[str]:
+    return [ln for ln in ass_text(vf).splitlines() if ln.startswith("Dialogue:")]
+
+
+@pytest.mark.parametrize(
+    ("position", "align"),
+    [("top-left", 7), ("top-center", 8), ("center", 5), ("bottom-left", 1), ("bottom-right", 3)],
+)
+def test_overlay_position_sets_alignment(tmp_path, calls, position, align):
+    OverlayBlock().execute({"text": "t", "position": position}, ctx(tmp_path), "ov")
+    assert style(calls["vf"]).endswith(f",{align},40,40,60,1")
+
+
+def test_overlay_without_position_stays_top_centred(tmp_path, calls):
+    """The historical default: no band, no position — top centre, 60px down."""
+    OverlayBlock().execute({"text": "t"}, ctx(tmp_path), "ov")
+    assert style(calls["vf"]).endswith(",8,40,40,60,1")
+
+
+def test_overlay_band_still_drives_alignment(tmp_path, calls):
+    OverlayBlock().execute({"text": "t", "band": {"position": "bottom"}}, ctx(tmp_path), "ov")
+    assert ",2," in style(calls["vf"])  # bottom band -> bottom-centred text, as before
+
+
+def test_overlay_position_overrides_the_band(tmp_path, calls):
+    params = {"text": "t", "band": {"position": "top"}, "position": "top-right"}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert ",9," in style(calls["vf"])
+
+
+def test_overlay_margin_x_sets_side_margins(tmp_path, calls):
+    params = {"text": "t", "position": "bottom-left", "margin_x": 62, "margin": 440}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert style(calls["vf"]).endswith(",1,62,62,440,1")
+
+
+def test_overlay_outline_defaults_to_none(tmp_path, calls):
+    """Unchanged from before: flat text, right over a band or a card."""
+    OverlayBlock().execute({"text": "t"}, ctx(tmp_path), "ov")
+    assert ",1,0,0,8," in style(calls["vf"])  # BorderStyle, Outline, Shadow, Alignment
+
+
+def test_overlay_outline_thickens_the_contour(tmp_path, calls):
+    params = {"text": "t", "outline": 5, "outline_color": "#101010"}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert ",1,5,0,8," in style(calls["vf"])
+    assert "&H00101010" in style(calls["vf"])
+
+
+def test_overlay_rejects_negative_outline(tmp_path, calls):
+    with pytest.raises(ValueError, match="outline must be a number"):
+        OverlayBlock().execute({"text": "t", "outline": -2}, ctx(tmp_path), "ov")
+
+
+def test_overlay_rejects_unknown_position(tmp_path, calls):
+    with pytest.raises(ValueError, match="unknown position 'sideways'"):
+        OverlayBlock().execute({"text": "t", "position": "sideways"}, ctx(tmp_path), "ov")
+
+
+# --- run size and font ---------------------------------------------------------
+
+
+def test_overlay_run_size_mixes_scales_on_one_line(tmp_path, calls):
+    """A big rank number then a small label — one text block, two sizes."""
+    params = {"text": [{"text": "1.", "size": 92}, {"text": "  Jumpscare", "size": 40}]}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert r"{\fs92}1.{\r}{\fs40}  Jumpscare{\r}" in dialogues(calls["vf"])[0]
+
+
+def test_overlay_run_font_resolves_the_preset_alias(tmp_path, calls):
+    OverlayBlock().execute({"text": [{"text": "a", "font": "font3"}]}, ctx(tmp_path), "ov")
+    assert r"{\fnBangers}" in dialogues(calls["vf"])[0]
+
+
+def test_overlay_run_combines_colour_size_and_font(tmp_path, calls):
+    params = {"text": [{"text": "a", "color": "red", "size": 50, "font": "font2"}]}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert r"{\c&H000000FF&\fs50\fnBebas Neue}a{\r}" in dialogues(calls["vf"])[0]
+
+
+def test_overlay_run_font_cannot_inject_ass(tmp_path, calls):
+    """`\\fn` takes the family verbatim, so a brace in it would end the block."""
+    params = {"text": [{"text": "a", "font": "Evil}{\\fscx300"}]}
+    with pytest.raises(ValueError, match="cannot contain"):
+        OverlayBlock().execute(params, ctx(tmp_path), "ov")
+
+
+def test_overlay_run_bad_size_names_the_run(tmp_path, calls):
+    with pytest.raises(ValueError, match=r"overlay.text\[0\].size"):
+        OverlayBlock().execute({"text": [{"text": "a", "size": 0}]}, ctx(tmp_path), "ov")
+
+
+# --- cues ----------------------------------------------------------------------
+
+
+def test_overlay_cues_render_in_a_single_pass(tmp_path, calls):
+    params = {
+        "cues": [
+            {"text": "first", "show": {"from": 0, "to": 6}},
+            {"text": "second", "show": {"from": 6, "to": 12}},
+            {"text": "third", "show": {"from": 12}},
+        ]
+    }
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert calls["vf"].count("ass=") == 1  # one libass filter, so one re-encode
+    lines = dialogues(calls["vf"])
+    assert len(lines) == 3
+    assert "0:00:00.00,0:00:06.00" in lines[0]
+    assert "0:00:06.00,0:00:12.00" in lines[1]
+    assert "0:00:12.00,9:59:59.99" in lines[2]  # no `to` — holds to the last frame
+
+
+def test_overlay_cues_are_pinned_not_flowed(tmp_path, calls):
+    """libass shifts events that would overlap — a fixed column must not move.
+
+    Two cues 102px apart at a size whose line boxes collide: without `\\pos`
+    they get pushed off their seats, and the column's spacing collapses.
+    """
+    params = {
+        "cues": [
+            {"text": "1.", "position": "top-left", "size": 158, "margin": 440, "margin_x": 62},
+            {"text": "2.", "position": "top-left", "size": 158, "margin": 542, "margin_x": 62},
+        ]
+    }
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    lines = dialogues(calls["vf"])
+    assert r"{\pos(62,440)}1." in lines[0]
+    assert r"{\pos(62,542)}2." in lines[1]
+
+
+@pytest.mark.parametrize(
+    ("position", "margin", "point"),
+    [
+        ("top-left", 440, "(62,440)"),
+        ("top-center", 186, "(540,186)"),
+        ("top-right", 186, "(1018,186)"),
+        ("center", 0, "(540,960)"),
+        ("bottom-center", 178, "(540,1742)"),
+        ("bottom-right", 178, "(1018,1742)"),
+    ],
+)
+def test_overlay_cue_anchor_matches_its_position(tmp_path, calls, position, margin, point):
+    """The pinned point is what the anchor already meant, so margins don't move."""
+    params = {"cues": [{"text": "x", "position": position, "margin": margin, "margin_x": 62}]}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert rf"{{\pos{point}}}" in dialogues(calls["vf"])[0]
+
+
+def test_overlay_single_text_is_not_pinned(tmp_path, calls):
+    """A lone `text` keeps flowing from its margins, exactly as it always has."""
+    OverlayBlock().execute({"text": "t", "position": "top-left"}, ctx(tmp_path), "ov")
+    assert r"\pos(" not in dialogues(calls["vf"])[0]
+
+
+def test_overlay_cues_style_independently(tmp_path, calls):
+    params = {
+        "size": 40,
+        "cues": [
+            {"text": "left", "position": "bottom-left", "size": 92},
+            {"text": "right", "position": "top-right", "color": "red"},
+        ],
+    }
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    styles = [ln for ln in ass_text(calls["vf"]).splitlines() if ln.startswith("Style:")]
+    assert "Cue0" in styles[0] and ",92," in styles[0] and ",1,40,40," in styles[0]
+    assert "Cue1" in styles[1] and ",40," in styles[1] and ",9,40,40," in styles[1]
+    assert "&H000000FF" in styles[1]  # red, on that cue only
+
+
+def test_overlay_cue_without_window_uses_the_block_one(tmp_path, calls):
+    params = {"show": {"from": 2, "to": 8}, "cues": [{"text": "a"}]}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert "0:00:02.00,0:00:08.00" in dialogues(calls["vf"])[0]
+
+
+def test_overlay_cue_text_takes_runs(tmp_path, calls):
+    params = {"cues": [{"text": [{"text": "hi", "color": "yellow"}]}]}
+    OverlayBlock().execute(params, ctx(tmp_path), "ov")
+    assert r"{\c&H0000FFFF&}hi{\r}" in dialogues(calls["vf"])[0]
+
+
+def test_overlay_cue_without_text_raises(tmp_path, calls):
+    with pytest.raises(ValueError, match=r"overlay.cues\[1\]"):
+        OverlayBlock().execute({"cues": [{"text": "a"}, {"size": 40}]}, ctx(tmp_path), "ov")
+
+
+# --- image per clip ------------------------------------------------------------
+
+
+def test_overlay_image_list_picks_one_per_clip(tmp_path, calls, png):
+    second = tmp_path / "b.png"
+    second.write_bytes(b"\x89PNG")
+    params = {"image": [png, str(second)]}
+    OverlayBlock().execute_item(params, {"clip": "c.mp4", "index": 1}, ctx(tmp_path), "ov")
+    assert str(second) in calls["args"]
+
+
+def test_overlay_image_list_shorter_than_channel_passes_through(tmp_path, calls, png):
+    """Nothing left to draw on this clip — no overlay, and no needless re-encode."""
+    res = OverlayBlock().execute_item(
+        {"image": [png]}, {"clip": "c.mp4", "index": 3}, ctx(tmp_path), "ov"
+    )
+    assert res.item["clip"] == "c.mp4"
+    assert "args" not in calls
+
+
 # --- validator ---------------------------------------------------------------
 
 
@@ -244,11 +457,29 @@ def test_validator_accepts_coloured_runs():
     assert validate_doc(doc) == []
 
 
+def test_validator_accepts_placement_and_cues():
+    doc = pipeline(
+        {
+            "position": "bottom-left",
+            "margin_x": 62,
+            "cues": [
+                {"text": [{"text": "1.", "size": 92}], "show": {"from": 0, "to": 6}},
+                {"text": "2.", "position": "top-right"},
+            ],
+        }
+    )
+    assert validate_doc(doc) == []
+
+
+def test_validator_accepts_image_list():
+    assert validate_doc(pipeline({"image": ["./a.png", "./b.png"]})) == []
+
+
 @pytest.mark.parametrize(
     ("params", "needle"),
     [
-        ({}, "'text' and/or an 'image'"),
-        ({"image": 12}, "overlay.image must be a path"),
+        ({}, "needs a 'text' (or 'cues') and/or an 'image'"),
+        ({"image": 12}, "overlay.image must be an image path"),
         ({"image": "./c.png", "y": "421px"}, "overlay.y must be an integer"),
         ({"text": []}, "list of {text, color} runs"),
         ({"text": ["a", "b"]}, "list of {text, color} runs"),
@@ -260,6 +491,13 @@ def test_validator_accepts_coloured_runs():
         ({"text": "t", "show": {"from": "nope"}}, "show.from"),
         ({"text": "t", "show": {"from": "5s", "to": "2s"}}, "show.to"),
         ({"text": "t", "show": {"except": "transition"}}, "not supported"),
+        ({"text": "t", "position": "sideways"}, "unknown overlay.position"),
+        ({"text": "t", "margin_x": "62px"}, "overlay.margin_x must be an integer"),
+        ({"image": [12]}, "overlay.image must be an image path"),
+        ({"cues": []}, "overlay.cues must be a non-empty list"),
+        ({"cues": [{"show": {"from": 0}}]}, "overlay.cues[0].text"),
+        ({"cues": [{"text": "a", "position": "sideways"}]}, "unknown overlay.cues[0].position"),
+        ({"cues": [{"text": "a", "show": {"from": "5s", "to": "2s"}}]}, "overlay.cues[0].show.to"),
     ],
 )
 def test_validator_rejects_bad_overlay(params, needle):

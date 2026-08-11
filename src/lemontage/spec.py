@@ -79,6 +79,36 @@ CONCAT_TRANSITIONS = frozenset(
 # Where `overlay` can place its full-width band (and its text) — SPEC §6.12.
 OVERLAY_BAND_POSITIONS = frozenset({"top", "bottom"})
 
+# Where a block of text sits in the frame, as ASS numpad alignment codes:
+#
+#     7 8 9      top-left    top-center    top-right
+#     4 5 6      center-left center        center-right
+#     1 2 3      bottom-left bottom-center bottom-right
+#
+# The bare `top`/`center`/`bottom` names are the centre column — they are what
+# `export.title_position` has always meant, and they keep meaning it.
+TEXT_POSITIONS: dict[str, int] = {
+    "bottom-left": 1,
+    "bottom": 2,
+    "bottom-center": 2,
+    "bottom-centre": 2,
+    "bottom-right": 3,
+    "center-left": 4,
+    "centre-left": 4,
+    "middle-left": 4,
+    "center": 5,
+    "centre": 5,
+    "middle": 5,
+    "center-right": 6,
+    "centre-right": 6,
+    "middle-right": 6,
+    "top-left": 7,
+    "top": 8,
+    "top-center": 8,
+    "top-centre": 8,
+    "top-right": 9,
+}
+
 # How `export` fits the source into the target frame (see SPEC §6.6).
 EXPORT_FIT_MODES = frozenset({"contain", "cover", "stretch"})
 

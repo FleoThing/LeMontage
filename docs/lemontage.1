@@ -130,7 +130,10 @@ Built\-in blocks: \fBstt\fR, \fBdetect_clips\fR, \fBcut\fR,
 \fBeq\fR), \fBconcat\fR, \fBspeed\fR, \fBreverse\fR,
 \fBstills\fR, \fBstill\fR, \fBzoom\fR (punch in on a clip: \fBamount\fR,
 optional \fBat\fR times, \fBduration\fR), \fBoverlay\fR (timed text, band or \fBimage\fR over
-each clip; \fBtext\fR also takes \fB{text, color}\fR runs),
+each clip; \fBtext\fR also takes \fB{text, color, size, font}\fR runs,
+\fBposition\fR seats it at any of the nine frame anchors with \fBmargin\fR /
+\fBmargin_x\fR, \fBoutline\fR gives it a contour, and \fBcues\fR draws several
+timed texts in one pass),
 \fBmusic\fR (lay a music track over the reel: \fBsource\fR, \fBstart_at\fR to
 skip into the track, \fBdelay\fR to make the music enter later over the video,
 \fBfade_out\fR, \fBmix\fR), \fBsfx\fR (drop a sample at chosen \fBat\fR

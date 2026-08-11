@@ -1,0 +1,99 @@
+lemontage: "1.0"
+name: ranking
+description: "Top-5 countdown: the five slots are on screen from the first frame, each label lands as its clip plays"
+
+# The retention trick of the format is that the viewer sees the empty slots
+# straight away (1. to 5., colour-coded) and stays to watch them fill. The
+# clips play worst-first, so the gold slot is the last thing revealed.
+#
+# Everything the frame carries is ONE `overlay` step:
+#   - `position: top-left` + `margin_x` puts the column flush left (text is
+#     centred in the frame by default, which no list can use)
+#   - `margin` seats each cue by hand, on a 102px pitch. Cues are pinned, so
+#     the pitch holds however big the text gets
+#   - each label's `show.from` is the cumulative length of the clips before it
+#   - `cues` renders them all in a single pass, so the reel is encoded once
+#     instead of once per reveal
+#
+#   lemontage validate examples/pipeline_ranking.yaml
+#   lemontage run examples/pipeline_ranking.yaml --clean
+
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # The five moments, in the order they PLAY: rank 5 first, rank 1 last.
+  - id: moments
+    detect_clips:
+      method: agent
+      emit: top5
+      clips:
+        - {start: 10, end: 18}    # rank 5
+        - {start: 42, end: 50}    # rank 4
+        - {start: 88, end: 96}    # rank 3
+        - {start: 130, end: 138}  # rank 2
+        - {start: 175, end: 187}  # rank 1, the payoff, given the most room
+
+  - cut:
+      from: top5
+
+  - export:
+      from: top5
+      format: vertical
+      resolution: 1080x1920
+      fps: 30
+      fit: contain
+      bg: blur
+      normalize_audio: true      # five points of one recording, one level
+
+  - id: reel
+    concat:
+      from: top5
+
+  - id: ranking
+    overlay:
+      input: "{{ steps.reel.file }}"
+      font: font1
+      color: white
+      outline: 10                # the column sits on footage, not on a band
+      cues:
+        - text:
+            - {text: "Ranking Best "}
+            - {text: "Moments", color: "#FEDE05"}
+          position: top-center
+          size: 134
+          margin: 186
+
+        # The slots: gold, silver, bronze, then white. On screen from frame 0.
+        - {text: "1.", position: top-left, size: 158, margin: 440, margin_x: 62, color: "#F4C711"}
+        - {text: "2.", position: top-left, size: 158, margin: 542, margin_x: 62, color: "#B3B3B3"}
+        - {text: "3.", position: top-left, size: 158, margin: 644, margin_x: 62, color: "#C84C02"}
+        - {text: "4.", position: top-left, size: 158, margin: 746, margin_x: 62}
+        - {text: "5.", position: top-left, size: 158, margin: 848, margin_x: 62}
+
+        # The labels. `margin` is its number's + 67 so the two sit on one
+        # baseline, and `show.from` is where that clip starts in the reel.
+        - {text: "The fifth one", position: top-left, size: 69, margin: 915, margin_x: 172, show: {from: 0}}
+        - {text: "The fourth one", position: top-left, size: 69, margin: 813, margin_x: 172, show: {from: 8}}
+        - {text: "The third one", position: top-left, size: 69, margin: 711, margin_x: 172, show: {from: 16}}
+        - {text: "The runner-up", position: top-left, size: 69, margin: 609, margin_x: 172, show: {from: 24}}
+        - {text: "The best one", position: top-left, size: 69, margin: 507, margin_x: 172, show: {from: 32}}
+
+        - text:
+            - {text: "Subscribe to "}
+            - {text: "@yourhandle", color: "#FF2D2D"}
+          position: bottom-center
+          size: 89
+          margin: 178             # clear of the Shorts/TikTok player UI
+
+  # `overlay` writes to the work directory, so one last export names the file.
+  - id: final
+    export:
+      input: "{{ steps.ranking.clip }}"
+      resolution: 1080x1920
+      fps: 30
+      output: "./output/{{ name }}.mp4"
+
+output:
+  dir: ./output
