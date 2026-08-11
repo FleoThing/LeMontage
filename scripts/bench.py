@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import statistics
 import subprocess
@@ -87,14 +88,38 @@ def fingerprint(directory: Path) -> dict[str, str]:
 # -- running ------------------------------------------------------------------
 
 
-def time_run(pipeline: Path, out: Path, var_args: list[str]) -> float:
+def settle(seconds: float) -> None:
+    """Let the previous run's dirty pages reach disk before timing the next one.
+
+    A run of the channel control writes some 85 MB. The kernel flushes that in
+    the background, *after* the process exits — so without this the writeback of
+    run N lands inside run N+1 and shows up as a slow oscillation across a batch,
+    wide enough (25% here) to swamp the difference being measured. Two batches of
+    the same code came out 39.0s and 45.7s before this was added.
+    """
+    if seconds <= 0:
+        return
+    os.sync()
+    time.sleep(seconds)
+
+
+def time_run(
+    pipeline: Path,
+    out: Path,
+    var_args: list[str],
+    settle_s: float = 3.0,
+    env: dict[str, str] | None = None,
+) -> float:
     """One cold-cache run. Returns wall-clock seconds; raises if the run failed."""
     shutil.rmtree(out, ignore_errors=True)
+    settle(settle_s)
     cmd = [sys.executable, "-m", "lemontage", "run", str(pipeline)]
     for var in var_args:
         cmd += ["--var", var]
     start = time.perf_counter()
-    proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
+    proc = subprocess.run(
+        cmd, cwd=REPO, capture_output=True, text=True, env={**os.environ, **(env or {})}
+    )
     elapsed = time.perf_counter() - start
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr)
@@ -102,27 +127,9 @@ def time_run(pipeline: Path, out: Path, var_args: list[str]) -> float:
     return elapsed
 
 
-def bench(
-    pipeline: Path, runs: int, var_args: list[str], label: str | None, warmup: int = 1
-) -> dict:
-    out = output_dir(pipeline)
-    # A discarded warm-up run, because without one this harness disagreed with
-    # itself by 6% on unchanged code: the first batch after a reboot reads the
-    # source from disk, every later one from the OS page cache. That gap is wider
-    # than most of the gains being measured, so it is paid once and thrown away.
-    for i in range(1, warmup + 1):
-        elapsed = time_run(pipeline, out, var_args)
-        print(f"  warmup {i}/{warmup}: {elapsed:7.2f}s (discarded)", flush=True)
-
-    times = []
-    for i in range(1, runs + 1):
-        elapsed = time_run(pipeline, out, var_args)
-        times.append(elapsed)
-        print(f"  run {i}/{runs}: {elapsed:7.2f}s", flush=True)
-
-    files = fingerprint(out)
+def summarize(label: str, pipeline: Path, var_args: list[str], times: list[float], files: dict):
     return {
-        "label": label or pipeline.stem,
+        "label": label,
         "pipeline": str(pipeline),
         "vars": var_args,
         "runs": [round(t, 3) for t in times],
@@ -131,6 +138,87 @@ def bench(
         "spread_pct": round((max(times) - min(times)) / statistics.median(times) * 100, 1),
         "files": files,
     }
+
+
+def bench(
+    pipeline: Path,
+    runs: int,
+    var_args: list[str],
+    label: str | None,
+    warmup: int = 1,
+    settle_s: float = 3.0,
+) -> dict:
+    out = output_dir(pipeline)
+    # A discarded warm-up run, because without one this harness disagreed with
+    # itself by 6% on unchanged code: the first batch after a reboot reads the
+    # source from disk, every later one from the OS page cache. That gap is wider
+    # than most of the gains being measured, so it is paid once and thrown away.
+    for i in range(1, warmup + 1):
+        elapsed = time_run(pipeline, out, var_args, settle_s)
+        print(f"  warmup {i}/{warmup}: {elapsed:7.2f}s (discarded)", flush=True)
+
+    times = []
+    for i in range(1, runs + 1):
+        elapsed = time_run(pipeline, out, var_args, settle_s)
+        times.append(elapsed)
+        print(f"  run {i}/{runs}: {elapsed:7.2f}s", flush=True)
+
+    return summarize(label or pipeline.stem, pipeline, var_args, times, fingerprint(out))
+
+
+# -- A/B ----------------------------------------------------------------------
+
+
+def ab(
+    pipeline: Path,
+    sides: tuple[str, str],
+    runs: int,
+    var_args: list[str],
+    warmup: int,
+    settle_s: float,
+) -> tuple[dict, dict]:
+    """Interleave two environments, A B A B ..., and report each side.
+
+    Measuring all of A then all of B is the wrong protocol here: this machine
+    drifts by 25% on a timescale longer than one batch, so whichever side ran
+    during the slow stretch loses. Two batches of *identical* code came out 39.0s
+    and 45.7s that way. Alternating spreads the drift evenly over both sides, and
+    the paired per-round delta cancels what is left of it.
+    """
+    out = output_dir(pipeline)
+    envs = [_parse_env(side) for side in sides]
+    for i in range(1, warmup + 1):
+        elapsed = time_run(pipeline, out, var_args, settle_s, envs[0])
+        print(f"  warmup {i}/{warmup}: {elapsed:7.2f}s (discarded)", flush=True)
+
+    times: list[list[float]] = [[], []]
+    prints: list[dict] = [{}, {}]
+    for round_no in range(1, runs + 1):
+        for side in (0, 1):
+            elapsed = time_run(pipeline, out, var_args, settle_s, envs[side])
+            times[side].append(elapsed)
+            prints[side] = fingerprint(out)
+            print(f"  round {round_no}: {sides[side] or 'default'} {elapsed:7.2f}s", flush=True)
+        delta = times[1][-1] - times[0][-1]
+        print(f"           paired delta: {delta:+.2f}s", flush=True)
+
+    a, b = (
+        summarize(sides[s] or "default", pipeline, var_args, times[s], prints[s]) for s in (0, 1)
+    )
+    # The paired delta is the number to trust: each pair ran under the same
+    # machine conditions, so the drift subtracts out of it.
+    paired = [second - first for first, second in zip(*times, strict=True)]
+    b["paired_delta_median"] = round(statistics.median(paired), 3)
+    return a, b
+
+
+def _parse_env(assignment: str) -> dict[str, str]:
+    if not assignment:
+        return {}
+    key, _, value = assignment.partition("=")
+    if not key or "=" not in assignment:
+        raise SystemExit(f"--ab sides must be KEY=VALUE (or ''), got {assignment!r}")
+    return {key: value}
 
 
 def report(result: dict) -> None:
@@ -154,8 +242,16 @@ def compare(before: dict, after: dict) -> int:
     # A delta smaller than the run-to-run spread is not a result, and saying so
     # here is cheaper than arguing about it in a PR.
     noise = max(before.get("spread_pct", 0.0), after.get("spread_pct", 0.0))
-    if abs(change) <= noise:
-        print(f"  ...but the run-to-run spread is {noise:.1f}%: this delta is noise, not a gain")
+    paired = after.get("paired_delta_median")
+    if paired is not None:
+        # From --ab: each pair ran back to back, so the machine's drift is already
+        # subtracted and this survives a spread the medians cannot.
+        print(f"paired delta (median of A/B rounds): {paired:+.2f}s")
+    elif abs(change) <= noise:
+        print(
+            f"  ...but the run-to-run spread is {noise:.1f}%: this delta is noise, not a gain. "
+            "Use --ab to interleave the two variants instead."
+        )
 
     ok = _report_file_diff(before["files"], after["files"])
     print(
@@ -259,6 +355,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--compare", nargs=2, metavar=("BEFORE", "AFTER"), help="compare two --save files"
     )
+    parser.add_argument(
+        "--ab",
+        nargs=2,
+        metavar=("A", "B"),
+        help="interleave two environments (KEY=VALUE each, '' for the default) "
+        "-- the honest protocol when the machine drifts",
+    )
+    parser.add_argument(
+        "--settle",
+        type=float,
+        default=3.0,
+        help="seconds to let writeback finish before each run (default: 3)",
+    )
     parser.add_argument("--self-check", action="store_true", help="test this script and exit")
     args = parser.parse_args(argv)
 
@@ -272,7 +381,21 @@ def main(argv: list[str] | None = None) -> int:
     if not args.pipeline:
         parser.error("give a pipeline to time, or --compare two saved results")
 
-    result = bench(Path(args.pipeline), args.runs, args.var, args.label, args.warmup)
+    pipeline = Path(args.pipeline)
+    if args.ab:
+        before, after = ab(pipeline, tuple(args.ab), args.runs, args.var, args.warmup, args.settle)
+        report(before)
+        report(after)
+        print()
+        code = compare(before, after)
+        if args.save:
+            Path(args.save).write_text(
+                json.dumps({"a": before, "b": after}, indent=2), encoding="utf-8"
+            )
+            print(f"saved to {args.save}")
+        return code
+
+    result = bench(pipeline, args.runs, args.var, args.label, args.warmup, args.settle)
     report(result)
     if args.save:
         Path(args.save).write_text(json.dumps(result, indent=2), encoding="utf-8")

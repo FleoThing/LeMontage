@@ -56,14 +56,42 @@ must not touch the output.
 Quote the **median**, not the minimum (it flatters a warm page cache) and not the
 mean (it follows whatever else the machine was doing).
 
-Every measurement starts with one discarded warm-up run. It is not politeness:
-without it this harness disagreed with itself by 6% on unchanged code, because
-the first batch reads the source from disk and every later one from the OS page
-cache. Six percent is wider than most of the gains being measured here.
+Two things in the harness exist only because the first measurements were wrong,
+and both are worth knowing about before trusting a number.
+
+**A discarded warm-up run.** Without it the harness disagreed with itself by 6%
+on unchanged code: the first batch reads the source from disk, every later one
+from the OS page cache.
+
+**A settle step before each run.** A run of the channel control writes some 85 MB
+and the kernel flushes it in the background *after* the process exits, so the
+writeback of run N landed inside run N+1. That showed up as a slow oscillation
+across a batch, and two batches of identical code came out 39.0s and 45.7s. With
+`os.sync()` and a few seconds of quiet before each run, the same control measures
+a 0.3% spread instead of 25%. If a batch ever spreads by more than a couple of
+percent again, suspect the machine before the code: check `uptime`, and look for
+`kworker/*flush*` near the top of `ps`.
 
 `--compare` prints the run-to-run spread alongside the delta and says so when the
 delta is inside it. A change that does not clear its own noise floor has not been
-measured yet; give it more `--runs` or a quieter machine.
+measured yet.
+
+## When the machine drifts anyway
+
+Measuring all of A and then all of B is the wrong protocol against slow drift:
+whichever side ran during the slow stretch loses, and the verdict can invert
+between two attempts. `--ab` interleaves them instead, A B A B, and reports the
+median of the per-round paired deltas — each pair ran back to back, so whatever
+drift is left subtracts out.
+
+```bash
+python3 scripts/bench.py benchmarks/channel.yaml \
+    --ab LEMONTAGE_WORKERS=8 LEMONTAGE_WORKERS=4 --runs 4
+```
+
+Each side is `KEY=VALUE`, or `''` for the default environment. This only compares
+things an environment variable can switch; a code change still needs two
+checkouts and `--compare`.
 
 The numbers are only comparable to each other on the same machine, with the same
 source and the same ffmpeg. There is no absolute score here.
