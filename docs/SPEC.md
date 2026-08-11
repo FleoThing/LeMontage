@@ -426,7 +426,7 @@ Renders the final video(s) to disk.
 | `format` | enum | `vertical` | `vertical` (9:16) \| `horizontal` (16:9) \| `square` (1:1). |
 | `resolution` | string | per-format | e.g. `1080x1920`. |
 | `fit` | enum | `contain` | `contain` letterboxes the source (black bars) so all of it shows; `cover` fills the frame and centre-crops the overflow (no bars); `stretch` scales each axis independently so a horizontal source fills a vertical frame entirely — distorted, but nothing cropped. A **list** sets the mode per clip by position (`fit: [cover, cover, stretch]` stretches only the 3rd clip), so one clip in the middle of the edit can be distorted on purpose; missing positions fall back to `contain`. |
-| `smart_crop` | bool | `false` | Fill the frame by **following the subject** instead of barring or centre-cropping: the crop window holds still and slides only when the tracked face really leaves the middle (mediapipe). For a landscape → vertical reframe (real TikTok framing). Overrides `fit`/`bg`. Needs `pip install 'lemontage[smartcrop]'`; falls back to a centre crop when the source is not wider than the target or no face is found. |
+| `smart_crop` | bool | `false` | Fill the frame by **following the subject** instead of barring or centre-cropping: the crop window holds still and slides only when the tracked face really leaves the middle. For a landscape → vertical reframe (real TikTok framing). Overrides `fit`/`bg`. Needs `pip install 'lemontage[smartcrop]'`; falls back to a centre crop when the source is not wider than the target or no face is found. |
 | `trim_bars` | bool | `true` | Auto-detect and strip the source's own baked-in letterbox bars first (via `cropdetect`) so a letterboxed source fills the frame. Applied with `fit: cover` (else the bars leak into the crop) and whenever a `bg` fill is set — `blur` (else the sharp foreground keeps its bars over the blur) or a colour (else the bars show as a black band inside the fill). Set `false` to keep them. |
 | `bg` | string | `black` | Fill for the `contain` bars: a colour (`white`, `#101010`) or `blur` — a blurred, zoomed copy of the source behind the sharp centred video (the classic vertical look). |
 | `canvas` | string | — | Place the export frame inside a larger canvas, e.g. `canvas: 1080x1920` with `resolution: 1080x1080` puts a square video on a vertical frame. The canvas becomes the final frame size and must be at least as large as the export frame. The empty area is filled with `bg` (a colour, default black; `bg: blur` only fills the fit bars, the canvas stays black). Applied after titles/author, so those stay on the export frame. |
@@ -706,9 +706,28 @@ track); `concat` tolerates this and drops audio for the join.
 | `image` | path | — | Source image (single mode). |
 | `duration` | time | `3s` | Clip length. Channel items carry their own duration; this is the fallback. |
 | `fps` | int | `30` | Frame rate of the rendered clip. |
-| `motion` | string | — | Animate the image while it is on screen: `zoomout` starts slightly punched-in and pulls back to the full frame; `zoomin` pushes from the full frame into the punch-in (both fast at first, braking just before landing — the classic shorts/reels look). `panup` / `pandown` are a pure vertical scroll — a full-width band slides across the image at constant speed, no zoom. Omit for a static clip. |
+| `motion` | string | — | Animate the image while it is on screen: `zoomout` starts slightly punched-in and pulls back to the full frame; `zoomin` pushes from the full frame into the punch-in. Both leave fast and **decelerate** into the landing (a cubic ease-out — the "smooth zoom" a CapCut edit gets from an Ease Out velocity curve, not a constant slide), and neither overshoots. `panup` / `pandown` are a pure vertical scroll — a full-width band slides across the image at constant speed, no zoom. Omit for a static clip. |
 | `motion_amount` | float | `1.1` | For the zooms: the punched-in zoom factor (must be > 1.0; `1.1` = a 10% punch-in). For the pans: the crop ratio — the visible band is `height / motion_amount` tall, so a larger value scrolls further. |
 | `motion_duration` | time | clip length | How long the motion lasts; the image then holds the landing frame for the rest of the clip. Shorter = snappier zoom / faster scroll. |
+
+**The zooms aim at the subject.** `zoomin` / `zoomout` do not push into the
+middle of the frame — on a portrait that lands on the torso, on a wide scene on
+nothing. They aim at the picture's focal point instead: `zoomin` pushes in and
+lands on it, `zoomout` starts on it and pulls back to the full frame.
+
+The move is a **straight line**. The window centre travels from the frame centre
+to the focal point in step with the zoom's own eased progress, so the framing
+arrives exactly when the zoom does. (Pinning the centre on the focal point at
+every zoom level instead makes the frame wander sideways mid-move — at zoom 1.0
+the window is the whole image and cannot be off-centre, so the clamp drags it.)
+The full-frame end of the move is unchanged either way.
+
+The focal point is, in order: the largest face — the same detector `smart_crop`
+uses, YuNet, which sees painted and engraved faces and not only photographed ones
+(its weights ship with the package, 227 KB, MIT, no download); else the most
+detailed part of the image, a deliberately weak last resort that on a portrait
+aims at the torso. Without the `[smartcrop]` extra the move is centred as before,
+no error. `panup` / `pandown` are unaffected.
 
 **Outputs:** `clips` (list of paths), or `clip` (single path) when not mapping.
 
@@ -854,6 +873,7 @@ dependency.
 | Param | Type | Default | Description |
 |---|---|---|---|
 | `look` | string / list | — | Named effect(s), applied in order: `bw` (black & white), `vignette` (darkened corners), `grain` (film grain), `sharpen` (luma sharpen). |
+| `grain` | number | `12` | Strength of the `grain` look, 0-100 (FFmpeg `noise=alls=`). `12` is texture you feel rather than see; `25`-`40` is a visible dirty-archive grain. Ignored unless `look` includes `grain`. |
 | `eq` | mapping | — | Colour grade via FFmpeg `eq`: any of `brightness`, `contrast`, `saturation`, `gamma` (plain numbers). Applied before the looks. |
 | `from` | channel | — | Map over a channel of clips instead of the input. |
 

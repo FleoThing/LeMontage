@@ -41,6 +41,19 @@ def test_looks_compose_in_order_after_eq(tmp_path, captured):
     assert chain == "eq=contrast=1.2:saturation=0.8,noise=alls=12:allf=t,vignette=PI/5"
 
 
+def test_grain_strength_is_dialable(tmp_path, captured):
+    """Default stays 12 (see above); `grain` overrides it, and only it."""
+    FilterBlock().execute({"look": ["grain", "bw"], "grain": 34}, ctx(tmp_path), "f")
+    assert chain_of(captured) == "noise=alls=34:allf=t,hue=s=0"
+
+
+def test_grain_rejects_nonsense(tmp_path, captured):
+    with pytest.raises(ValueError, match="'grain' must be a number between 0 and 100"):
+        FilterBlock().execute({"look": "grain", "grain": "lots"}, ctx(tmp_path), "f")
+    with pytest.raises(ValueError, match="'grain' must be a number between 0 and 100"):
+        FilterBlock().execute({"look": "grain", "grain": 400}, ctx(tmp_path), "f")
+
+
 def test_maps_over_channel_item_updates_clip(tmp_path, captured):
     res = FilterBlock().execute_item(
         {"look": "sharpen"}, {"index": 2, "clip": "c.mp4"}, ctx(tmp_path), "f"
@@ -81,6 +94,11 @@ def test_validator_requires_something():
 
 def test_validator_accepts_valid_filter():
     assert validate_doc(_doc({"look": ["bw", "grain"], "eq": {"brightness": 0.1}})) == []
+    assert validate_doc(_doc({"look": "grain", "grain": 30})) == []
+
+
+def test_validator_rejects_a_bad_grain():
+    assert any("filter.grain must be a number" in e for e in validate_doc(_doc({"grain": "heavy"})))
 
 
 def test_filter_after_export_grades_the_exported_file(tmp_path, captured):

@@ -7,11 +7,15 @@ synthesised — so a downstream ``concat`` must tolerate silent clips.
 
 An optional ``motion`` effect animates the image while it is on screen, driven
 by FFmpeg's ``zoompan``: ``zoomout`` starts slightly punched-in and pulls back
-to the full frame (the classic shorts/reels look); ``zoomin`` is the reverse,
-pushing from the full frame into the punch-in. Both move fast at first and
-brake just before landing. ``panup`` / ``pandown`` are a pure scroll: a
-full-width, native-resolution band slides vertically across the image at
-constant speed — no zoom involved.
+to the full frame; ``zoomin`` is the reverse, pushing from the full frame into
+the punch-in. Both leave fast and decelerate into the landing (a cubic ease-out
+— the "smooth zoom" a CapCut edit gets from an Ease Out velocity curve, not a
+constant slide). Both travel in a straight line to (or
+from) the picture's subject rather than the middle of the frame
+(:func:`smartcrop.focal_point` — the same face detector the podcast reframe
+uses). ``panup`` / ``pandown`` are a pure scroll: a full-width,
+native-resolution band slides vertically across the image at constant speed —
+no zoom involved.
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...spec import STILL_MOTIONS
-from .. import ffmpeg
+from .. import ffmpeg, smartcrop
 from ..context import RunContext
 from ..timecode import parse_seconds
 from .base import Block, BlockResult, ItemResult
@@ -27,6 +31,10 @@ from .base import Block, BlockResult, ItemResult
 _DEFAULT_DURATION = 3.0
 _DEFAULT_FPS = 30
 _DEFAULT_MOTION_AMOUNT = 1.1
+# Deceleration of the zooms: the eased progress is 1-(1-p)^_EASE, so the move
+# spends its speed early and coasts into the landing. 3 (cubic) is the CapCut
+# "smooth zoom" feel; 2 is gentler, 4-5 brakes harder. No overshoot at any value.
+_EASE = 3
 
 
 class StillBlock(Block):
@@ -177,9 +185,9 @@ def _render_zoom(
     motion_dur: float | None,
 ) -> None:
     # zoompan eases the zoom between 1.0 and `amount` over `motion_dur` seconds
-    # (the whole clip if unset), then holds the landing frame; the quadratic
-    # ease-out moves fast at first and brakes just before landing. zoomout goes
-    # amount -> 1.0, zoomin goes 1.0 -> amount. The 2x pre-upscale hides
+    # (the whole clip if unset), then holds the landing frame; the cubic ease-out
+    # leaves fast and decelerates into the landing, both ways — that braking is
+    # what reads as a "smooth zoom" rather than a slider. The 2x pre-upscale hides
     # zoompan's integer-pan jitter on small zooms; `s=` brings the frame back to
     # the image's own (even) size afterwards.
     width, height = ffmpeg.probe_resolution(image)
@@ -189,11 +197,24 @@ def _render_zoom(
     if motion_dur is not None:
         span = min(max(int(round(motion_dur * fps)), 1), span)
     progress = f"min(on/{span},1)"
-    x, y = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+    # Aim the punch-in at the subject: the window centre travels in a straight
+    # line between the frame centre (full frame, zoom 1.0) and the focal point
+    # (fully punched in, zoom `amount`), indexed on the zoom's own eased
+    # progress `(zoom-1)/(amount-1)` — so the move goes *straight* at the face
+    # and lands with the zoom, instead of wandering while the clamp releases it.
+    # Pinning the centre on the focal point at every zoom level was the detour:
+    # at zoom 1.0 the window is the whole image and can only sit at 0, so the
+    # centre swung sideways as the clamp let go. Same expression both ways —
+    # `zoomout` runs the zoom amount -> 1.0, so it starts on the face and pulls
+    # back to the full frame. A centred focal point => the old centred move.
+    fx, fy = smartcrop.focal_point(image) or (0.5, 0.5)
+    ease = f"min(1,(zoom-1)/({amount}-1))"
+    x = f"max(0,min(iw-iw/zoom,(0.5+({fx:.4f}-0.5)*{ease})*iw-(iw/zoom/2)))"
+    y = f"max(0,min(ih-ih/zoom,(0.5+({fy:.4f}-0.5)*{ease})*ih-(ih/zoom/2)))"
     if name == "zoomout":
-        zoom = f"1+({amount}-1)*pow(1-{progress},2)"
+        zoom = f"1+({amount}-1)*pow(1-{progress},{_EASE})"
     else:
-        zoom = f"{amount}-({amount}-1)*pow(1-{progress},2)"
+        zoom = f"{amount}-({amount}-1)*pow(1-{progress},{_EASE})"
     ffmpeg.run(
         [
             "-i",

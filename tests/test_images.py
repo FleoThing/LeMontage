@@ -142,21 +142,75 @@ def test_still_zoomout_builds_zoompan(tmp_path, monkeypatch):
     StillBlock().execute_item({"motion": "zoomout", "fps": 30}, item, ctx(tmp_path), "sc")
 
     graph = captured["args"][captured["args"].index("-vf") + 1]
-    assert "zoompan=z='1+(1.1-1)*pow(1-min(on/59,1),2)'" in graph  # 2s * 30fps -> 60 frames
+    # 2s * 30fps -> 60 frames; cubic ease-out, so it brakes into the landing.
+    assert "zoompan=z='1+(1.1-1)*pow(1-min(on/59,1),3)'" in graph
     assert "s=1080x1920" in graph  # odd source width rounded down to even
 
 
-def test_still_zoomin_reverses_the_curve(tmp_path, monkeypatch):
+def test_still_zoomin_decelerates_into_the_landing(tmp_path, monkeypatch):
+    """The "smooth zoom": fast out of the gate, braking onto the target.
+
+    Checked on the numbers rather than the string, because that is what a viewer
+    sees: 1.0 -> `amount`, monotone (no overshoot, no wobble), and each step
+    smaller than the last — a constant-speed ramp would keep them equal.
+    """
+    import math
+
     from lemontage.engine.blocks import still as still_mod
 
     captured = {}
     monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
     monkeypatch.setattr(still_mod.ffmpeg, "probe_resolution", lambda _f: (1080, 1920))
     item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
+    StillBlock().execute_item(
+        {"motion": "zoomin", "fps": 30, "motion_amount": 1.4}, item, ctx(tmp_path), "sc"
+    )
+
+    graph = captured["args"][captured["args"].index("-vf") + 1]
+    expr = graph.split("zoompan=z='")[1].split("':x=")[0]
+    zoom = [eval(expr.replace("on", str(n)), {"pow": math.pow, "min": min}) for n in range(60)]
+    assert zoom[0] == pytest.approx(1.0)
+    assert zoom[-1] == pytest.approx(1.4)
+    assert max(zoom) == pytest.approx(1.4)  # lands on it, never past it
+    steps = [b - a for a, b in zip(zoom, zoom[1:], strict=False)]
+    assert all(s >= 0 for s in steps)  # monotone push-in
+    assert all(b <= a + 1e-9 for a, b in zip(steps, steps[1:], strict=False))  # each step slower
+    assert steps[0] > steps[-2] * 5  # and decisively so, not a near-linear ramp
+
+
+def test_still_zoom_aims_at_the_focal_point(tmp_path, monkeypatch):
+    """A punch-in into the middle of a portrait lands on the torso, not the face —
+    the window travels straight to `focal_point` instead, indexed on the zoom so it
+    arrives with it (a centre pinned on the focal point at every zoom detours)."""
+    from lemontage.engine.blocks import still as still_mod
+
+    captured = {}
+    monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
+    monkeypatch.setattr(still_mod.ffmpeg, "probe_resolution", lambda _f: (1080, 1920))
+    monkeypatch.setattr(still_mod.smartcrop, "focal_point", lambda _i: (0.8, 0.2))
+    item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
     StillBlock().execute_item({"motion": "zoomin", "fps": 30}, item, ctx(tmp_path), "sc")
 
     graph = captured["args"][captured["args"].index("-vf") + 1]
-    assert "zoompan=z='1.1-(1.1-1)*pow(1-min(on/59,1),2)'" in graph  # 1.0 -> amount
+    aim = "min(1,(zoom-1)/(1.1-1))"  # clamped: the bounce must not drag the aim past the face
+    assert f"x='max(0,min(iw-iw/zoom,(0.5+(0.8000-0.5)*{aim})*iw-(iw/zoom/2)))'" in graph
+    assert f"y='max(0,min(ih-ih/zoom,(0.5+(0.2000-0.5)*{aim})*ih-(ih/zoom/2)))'" in graph
+
+
+def test_still_zoom_without_a_focal_point_stays_centred(tmp_path, monkeypatch):
+    """No OpenCV / unreadable image -> the old centred move, not a crash."""
+    from lemontage.engine.blocks import still as still_mod
+
+    captured = {}
+    monkeypatch.setattr(still_mod.ffmpeg, "run", lambda args: captured.setdefault("args", args))
+    monkeypatch.setattr(still_mod.ffmpeg, "probe_resolution", lambda _f: (1080, 1920))
+    monkeypatch.setattr(still_mod.smartcrop, "focal_point", lambda _i: None)
+    item = {"index": 0, "image": str(tmp_path / "a.png"), "duration": 2.0}
+    StillBlock().execute_item({"motion": "zoomout", "fps": 30}, item, ctx(tmp_path), "sc")
+
+    graph = captured["args"][captured["args"].index("-vf") + 1]
+    # == iw/2-(iw/zoom/2): the centred move, unchanged.
+    assert "(0.5+(0.5000-0.5)*min(1,(zoom-1)/(1.1-1)))*iw-(iw/zoom/2)" in graph
 
 
 def test_still_panup_is_a_pure_scroll(tmp_path, monkeypatch):
@@ -200,7 +254,7 @@ def test_still_zoomout_motion_duration_shortens_span(tmp_path, monkeypatch):
     )
 
     graph = captured["args"][captured["args"].index("-vf") + 1]
-    assert "pow(1-min(on/9,1),2)" in graph  # 0.3s * 30fps -> 9-frame pull-back
+    assert "pow(1-min(on/9,1),3)" in graph  # 0.3s * 30fps -> 9-frame pull-back
     assert "d=60" in graph  # ...within a 60-frame clip (holds full frame after)
 
 

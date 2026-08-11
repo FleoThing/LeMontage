@@ -31,8 +31,6 @@ below when it genuinely helps.
 
 - **Perception++ (VSO)**: sharper visual scoring; `scenedetect` / `silero-vad`
   if FFmpeg's shot splitting / dead-air detection prove too coarse.
-- **Smart-crop on the Tasks API**: port face tracking off `mediapipe.solutions`,
-  which 1.x removed — the `[smartcrop]` extra is capped below 1.0 until then.
 - **Full Ken Burns**: horizontal pan / free drift on stills.
 - **Observability**: structured logs, run summaries, cache reporting.
 - **Long videos**: memory-friendly `reverse`, resumable runs.
