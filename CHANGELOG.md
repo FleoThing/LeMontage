@@ -9,6 +9,11 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Changed
 
+- **Captions are CAPITALS by default.** `uppercase` now defaults to `true`: it
+  is the register short-form captions are set in, and every pipeline in the repo
+  was asking for it by hand. A pipeline that says nothing therefore renders in
+  capitals where it used to keep the transcript's casing. `uppercase: false`
+  restores that casing, `case: lower` forces lowercase.
 - **Face detection is now YuNet via OpenCV, and `mediapipe` is gone** from the
   `[smartcrop]` extra (−36 MB, one dependency instead of two). The mediapipe code
   path was in fact dead: it needed `mp.solutions`, which mediapipe removed in
@@ -31,6 +36,33 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Added
 
+- **Caption styles are presets now**: `style1`-`style4`, each also reachable by
+  the name of its animation (`karaoke`, `bounce`, `zoom`, `none`). `style` used
+  to set the outline and the weight and nothing else, so the mode had to be
+  assembled by hand out of `pop`, `pop_on` and the colours, and reading a
+  pipeline meant reading the spec. A preset only fills in what the pipeline
+  leaves unset, so a parameter written by hand still wins, and it never sets
+  anything measured in pixels of the final frame. `tiktok`, `default` and
+  `minimal` keep their old look-only meaning.
+- `captions.pop_on: line`: the pop lands on the **phrase** instead of the active
+  word. The whole line punches in and settles back every time it changes, with
+  no highlight and no per-word event, which is the beat short-form captions are
+  cut to when they are read as rhythm rather than followed word by word.
+  `pop_on: word` (the default) is the existing behaviour.
+- `captions.case: upper | lower`: captions could be forced to CAPITALS
+  (`uppercase: true`) and nothing else, so all-lowercase captions were simply
+  out of reach. `uppercase` stays as the older spelling of `case: upper`.
+- `captions.pop_duration`: how long the pop takes to settle back, previously a
+  fixed 90 ms in the engine. The scale said how far the text moved and nothing
+  said how hard it landed, which is the other half of the beat.
+- `captions.max_words`: cap the words per line, previously a fixed 5. `3` gives
+  the 2-3 word phrasing `pop_on: line` needs, without having to guess a
+  `max_chars` that happens to break there.
+- `captions.color` and `captions.outline`: caption text colour (white by
+  default) and black contour thickness. Both `color` and `highlight` now take a
+  colour name or `#RRGGBB`, like every other block, alongside the raw ASS
+  `&HBBGGRR` form — which is now checked before it reaches the subtitle file
+  instead of being pasted in as-is.
 - Text placement: `overlay.position` and `export.title_position` now reach all
   **nine** frame anchors (`top-left`, `bottom-right`, …), with `margin_x` for
   the distance to the side edge. Text was locked to the centre column, so a

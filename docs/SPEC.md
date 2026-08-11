@@ -368,17 +368,43 @@ segment-level cues.
 | `segments` | ref | — | Segment timing (`steps.<stt>.segments`). Used if `words` is absent. |
 | `from` | channel | — | Channel of clips to caption. Reads the exported `file` if the step runs **after** `export`, else the cut `clip` (see note). |
 | `output` | path | — | Final file path (supports `{{ name }}`/`{{ part }}`). Set it when `captions` is the last step so the captioned clip lands at a known path. |
-| `style` | enum | `tiktok` | `default` \| `tiktok` \| `minimal` (outline/weight). |
+| `style` | enum | `style1` | A preset: `style1`–`style4`, or its name (see below). `tiktok`/`default`/`minimal` are the older look-only names. |
 | `font` | string | `font1` | Caption font: a preset `font1`–`font5` or an installed family. |
 | `position` | enum | `bottom` | `top` \| `center` \| `bottom`. |
 | `max_chars` | int | `24` | Max characters per line (lines stay short for word-by-word reading). |
+| `max_words` | int | `5` | Max words per line. `3` gives the 2-3 word phrasing `pop_on: line` is made for. |
 | `caption_size` | int | `100` | Font size in pixels of the clip. |
 | `caption_margin` | int | ~5% of height | Distance from the edge (per `position`). |
-| `highlight` | ASS colour | yellow | Active-word colour, e.g. `&H0000FFFF` (yellow), `&H0000FF00` (green). |
-| `uppercase` | bool | `false` | Draw every line in CAPITALS. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
-| `pop` | bool \| int | `false` | Scale the active word up as it is spoken, settling back over 90ms — the beat that makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`–`200`). |
+| `color` | colour | white | Text colour: a name (`white`), `#RRGGBB`, or a raw ASS `&HBBGGRR`. |
+| `highlight` | colour | yellow | Active-word colour (`pop_on: word` and karaoke). Same forms as `color`. |
+| `outline` | int | per `style` | Black contour thickness in px (`tiktok` = 3). Raise it for a heavier border. |
+| `case` | enum | `upper` | `upper` or `lower`. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
+| `uppercase` | bool | `true` | Older spelling of `case: upper`. `false` keeps the transcript's own casing (which is not the same as `case: lower`). |
+| `pop` | bool \| int | `false` | Scale up on the beat, settling back over 90ms — what makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`-`200`). |
+| `pop_duration` | duration | `0.09s` | How long the pop takes to settle back to 100%. Shorter lands harder. |
+| `pop_on` | enum | `word` | What `pop` scales: `word` (the active word, highlighted) or `line` (the whole phrase, once, when it changes). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |
+
+**Styles.** `style` is a preset, named twice: `style1`–`style4` for reading a
+pipeline without knowing the vocabulary, and a word for the animation itself.
+Both spellings are the same preset.
+
+| `style` | Also | What it does | Sets |
+|---|---|---|---|
+| `style1` | `karaoke` | The spoken word recolours. Nothing moves. | outline 3, bold |
+| `style2` | `bounce` | The spoken word recolours **and** scales. | `pop: 115` |
+| `style3` | `zoom` | The whole phrase scales, once, on every change. | `pop: 130`, `pop_on: line`, `color: white`, `outline` 6, `max_words: 3`, `max_chars: 28` |
+| `style4` | `none` | A plain subtitle: no animation, no capitals. | `uppercase: false`, outline 1 |
+
+A preset only fills in what the pipeline leaves unset, so any parameter written
+by hand wins: `style: zoom` with `pop: 160` is the phrase pop at 160%. Nothing a
+preset sets is measured in pixels of the final frame, because `caption_size` and
+`caption_margin` depend on the export resolution and a preset cannot know it.
+
+`tiktok`, `default` and `minimal` are the names `style` accepted before the
+presets existed. They set the outline and the weight and nothing else, so a
+pipeline naming one of them renders exactly as it did.
 
 **Word pop.** `highlight` recolours the spoken word; `pop` also *scales* it.
 The two together are the short-form caption look:
@@ -387,7 +413,6 @@ The two together are the short-form caption look:
 - captions:
     from: clip_channel
     words: "{{ steps.transcript.words }}"
-    uppercase: true
     pop: true              # or a percent: pop: 130
     max_chars: 12          # 2 words a line, so each pop lands on its own
 ```
@@ -395,6 +420,27 @@ The two together are the short-form caption look:
 Under the hood a popped line is emitted once **per word** instead of as one
 karaoke line (the karaoke tag can only change colour). Each event still draws the
 whole line, so the wrapping never moves — only the active word changes.
+
+**Phrase pop.** `pop_on: line` moves the beat from the word to the line: no
+highlight, no per-word event, the whole phrase punches in at 115% and settles
+back every time it changes. It reads as a rhythm rather than a read-along, so the
+phrases have to be short:
+
+```yaml
+- captions:
+    from: clip_channel
+    words: "{{ steps.transcript.words }}"
+    case: lower            # or upper, the short-form default
+    pop: true
+    pop_on: line
+    max_words: 3           # 2-3 words a phrase
+    # `max_chars` is the *other* cap and the tighter one wins: leave it wide
+    # enough here, or a long word breaks the phrase and a lone word lands on
+    # screen, which is exactly the beat this mode is trying to keep regular.
+    max_chars: 28
+    color: white           # default; any name or #RRGGBB
+    outline: 6             # heavy black border, readable over anything
+```
 
 **Order matters — caption before *or* after reframing.** `caption_size`/`caption_margin`
 are relative to the **height of the clip being captioned**. Placing `captions`

@@ -7,23 +7,30 @@ CapCut look. Without word timing it falls back to segment-level SRT cues.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from .. import ffmpeg, fonts
 from ..assformat import escape_text, timestamp
 from ..context import RunContext
-from ..timecode import to_timecode
+from ..timecode import parse_seconds, to_timecode
 from .base import Block, BlockResult, ItemResult
-from .export import _output_path
+from .export import _ass_color, _output_path
 
 # ASS Alignment is numpad-style: 2=bottom-centre, 5=middle, 8=top.
 _POSITION = {"bottom": 2, "center": 5, "top": 8}
 
-# Per-style (outline weight, bold). Colours/size are handled by the karaoke path.
+# Per-style (outline weight, bold). `outline` overrides the first of the two.
 _STYLES = {
-    "default": (1, 0),
+    "style1": (3, -1),
+    "style2": (3, -1),
+    "style3": (6, -1),
+    "style4": (1, 0),
+    # The three names that existed before the presets. Look only, no mode: a
+    # pipeline that names one of them renders exactly as it always did.
     "tiktok": (3, -1),
+    "default": (1, 0),
     "minimal": (1, 0),
 }
 
@@ -36,6 +43,36 @@ _POP_MS = 90  # how long the pop takes to settle back to 100%
 # ASS colours are &HAABBGGRR. Default: spoken word yellow, upcoming word white.
 _HIGHLIGHT = "&H0000FFFF"
 _BASE = "&H00FFFFFF"
+_ASS_COLOUR = re.compile(r"&H[0-9A-Fa-f]{6,8}&?")
+
+# What each numbered style *is*, beyond its outline. Merged in as defaults, so
+# anything the pipeline writes by hand always wins. Nothing here is measured in
+# pixels of the final frame: `caption_size` and `caption_margin` depend on the
+# export resolution, and a preset cannot know it.
+_PRESETS: dict[str, dict[str, Any]] = {
+    "style1": {},  # karaoke: the spoken word recolours, nothing moves
+    "style2": {"pop": _DEFAULT_POP},  # the spoken word recolours *and* scales
+    "style3": {  # the whole phrase scales, once, on every change
+        "pop": 130,
+        "pop_on": "line",
+        "color": "white",
+        "max_words": 3,
+        "max_chars": 28,
+    },
+    "style4": {"uppercase": False},  # a plain subtitle: no effect, no capitals
+}
+
+# Spelled-out names for the same four, in the vocabulary CapCut uses for its
+# caption animations. Both spellings resolve to the same preset. `pop` is not
+# among them on purpose: it is already a parameter, and `style: pop` next to
+# `pop: 130` would be the same word meaning two things in one block.
+_STYLE_NAMES = {
+    "karaoke": "style1",
+    "bounce": "style2",
+    "zoom": "style3",
+    "none": "style4",
+}
+CAPTION_STYLES = frozenset(_STYLES) | frozenset(_STYLE_NAMES)
 
 _KARAOKE_ASS = (
     """\
@@ -96,6 +133,7 @@ class CaptionsBlock(Block):
         return ItemResult(item={key: str(out)}, outputs={"clips": str(out)})
 
     def _caption(self, media, params, ctx, name, offset, dest: Path | None = None) -> Path | None:
+        params = _with_style(params)
         lines = _build_lines(params, offset)
         if not lines:
             return None
@@ -107,35 +145,70 @@ class CaptionsBlock(Block):
         return out
 
 
+def _style_key(params: dict[str, Any]) -> str:
+    """The canonical name of the requested style (`style1`…`style4`)."""
+    key = str(params.get("style", "style1")).strip().lower()
+    return _STYLE_NAMES.get(key, key)
+
+
+def _with_style(params: dict[str, Any]) -> dict[str, Any]:
+    """``params`` with the style's defaults filled in for whatever it left unset.
+
+    The preset never overwrites: a pipeline that names a style *and* sets
+    `pop_duration` gets the style with its own timing, not an argument about it.
+    """
+    preset = _PRESETS.get(_style_key(params))
+    if not preset:
+        return params
+    return {**preset, **params}
+
+
 def _build_lines(params: dict[str, Any], offset: float) -> list[dict[str, Any]]:
     """Group words (preferred) or segments into short, clip-local caption lines."""
     words = params.get("words")
     if isinstance(words, list) and words:
         max_chars = int(params.get("max_chars", _DEFAULT_MAX_CHARS))
-        lines = _lines_from_words(words, offset, max_chars)
+        max_words = int(params.get("max_words", _MAX_WORDS_PER_LINE))
+        lines = _lines_from_words(words, offset, max_chars, max_words)
     else:
         segments = params.get("segments")
         if not isinstance(segments, list):
             raise ValueError("captions: provide 'words' (from stt) or 'segments'")
         lines = _lines_from_segments(segments, offset)
-    return _uppercased(lines) if params.get("uppercase") else lines
+    return _recased(lines, _case(params))
 
 
-def _uppercased(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Upper-case every caption line (and its words).
+def _case(params: dict[str, Any]) -> str | None:
+    """The requested casing: ``upper``, ``lower``, or None to leave it alone.
+
+    CAPITALS are the default: it is what short-form captions are set in, and it
+    was what every pipeline had to ask for by hand. ``uppercase: false`` opts out
+    and keeps the transcript's own casing; ``case: lower`` forces the other way.
+    """
+    case = params.get("case")
+    if case is not None:
+        return str(case).lower()
+    return "upper" if params.get("uppercase", True) else None
+
+
+def _recased(lines: list[dict[str, Any]], case: str | None) -> list[dict[str, Any]]:
+    """Re-case every caption line (and its words).
 
     Done on the text, not with a renderer flag: the sidecar `.srt` gets the same
     treatment, and `max_chars` still counts the characters that are drawn.
     """
+    if case not in ("upper", "lower"):
+        return lines
+    fold = str.upper if case == "upper" else str.lower
     for line in lines:
-        line["text"] = line["text"].upper()
+        line["text"] = fold(line["text"])
         for word in line["words"]:
-            word["text"] = word["text"].upper()
+            word["text"] = fold(word["text"])
     return lines
 
 
 def _lines_from_words(
-    words: list[dict[str, Any]], offset: float, max_chars: int
+    words: list[dict[str, Any]], offset: float, max_chars: int, max_words: int = _MAX_WORDS_PER_LINE
 ) -> list[dict[str, Any]]:
     lines: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
@@ -149,7 +222,7 @@ def _lines_from_words(
         if not text:
             continue
         word = {"start": max(0.0, start), "end": end, "text": text}
-        too_long = length + len(text) + 1 > max_chars or len(current) >= _MAX_WORDS_PER_LINE
+        too_long = length + len(text) + 1 > max_chars or len(current) >= max_words
         big_gap = current and word["start"] - current[-1]["end"] > _LINE_GAP
         if current and (too_long or big_gap):
             lines.append(_line(current))
@@ -200,17 +273,17 @@ def _safe_margin_h(params: dict[str, Any], width: int, height: int) -> int:
 
 def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
     width, height = ffmpeg.probe_resolution(media)
-    outline, bold = _STYLES.get(params.get("style", "tiktok"), _STYLES["tiktok"])
+    outline, bold = _STYLES.get(_style_key(params), _STYLES["style1"])
+    outline = params.get("outline", outline)
     size = int(params.get("caption_size") or 100)
     align = _POSITION.get(params.get("position", "bottom"), 2)
     marginv = int(params.get("caption_margin", round(height * 0.05)))
     marginh = _safe_margin_h(params, width, height)
-    hi = params.get("highlight") or _HIGHLIGHT
+    hi = _colour(params.get("highlight"), "captions.highlight", _HIGHLIGHT)
+    base = _colour(params.get("color"), "captions.color", _BASE)
     font = fonts.family(params.get("font"))
 
-    events = "\n".join(
-        event for line in lines for event in _events(line, params, hi=hi, base=_BASE)
-    )
+    events = "\n".join(event for line in lines for event in _events(line, params, hi=hi, base=base))
     path.write_text(
         _KARAOKE_ASS.format(
             w=width,
@@ -218,7 +291,7 @@ def _write_karaoke_ass(lines, params, media, path: Path) -> Path:
             font=font,
             size=size,
             hi=hi,
-            base=_BASE,
+            base=base,
             bold=bold,
             outline=outline,
             align=align,
@@ -239,10 +312,19 @@ def _events(line: dict[str, Any], params: dict[str, Any], hi: str, base: str) ->
     colour, and the word has to *scale* — the beat that makes short-form captions
     read as spoken rather than displayed. Each event draws the whole line, so the
     wrapping never changes; only the active word is coloured and briefly enlarged.
+
+    With `pop_on: line` the *whole line* pops instead, once, when it appears: no
+    active word, no highlight, one flat-coloured phrase that punches in on every
+    change. Pair it with `max_words` to get the 2-3 word phrasing it is made for.
     """
     pop = _pop_scale(params)
     if pop is None or not line["words"]:
         return [_dialogue(line)]
+    ms = _pop_ms(params)
+    if str(params.get("pop_on", "word")).lower() == "line":
+        text = _styled(line["text"], base, pop, ms)
+        start, end = timestamp(line["start"]), timestamp(line["end"])
+        return [f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{text}"]
     events = []
     words = line["words"]
     for i, w in enumerate(words):
@@ -251,14 +333,14 @@ def _events(line: dict[str, Any], params: dict[str, Any], hi: str, base: str) ->
         if end <= start:
             continue
         text = " ".join(
-            _styled(word["text"], hi if j == i else base, pop if j == i else None)
+            _styled(word["text"], hi if j == i else base, pop if j == i else None, ms)
             for j, word in enumerate(words)
         )
         events.append(f"Dialogue: 0,{timestamp(start)},{timestamp(end)},Cap,,0,0,0,,{text}")
     return events or [_dialogue(line)]
 
 
-def _styled(text: str, colour: str, pop: int | None) -> str:
+def _styled(text: str, colour: str, pop: int | None, ms: int = _POP_MS) -> str:
     """One word with its colour, and — when it is the active one — a scale pop.
 
     Every word carries an explicit colour tag rather than relying on `\\r`: the
@@ -267,10 +349,36 @@ def _styled(text: str, colour: str, pop: int | None) -> str:
     """
     if pop is None:
         return f"{{\\c{colour}\\fscx100\\fscy100}}{escape_text(text)}"
-    return (
-        f"{{\\c{colour}\\fscx{pop}\\fscy{pop}"
-        f"\\t(0,{_POP_MS},\\fscx100\\fscy100)}}{escape_text(text)}"
-    )
+    return f"{{\\c{colour}\\fscx{pop}\\fscy{pop}\\t(0,{ms},\\fscx100\\fscy100)}}{escape_text(text)}"
+
+
+def _pop_ms(params: dict[str, Any]) -> int:
+    """How long the pop takes to settle back, in milliseconds.
+
+    Shorter is punchier: the scale is *what* moves, this is how hard it lands.
+    """
+    value = params.get("pop_duration")
+    if value is None:
+        return _POP_MS
+    return max(1, round(parse_seconds(value) * 1000))
+
+
+def _colour(value: object, field: str, default: str) -> str:
+    """A caption colour: a name / ``#RRGGBB``, or a raw ASS ``&HAABBGGRR``.
+
+    Colours land inside ASS override blocks, so this is a trust boundary: the raw
+    form is kept (it is what `highlight` has always taken) but only when it really
+    is one, and anything else goes through the same strict parser as every other
+    block's colour.
+    """
+    if not value:
+        return default
+    text = str(value).strip()
+    if text[:2].upper() == "&H":
+        if not _ASS_COLOUR.fullmatch(text):
+            raise ValueError(f"invalid {field} '{value}' (use #RRGGBB, a name, or &HBBGGRR)")
+        return text
+    return _ass_color(text, field)
 
 
 def _pop_scale(params: dict[str, Any]) -> int | None:
