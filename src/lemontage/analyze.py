@@ -14,6 +14,7 @@ visual quality (motion/sharpness) is a later phase behind an ``[analyze]`` extra
 from __future__ import annotations
 
 import itertools
+from concurrent.futures import ThreadPoolExecutor
 
 from .engine import ffmpeg
 from .engine.blocks.detect_clips import (
@@ -37,7 +38,7 @@ def analyze_video(
     duration = ffmpeg.probe_duration(path)
     audio = ffmpeg.has_audio(path)
 
-    loud = _loudness_timeline(path) if audio else []
+    loud, spans, dead_air = _analysis_passes(path, duration, audio)
     shots = [
         {
             "id": i + 1,
@@ -45,7 +46,7 @@ def analyze_video(
             "end": round(end, 3),
             "loudness_db": _avg_loudness(loud, start, end),
         }
-        for i, (start, end) in enumerate(_spans_from_scene_cuts(path, duration))
+        for i, (start, end) in enumerate(spans)
     ]
     if visual:
         _visual_scores(path, shots)
@@ -58,12 +59,39 @@ def analyze_video(
     }
 
     if audio:
-        speech: dict = {"dead_air": _dead_air(path, duration)}
+        speech: dict = {"dead_air": dead_air}
         if transcribe:
             speech["words"] = _transcribe_words(path, model, lang)
         manifest["speech"] = speech
 
     return manifest
+
+
+def _analysis_passes(path: str, duration: float, audio: bool):
+    """Run the three ffmpeg analysis passes at once, not one after another.
+
+    Scene cuts, loudness and silence are three independent full reads of the same
+    file: nothing any of them produces feeds another. Run in sequence they were
+    three separate decodes of the whole video end to end; overlapped, the two
+    audio passes disappear into the shadow of the video one, which is the
+    expensive read.
+
+    Transcription deliberately stays outside this. It is not an ffmpeg pass, it
+    holds a Whisper model in memory, and it already saturates what it is given.
+
+    Returns ``(loudness timeline, shot spans, dead-air spans)``, exactly the values
+    the sequential version produced.
+    """
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        cuts = pool.submit(_spans_from_scene_cuts, path, duration)
+        # Both audio passes need an audio track to read.
+        loudness = pool.submit(_loudness_timeline, path) if audio else None
+        silence = pool.submit(_dead_air, path, duration) if audio else None
+        return (
+            loudness.result() if loudness else [],
+            cuts.result(),
+            silence.result() if silence else [],
+        )
 
 
 def _avg_loudness(timeline: list[tuple[float, float]], start: float, end: float) -> float | None:

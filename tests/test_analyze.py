@@ -149,3 +149,71 @@ def test_format_packed_renders_ranges():
     manifest = {"duration": 3.0, "speech": {"words": [w(1.0, 0.5, "hi"), w(1.4, 0.2, "there")]}}
     out = analyze.format_packed([("take1", manifest)])
     assert "[0001.00-0001.60] hi there" in out
+
+
+# -- the three ffmpeg passes overlap (analyze._analysis_passes) ----------------
+
+
+def test_analysis_passes_run_concurrently(monkeypatch):
+    """Scene cuts, loudness and silence are independent: they must not queue."""
+    import threading
+    import time
+
+    running = set()
+    peak = 0
+    lock = threading.Lock()
+
+    def slow_capture(args):
+        nonlocal peak
+        with lock:
+            running.add(threading.get_ident())
+            peak = max(peak, len(running))
+        time.sleep(0.15)
+        with lock:
+            running.discard(threading.get_ident())
+        return fake_capture(args)
+
+    patch_ffmpeg(monkeypatch)
+    monkeypatch.setattr(analyze.ffmpeg, "run_capture", slow_capture)
+    monkeypatch.setattr(analyze, "_transcribe_words", lambda *a: [])
+
+    start = time.perf_counter()
+    analyze.analyze_video("v.mp4", transcribe=False)
+    elapsed = time.perf_counter() - start
+
+    assert peak == 3, f"expected all three passes in flight at once, saw {peak}"
+    # Three 0.15s passes: overlapped is ~0.15s, sequential would be ~0.45s.
+    assert elapsed < 0.40, f"passes did not overlap ({elapsed:.2f}s)"
+
+
+def test_analysis_passes_skip_audio_work_on_a_silent_file(monkeypatch):
+    """No audio track means no loudness and no silencedetect pass at all."""
+    seen = []
+
+    def recording_capture(args):
+        seen.append(" ".join(args))
+        return fake_capture(args)
+
+    patch_ffmpeg(monkeypatch, audio=False)
+    monkeypatch.setattr(analyze.ffmpeg, "run_capture", recording_capture)
+
+    manifest = analyze.analyze_video("v.mp4", transcribe=False)
+
+    assert "speech" not in manifest
+    assert not any("astats" in call or "silencedetect" in call for call in seen), seen
+    assert any("scene" in call for call in seen), seen
+
+
+def test_a_failing_pass_still_raises(monkeypatch):
+    """A pass that blows up in a worker thread must not be swallowed."""
+
+    def exploding_capture(args):
+        if "scene" in " ".join(args):
+            raise RuntimeError("ffmpeg exploded")
+        return fake_capture(args)
+
+    patch_ffmpeg(monkeypatch)
+    monkeypatch.setattr(analyze.ffmpeg, "run_capture", exploding_capture)
+
+    with pytest.raises(RuntimeError, match="ffmpeg exploded"):
+        analyze.analyze_video("v.mp4", transcribe=False)

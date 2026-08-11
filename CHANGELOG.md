@@ -18,6 +18,12 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Changed
 
+- **`lemontage analyze` is 18% faster**: its three ffmpeg passes (scene cuts,
+  loudness, silence) are independent full reads of the same file and now run at
+  once instead of one after another. On a 300s 1080p source, 44.18s → 36.38s, with
+  a byte-identical manifest. The overlap is complete — what is left is the
+  scene-detection pass alone, which is the expensive read. Transcription is
+  untouched: it is not an ffmpeg pass and already uses what it is given.
 - **The channel worker pool grows with the machine**, instead of stopping at 8.
   It is now `min(clips, max(8, os.cpu_count()))`, so a 32-core box no longer
   renders 16 clips 8 at a time; on 8 cores or fewer nothing changes at all. The
