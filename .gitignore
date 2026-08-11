@@ -20,6 +20,10 @@ models/
 *.mkv
 *.mp3
 *.wav
+# yt-dlp writes these two, and their absence here is how a 2.5 MB download
+# reached main (see the commit that added this line).
+*.webm
+*.m4a
 !docs/**
 !examples/**
 
