@@ -40,6 +40,13 @@ may still introduce breaking changes, and those changes must be called out here.
 - `export`: `normalize_audio: true` aborted the whole export on ffmpeg 4.x
   (`Cannot select channel layout`) — `loudnorm` renegotiates the filter link when
   it flushes and the following `aresample` did not pin a layout.
+### Removed
+
+- The GitHub Pages documentation site and its `Docs site` workflow. It rendered
+  the Markdown docs to HTML on every docs push, which meant a published site and
+  a `github-pages` environment to keep taking down. The docs are readable as
+  Markdown on GitHub and as a man page locally (`man lemontage`); the HTML copy
+  was a third place for the same text to drift.
 
 ## [0.7.0] - 2026-08-10
 
