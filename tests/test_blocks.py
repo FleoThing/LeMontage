@@ -661,6 +661,7 @@ def test_export_render_burns_author_label(tmp_path, monkeypatch):
         Path(args[-1]).write_bytes(b"v")
 
     monkeypatch.setattr(ffmpeg, "run", fake_run)
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     monkeypatch.setattr(fonts, "ensure", lambda _f: None)
     ExportBlock().execute(
         {"format": "vertical", "author": "@chaine", "output": str(tmp_path / "o.mp4")},
@@ -876,6 +877,7 @@ def test_render_cover_and_mute_reach_ffmpeg(tmp_path, monkeypatch):
 def test_cover_strips_source_letterbox_bars(tmp_path, monkeypatch):
     calls = {}
     monkeypatch.setattr(ffmpeg, "run", lambda args: calls.setdefault("args", args))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     # Source has baked-in bars: real content is 1920x800 at y=140.
     monkeypatch.setattr(ffmpeg, "detect_content_crop", lambda _m: "1920:800:0:140")
     ExportBlock().execute(
@@ -897,6 +899,7 @@ def test_cover_trim_bars_can_be_disabled(tmp_path, monkeypatch):
         return "1920:800:0:140"
 
     monkeypatch.setattr(ffmpeg, "run", lambda args: None)
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     monkeypatch.setattr(ffmpeg, "detect_content_crop", fake_detect)
     params = {
         "format": "vertical",
@@ -1194,6 +1197,7 @@ def test_export_renders_and_lists_file(tmp_path, monkeypatch):
         Path(args[-1]).write_bytes(b"v")
 
     monkeypatch.setattr(ffmpeg, "run", fake_run)
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     out = (
         ExportBlock()
         .execute({"format": "vertical", "output": str(tmp_path / "o.mp4")}, ctx(tmp_path), "exp")

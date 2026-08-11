@@ -98,6 +98,7 @@ def test_tracked_face_prefers_the_locked_subject_over_the_largest():
 def test_export_smart_crop_builds_subject_chain(tmp_path, monkeypatch):
     args = {}
     monkeypatch.setattr(ffmpeg, "run", lambda a: args.setdefault("a", a))
+    monkeypatch.setattr(ffmpeg, "has_audio", lambda _m: True)  # no ffmpeg binary in CI
     monkeypatch.setattr(
         smartcrop,
         "crop_filters",
