@@ -110,3 +110,42 @@ def test_visual_raises_when_no_frames_decode(monkeypatch):
     monkeypatch.setattr(analyze, "_sample_gray", lambda *a, **k: [])  # nothing decodes
     with pytest.raises(RuntimeError, match="decoded no frames"):
         analyze._visual_scores("av1.mp4", [{"start": 0.0, "end": 1.0}])
+
+
+# -------- Packed phrase view -------------------------------------------------
+
+
+def w(t, d, text):
+    return {"t": t, "d": d, "w": text}
+
+
+def test_pack_phrases_breaks_on_long_silence():
+    words = [w(0.0, 0.4, "one"), w(0.5, 0.4, "two"), w(2.0, 0.4, "three")]
+    phrases = analyze.pack_phrases(words)
+
+    assert [p["text"] for p in phrases] == ["one two", "three"]
+    # Boundaries stay on word edges so they can be replayed as agent spans.
+    assert phrases[0] == {"start": 0.0, "end": 0.9, "text": "one two"}
+    assert phrases[1]["start"] == 2.0
+
+
+def test_pack_phrases_keeps_words_under_the_gap_together():
+    # 0.49s gap — just under the 0.5s threshold, must not split.
+    words = [w(0.0, 0.1, "a"), w(0.59, 0.1, "b")]
+    assert len(analyze.pack_phrases(words)) == 1
+
+
+def test_pack_phrases_handles_no_speech():
+    assert analyze.pack_phrases([]) == []
+
+
+def test_format_packed_reports_silent_track():
+    out = analyze.format_packed([("clip", {"duration": 12.0, "speech": {"words": []}})])
+    assert "## clip  (12.0s, 0 phrases)" in out
+    assert "no speech" in out
+
+
+def test_format_packed_renders_ranges():
+    manifest = {"duration": 3.0, "speech": {"words": [w(1.0, 0.5, "hi"), w(1.4, 0.2, "there")]}}
+    out = analyze.format_packed([("take1", manifest)])
+    assert "[0001.00-0001.60] hi there" in out

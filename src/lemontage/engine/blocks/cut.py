@@ -41,20 +41,34 @@ class CutBlock(Block):
 def _cut_segment(media: str, start: float, end: float, out) -> None:
     duration = max(0.0, end - start)
     # Seek before -i for speed; use -t (duration) to avoid -to ambiguity with input seeking.
-    ffmpeg.run(
-        [
-            "-ss",
-            f"{start:.3f}",
-            "-i",
-            str(media),
-            "-t",
-            f"{duration:.3f}",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-c:a",
-            "aac",
-            str(out),
-        ]
-    )
+    args = [
+        "-ss",
+        f"{start:.3f}",
+        "-i",
+        str(media),
+        "-t",
+        f"{duration:.3f}",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-c:a",
+        "aac",
+    ]
+    if ffmpeg.has_audio(media):
+        args += ["-af", _edge_fades(duration)]
+    ffmpeg.run(args + [str(out)])
+
+
+# A hard splice between two segments leaves a step discontinuity in the
+# waveform — audible as a click at every join. `concat` only crossfades when
+# `transitions:` is set, so plain cuts need the fade baked in here.
+FADE = 0.03
+
+
+def _edge_fades(duration: float) -> str:
+    """Short fade in/out so segment boundaries don't click once concatenated."""
+    fade = min(FADE, duration / 2) if duration > 0 else 0.0
+    if fade <= 0:
+        return "anull"
+    return f"afade=t=in:st=0:d={fade:.3f},afade=t=out:st={duration - fade:.3f}:d={fade:.3f}"
