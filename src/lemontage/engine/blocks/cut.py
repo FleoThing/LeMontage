@@ -71,7 +71,4 @@ def _edge_fades(duration: float) -> str:
     fade = min(FADE, duration / 2) if duration > 0 else 0.0
     if fade <= 0:
         return "anull"
-    return (
-        f"afade=t=in:st=0:d={fade:.3f},"
-        f"afade=t=out:st={duration - fade:.3f}:d={fade:.3f}"
-    )
+    return f"afade=t=in:st=0:d={fade:.3f},afade=t=out:st={duration - fade:.3f}:d={fade:.3f}"
