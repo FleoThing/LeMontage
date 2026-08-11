@@ -392,6 +392,12 @@ def test_pop_emits_one_event_per_word_with_a_scale_transform():
     assert "\\k" not in events[0]
 
 
+def test_pop_duration_shortens_the_settle():
+    params = {"pop": True, "pop_on": "line", "pop_duration": "0.05s"}
+    events = _events(_pop_line(), params, hi="&H1", base="&H2")
+    assert r"\t(0,50,\fscx100\fscy100)" in events[0]
+
+
 def test_pop_scale_accepts_a_percent():
     events = _events(_pop_line(), {"pop": 130}, hi="&H1", base="&H2")
     assert r"\fscx130\fscy130" in events[0]

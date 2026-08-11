@@ -381,6 +381,7 @@ segment-level cues.
 | `case` | enum | `upper` | `upper` or `lower`. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
 | `uppercase` | bool | `true` | Older spelling of `case: upper`. `false` keeps the transcript's own casing (which is not the same as `case: lower`). |
 | `pop` | bool \| int | `false` | Scale up on the beat, settling back over 90ms — what makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`-`200`). |
+| `pop_duration` | duration | `0.09s` | How long the pop takes to settle back to 100%. Shorter lands harder. |
 | `pop_on` | enum | `word` | What `pop` scales: `word` (the active word, highlighted) or `line` (the whole phrase, once, when it changes). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
 | `safe_area` | bool | `true` | On a landscape source, keep every line inside the **centre 9:16 column** (long lines wrap), so a later `export format: vertical, fit: cover` never crops the text off-frame. Set `false` when the final export stays horizontal. |

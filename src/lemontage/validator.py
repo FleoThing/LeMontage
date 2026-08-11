@@ -286,6 +286,13 @@ def _check_block_params(
                 errors.append(
                     f"{label}: captions.pop must be a boolean or a scale percent 100..200"
                 )
+        pop_duration = params.get("pop_duration")
+        if pop_duration is not None:
+            try:
+                if parse_seconds(pop_duration) <= 0:
+                    errors.append(f"{label}: captions.pop_duration must be > 0")
+            except (ValueError, TypeError):
+                errors.append(f"{label}: captions.pop_duration must be a duration (e.g. 0.06s)")
         pop_on = params.get("pop_on")
         if pop_on is not None and (not isinstance(pop_on, str) or pop_on.lower() not in _POP_ON):
             errors.append(f"{label}: captions.pop_on must be 'word' or 'line'")

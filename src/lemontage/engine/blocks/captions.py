@@ -14,7 +14,7 @@ from typing import Any
 from .. import ffmpeg, fonts
 from ..assformat import escape_text, timestamp
 from ..context import RunContext
-from ..timecode import to_timecode
+from ..timecode import parse_seconds, to_timecode
 from .base import Block, BlockResult, ItemResult
 from .export import _ass_color, _output_path
 
@@ -266,8 +266,9 @@ def _events(line: dict[str, Any], params: dict[str, Any], hi: str, base: str) ->
     pop = _pop_scale(params)
     if pop is None or not line["words"]:
         return [_dialogue(line)]
+    ms = _pop_ms(params)
     if str(params.get("pop_on", "word")).lower() == "line":
-        text = _styled(line["text"], base, pop)
+        text = _styled(line["text"], base, pop, ms)
         start, end = timestamp(line["start"]), timestamp(line["end"])
         return [f"Dialogue: 0,{start},{end},Cap,,0,0,0,,{text}"]
     events = []
@@ -278,14 +279,14 @@ def _events(line: dict[str, Any], params: dict[str, Any], hi: str, base: str) ->
         if end <= start:
             continue
         text = " ".join(
-            _styled(word["text"], hi if j == i else base, pop if j == i else None)
+            _styled(word["text"], hi if j == i else base, pop if j == i else None, ms)
             for j, word in enumerate(words)
         )
         events.append(f"Dialogue: 0,{timestamp(start)},{timestamp(end)},Cap,,0,0,0,,{text}")
     return events or [_dialogue(line)]
 
 
-def _styled(text: str, colour: str, pop: int | None) -> str:
+def _styled(text: str, colour: str, pop: int | None, ms: int = _POP_MS) -> str:
     """One word with its colour, and — when it is the active one — a scale pop.
 
     Every word carries an explicit colour tag rather than relying on `\\r`: the
@@ -294,10 +295,18 @@ def _styled(text: str, colour: str, pop: int | None) -> str:
     """
     if pop is None:
         return f"{{\\c{colour}\\fscx100\\fscy100}}{escape_text(text)}"
-    return (
-        f"{{\\c{colour}\\fscx{pop}\\fscy{pop}"
-        f"\\t(0,{_POP_MS},\\fscx100\\fscy100)}}{escape_text(text)}"
-    )
+    return f"{{\\c{colour}\\fscx{pop}\\fscy{pop}\\t(0,{ms},\\fscx100\\fscy100)}}{escape_text(text)}"
+
+
+def _pop_ms(params: dict[str, Any]) -> int:
+    """How long the pop takes to settle back, in milliseconds.
+
+    Shorter is punchier: the scale is *what* moves, this is how hard it lands.
+    """
+    value = params.get("pop_duration")
+    if value is None:
+        return _POP_MS
+    return max(1, round(parse_seconds(value) * 1000))
 
 
 def _colour(value: object, field: str, default: str) -> str:

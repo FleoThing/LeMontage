@@ -44,6 +44,9 @@ may still introduce breaking changes, and those changes must be called out here.
 - `captions.case: upper | lower`: captions could be forced to CAPITALS
   (`uppercase: true`) and nothing else, so all-lowercase captions were simply
   out of reach. `uppercase` stays as the older spelling of `case: upper`.
+- `captions.pop_duration`: how long the pop takes to settle back, previously a
+  fixed 90 ms in the engine. The scale said how far the text moved and nothing
+  said how hard it landed, which is the other half of the beat.
 - `captions.max_words`: cap the words per line, previously a fixed 5. `3` gives
   the 2-3 word phrasing `pop_on: line` needs, without having to guess a
   `max_chars` that happens to break there.
