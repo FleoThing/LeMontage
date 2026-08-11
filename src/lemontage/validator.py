@@ -17,6 +17,7 @@ from . import spec
 from .engine.timecode import parse_seconds
 
 _POP_ON = {"word", "line"}
+_CASES = {"upper", "lower"}
 
 
 def validate_file(path: str | Path) -> list[str]:
@@ -276,6 +277,9 @@ def _check_block_params(
         uppercase = params.get("uppercase")
         if uppercase is not None and not isinstance(uppercase, bool):
             errors.append(f"{label}: captions.uppercase must be a boolean")
+        case = params.get("case")
+        if case is not None and (not isinstance(case, str) or case.lower() not in _CASES):
+            errors.append(f"{label}: captions.case must be 'upper' or 'lower'")
         pop = params.get("pop")
         if pop is not None and not isinstance(pop, bool):
             if not isinstance(pop, int) or not 100 <= pop <= 200:

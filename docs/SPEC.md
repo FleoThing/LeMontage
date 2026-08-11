@@ -378,7 +378,8 @@ segment-level cues.
 | `color` | colour | white | Text colour: a name (`white`), `#RRGGBB`, or a raw ASS `&HBBGGRR`. |
 | `highlight` | colour | yellow | Active-word colour (`pop_on: word` and karaoke). Same forms as `color`. |
 | `outline` | int | per `style` | Black contour thickness in px (`tiktok` = 3). Raise it for a heavier border. |
-| `uppercase` | bool | `false` | Draw every line in CAPITALS. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
+| `case` | enum | `upper` | `upper` or `lower`. Applied to the text itself, so the `.srt` sidecar matches and `max_chars` still counts what is drawn. |
+| `uppercase` | bool | `true` | Older spelling of `case: upper`. `false` keeps the transcript's own casing (which is not the same as `case: lower`). |
 | `pop` | bool \| int | `false` | Scale up on the beat, settling back over 90ms — what makes short-form captions read as *spoken*. `true` = 115%, or a percent (`100`-`200`). |
 | `pop_on` | enum | `word` | What `pop` scales: `word` (the active word, highlighted) or `line` (the whole phrase, once, when it changes). |
 | `burn` | bool | `true` | `true` burns into video; `false` writes a sidecar `.srt`. |
@@ -391,7 +392,6 @@ The two together are the short-form caption look:
 - captions:
     from: clip_channel
     words: "{{ steps.transcript.words }}"
-    uppercase: true
     pop: true              # or a percent: pop: 130
     max_chars: 12          # 2 words a line, so each pop lands on its own
 ```
@@ -409,11 +409,14 @@ phrases have to be short:
 - captions:
     from: clip_channel
     words: "{{ steps.transcript.words }}"
-    uppercase: true
+    case: lower            # or upper, the short-form default
     pop: true
     pop_on: line
     max_words: 3           # 2-3 words a phrase
-    max_chars: 18
+    # `max_chars` is the *other* cap and the tighter one wins: leave it wide
+    # enough here, or a long word breaks the phrase and a lone word lands on
+    # screen, which is exactly the beat this mode is trying to keep regular.
+    max_chars: 28
     color: white           # default; any name or #RRGGBB
     outline: 6             # heavy black border, readable over anything
 ```

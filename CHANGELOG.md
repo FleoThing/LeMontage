@@ -9,6 +9,11 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Changed
 
+- **Captions are CAPITALS by default.** `uppercase` now defaults to `true`: it
+  is the register short-form captions are set in, and every pipeline in the repo
+  was asking for it by hand. A pipeline that says nothing therefore renders in
+  capitals where it used to keep the transcript's casing. `uppercase: false`
+  restores that casing, `case: lower` forces lowercase.
 - **Face detection is now YuNet via OpenCV, and `mediapipe` is gone** from the
   `[smartcrop]` extra (−36 MB, one dependency instead of two). The mediapipe code
   path was in fact dead: it needed `mp.solutions`, which mediapipe removed in
@@ -36,6 +41,9 @@ may still introduce breaking changes, and those changes must be called out here.
   no highlight and no per-word event, which is the beat short-form captions are
   cut to when they are read as rhythm rather than followed word by word.
   `pop_on: word` (the default) is the existing behaviour.
+- `captions.case: upper | lower`: captions could be forced to CAPITALS
+  (`uppercase: true`) and nothing else, so all-lowercase captions were simply
+  out of reach. `uppercase` stays as the older spelling of `case: upper`.
 - `captions.max_words`: cap the words per line, previously a fixed 5. `3` gives
   the 2-3 word phrasing `pop_on: line` needs, without having to guess a
   `max_chars` that happens to break there.

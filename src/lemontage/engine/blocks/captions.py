@@ -121,19 +121,35 @@ def _build_lines(params: dict[str, Any], offset: float) -> list[dict[str, Any]]:
         if not isinstance(segments, list):
             raise ValueError("captions: provide 'words' (from stt) or 'segments'")
         lines = _lines_from_segments(segments, offset)
-    return _uppercased(lines) if params.get("uppercase") else lines
+    return _recased(lines, _case(params))
 
 
-def _uppercased(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Upper-case every caption line (and its words).
+def _case(params: dict[str, Any]) -> str | None:
+    """The requested casing: ``upper``, ``lower``, or None to leave it alone.
+
+    CAPITALS are the default: it is what short-form captions are set in, and it
+    was what every pipeline had to ask for by hand. ``uppercase: false`` opts out
+    and keeps the transcript's own casing; ``case: lower`` forces the other way.
+    """
+    case = params.get("case")
+    if case is not None:
+        return str(case).lower()
+    return "upper" if params.get("uppercase", True) else None
+
+
+def _recased(lines: list[dict[str, Any]], case: str | None) -> list[dict[str, Any]]:
+    """Re-case every caption line (and its words).
 
     Done on the text, not with a renderer flag: the sidecar `.srt` gets the same
     treatment, and `max_chars` still counts the characters that are drawn.
     """
+    if case not in ("upper", "lower"):
+        return lines
+    fold = str.upper if case == "upper" else str.lower
     for line in lines:
-        line["text"] = line["text"].upper()
+        line["text"] = fold(line["text"])
         for word in line["words"]:
-            word["text"] = word["text"].upper()
+            word["text"] = fold(word["text"])
     return lines
 
 

@@ -358,6 +358,20 @@ def test_uppercase_applies_to_lines_and_words():
     assert [w["text"] for w in line["words"]] == ["HI", "THERE"]
 
 
+def test_captions_are_uppercase_by_default_and_uppercase_false_opts_out():
+    words = _words((0.0, 0.5, "Hi"), (0.5, 0.9, "there"))
+    assert _build_lines({"words": words}, offset=0.0)[0]["text"] == "HI THERE"
+    kept = _build_lines({"words": _words((0.0, 0.5, "Hi")), "uppercase": False}, offset=0.0)
+    assert kept[0]["text"] == "Hi"  # the transcript's own casing, not lowercased
+
+
+def test_case_lower_folds_lines_and_words():
+    params = {"words": _words((0.0, 0.5, "Hi"), (0.5, 0.9, "There")), "case": "lower"}
+    line = _build_lines(params, offset=0.0)[0]
+    assert line["text"] == "hi there"
+    assert [w["text"] for w in line["words"]] == ["hi", "there"]
+
+
 def _pop_line():
     return {
         "start": 0.0,
@@ -399,7 +413,7 @@ def test_pop_on_line_scales_the_whole_phrase_once():
 def test_max_words_caps_the_phrase_length():
     words = _words((0.0, 0.2, "a"), (0.2, 0.4, "b"), (0.4, 0.6, "c"), (0.6, 0.8, "d"))
     lines = _build_lines({"words": words, "max_words": 3}, offset=0.0)
-    assert [line["text"] for line in lines] == ["a b c", "d"]
+    assert [line["text"] for line in lines] == ["A B C", "D"]
 
 
 def test_color_accepts_a_name_and_rejects_junk():
