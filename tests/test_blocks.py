@@ -13,10 +13,12 @@ from lemontage.engine.assformat import timestamp
 from lemontage.engine.blocks.captions import (
     CaptionsBlock,
     _build_lines,
+    _colour,
     _dialogue,
     _events,
     _lines_from_words,
     _safe_margin_h,
+    _with_style,
     _write_karaoke_ass,
 )
 from lemontage.engine.blocks.detect_clips import (
@@ -357,6 +359,20 @@ def test_uppercase_applies_to_lines_and_words():
     assert [w["text"] for w in line["words"]] == ["HI", "THERE"]
 
 
+def test_captions_are_uppercase_by_default_and_uppercase_false_opts_out():
+    words = _words((0.0, 0.5, "Hi"), (0.5, 0.9, "there"))
+    assert _build_lines({"words": words}, offset=0.0)[0]["text"] == "HI THERE"
+    kept = _build_lines({"words": _words((0.0, 0.5, "Hi")), "uppercase": False}, offset=0.0)
+    assert kept[0]["text"] == "Hi"  # the transcript's own casing, not lowercased
+
+
+def test_case_lower_folds_lines_and_words():
+    params = {"words": _words((0.0, 0.5, "Hi"), (0.5, 0.9, "There")), "case": "lower"}
+    line = _build_lines(params, offset=0.0)[0]
+    assert line["text"] == "hi there"
+    assert [w["text"] for w in line["words"]] == ["hi", "there"]
+
+
 def _pop_line():
     return {
         "start": 0.0,
@@ -377,6 +393,30 @@ def test_pop_emits_one_event_per_word_with_a_scale_transform():
     assert "\\k" not in events[0]
 
 
+def test_style3_presets_the_phrase_pop_and_a_param_still_wins():
+    events = _events(_pop_line(), _with_style({"style": "style3"}), hi="&H1", base="&H2")
+    assert len(events) == 1 and r"\fscx130\fscy130" in events[0]  # the preset's scale
+    louder = _events(_pop_line(), _with_style({"style": "zoom", "pop": 160}), hi="&H1", base="&H2")
+    assert r"\fscx160\fscy160" in louder[0]  # written by hand, so it wins
+
+
+def test_style_names_and_numbers_are_the_same_preset():
+    assert _with_style({"style": "zoom"}) == _with_style({"style": "style3"}) | {"style": "zoom"}
+
+
+def test_legacy_style_names_stay_look_only():
+    # `tiktok` sets no mode, so a pipeline naming it renders as it always did.
+    assert _events(_pop_line(), _with_style({"style": "tiktok"}), hi="&H1", base="&H2") == _events(
+        _pop_line(), {}, hi="&H1", base="&H2"
+    )
+
+
+def test_pop_duration_shortens_the_settle():
+    params = {"pop": True, "pop_on": "line", "pop_duration": "0.05s"}
+    events = _events(_pop_line(), params, hi="&H1", base="&H2")
+    assert r"\t(0,50,\fscx100\fscy100)" in events[0]
+
+
 def test_pop_scale_accepts_a_percent():
     events = _events(_pop_line(), {"pop": 130}, hi="&H1", base="&H2")
     assert r"\fscx130\fscy130" in events[0]
@@ -385,6 +425,27 @@ def test_pop_scale_accepts_a_percent():
 def test_pop_off_keeps_the_karaoke_line():
     events = _events(_pop_line(), {}, hi="&H1", base="&H2")
     assert len(events) == 1 and r"\k" in events[0]
+
+
+def test_pop_on_line_scales_the_whole_phrase_once():
+    events = _events(_pop_line(), {"pop": True, "pop_on": "line"}, hi="&H0000FFFF", base="&H2")
+    assert len(events) == 1  # one event per line, not per word
+    assert events[0].endswith(r"{\c&H2\fscx115\fscy115\t(0,90,\fscx100\fscy100)}a b")
+    assert "&H0000FFFF" not in events[0]  # no active word, so no highlight
+    assert "\\k" not in events[0]
+
+
+def test_max_words_caps_the_phrase_length():
+    words = _words((0.0, 0.2, "a"), (0.2, 0.4, "b"), (0.4, 0.6, "c"), (0.6, 0.8, "d"))
+    lines = _build_lines({"words": words, "max_words": 3}, offset=0.0)
+    assert [line["text"] for line in lines] == ["A B C", "D"]
+
+
+def test_color_accepts_a_name_and_rejects_junk():
+    assert _colour("white", "captions.color", "&H0") == "&H00FFFFFF"
+    assert _colour("&H0000FF00", "captions.color", "&H0") == "&H0000FF00"
+    with pytest.raises(ValueError):
+        _colour("&H00}{\\p1", "captions.color", "&H0")
 
 
 def test_stt_forwards_vad_and_beam_options(tmp_path, monkeypatch):

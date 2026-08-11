@@ -14,7 +14,11 @@ from pathlib import Path
 import yaml
 
 from . import spec
+from .engine.blocks.captions import CAPTION_STYLES
 from .engine.timecode import parse_seconds
+
+_POP_ON = {"word", "line"}
+_CASES = {"upper", "lower"}
 
 
 def validate_file(path: str | Path) -> list[str]:
@@ -274,6 +278,15 @@ def _check_block_params(
         uppercase = params.get("uppercase")
         if uppercase is not None and not isinstance(uppercase, bool):
             errors.append(f"{label}: captions.uppercase must be a boolean")
+        style = params.get("style")
+        if style is not None and (
+            not isinstance(style, str) or style.lower() not in CAPTION_STYLES
+        ):
+            valid = ", ".join(sorted(CAPTION_STYLES))
+            errors.append(f"{label}: unknown captions style '{style}' (choose from: {valid})")
+        case = params.get("case")
+        if case is not None and (not isinstance(case, str) or case.lower() not in _CASES):
+            errors.append(f"{label}: captions.case must be 'upper' or 'lower'")
         pop = params.get("pop")
         if (
             pop is not None
@@ -281,6 +294,26 @@ def _check_block_params(
             and (not isinstance(pop, int) or not 100 <= pop <= 200)
         ):
             errors.append(f"{label}: captions.pop must be a boolean or a scale percent 100..200")
+        pop_duration = params.get("pop_duration")
+        if pop_duration is not None:
+            try:
+                if parse_seconds(pop_duration) <= 0:
+                    errors.append(f"{label}: captions.pop_duration must be > 0")
+            except (ValueError, TypeError):
+                errors.append(f"{label}: captions.pop_duration must be a duration (e.g. 0.06s)")
+        pop_on = params.get("pop_on")
+        if pop_on is not None and (not isinstance(pop_on, str) or pop_on.lower() not in _POP_ON):
+            errors.append(f"{label}: captions.pop_on must be 'word' or 'line'")
+        max_words = params.get("max_words")
+        if max_words is not None and (
+            isinstance(max_words, bool) or not isinstance(max_words, int) or max_words < 1
+        ):
+            errors.append(f"{label}: captions.max_words must be an integer >= 1")
+        outline = params.get("outline")
+        if outline is not None and (
+            isinstance(outline, bool) or not isinstance(outline, (int, float)) or outline < 0
+        ):
+            errors.append(f"{label}: captions.outline must be a number of pixels >= 0")
 
     if block == "filter":
         _check_filter_params(params, label, errors)
