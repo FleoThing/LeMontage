@@ -383,6 +383,12 @@ def _check_filter_params(params: dict, label: str, errors: list[str]) -> None:
             valid = ", ".join(sorted(spec.FILTER_LOOKS))
             errors.append(f"{label}: unknown filter look '{name}' (choose from: {valid})")
 
+    grain = params.get("grain")
+    if grain is not None and (
+        isinstance(grain, bool) or not isinstance(grain, (int, float)) or not 0 <= grain <= 100
+    ):
+        errors.append(f"{label}: filter.grain must be a number between 0 and 100")
+
     eq = params.get("eq")
     if eq is not None:
         if not isinstance(eq, dict):

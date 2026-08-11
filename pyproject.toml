@@ -36,11 +36,11 @@ beat = [
     "librosa>=0.10",
     "numpy>=1.24",
 ]
-# Subject-following vertical crop for `export: smart_crop: true`. mediapipe
-# tracks the face on CPU; OpenCV decodes the sampled frames. Opt-in.
-# Capped below 1.0: mediapipe 1.x removed the `mediapipe.solutions` API this uses.
+# Subject-following vertical crop for `export: smart_crop: true`, and the focal
+# point the `still` zooms aim at. OpenCV decodes the sampled frames and runs the
+# face detector itself (`cv2.FaceDetectorYN`, 4.5.4+), so this is one dependency,
+# not two. Opt-in.
 smartcrop = [
-    "mediapipe>=0.10,<1.0",
     "opencv-python-headless>=4.8",
 ]
 dev = [
@@ -54,6 +54,11 @@ lemontage = "lemontage.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# The vendored YuNet weights `focal_point` falls back to — without this the wheel
+# ships the code and not the 227 KB it needs.
+[tool.setuptools.package-data]
+"lemontage.engine" = ["models/*.onnx"]
 
 [tool.ruff]
 line-length = 100
