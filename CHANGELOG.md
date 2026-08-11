@@ -7,6 +7,15 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ## [Unreleased]
 
+### Added
+
+- **A benchmark harness for the concurrency work**: two control pipelines in
+  `benchmarks/` and `scripts/bench.py`. It times cold-cache runs and hashes every
+  rendered file, so a perf change can show both that it is faster and that the
+  output did not move. It also reports the run-to-run spread and refuses to call
+  a delta inside that spread a gain — measured at 5% on the channel control,
+  which is wider than several of the gains being chased.
+
 ### Changed
 
 - **The validator dispatches per block instead of running one 180-line `if`

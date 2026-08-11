@@ -45,6 +45,23 @@ Run every pre-commit hook manually:
 pre-commit run --all-files
 ```
 
+## Performance Changes
+
+A change that claims to make the engine faster ships two facts: wall clock before
+and after on the same pipeline, and proof that the output did not change. The
+control pipelines in `benchmarks/` and `scripts/bench.py` produce both:
+
+```bash
+python3 scripts/bench.py benchmarks/channel.yaml --save /tmp/before.json
+# ...apply the change...
+python3 scripts/bench.py benchmarks/channel.yaml --save /tmp/after.json
+python3 scripts/bench.py --compare /tmp/before.json /tmp/after.json
+```
+
+The comparison exits non-zero when any rendered file changed. See
+`benchmarks/README.md` for what the controls measure and how to read the number.
+These are not CI gates: they need a real video and several minutes.
+
 ## Pipeline Usage
 
 Create and validate a starter pipeline:
