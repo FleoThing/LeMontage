@@ -18,8 +18,10 @@ import itertools
 import json
 import os
 import re
+import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -274,39 +276,116 @@ def _run_cell(
         ctx.state[node.step_id] = PENDING
 
     cache = _Cache(output_dir, matrix)
-    for node in nodes:
-        try:
-            _run_node(node, ctx, cache, report)
-        except ExecutionError as exc:
-            cell.error = str(exc)
-            break
+    cell.error = _run_steps(nodes, ctx, cache, report)
     cell.states = dict(ctx.state)
     cell.outputs = dict(ctx.step_outputs)
     return cell
 
 
-def _run_node(node: Node, ctx: RunContext, cache: _Cache, report: Reporter) -> None:
-    if not _requires_met(node, ctx):
-        ctx.state[node.step_id] = SKIPPED
-        report(f"  ⊘ {node.step_id} ({node.block}) — skipped, requires unmet")
-        return
+def _run_steps(nodes: list[Node], ctx: RunContext, cache: _Cache, report: Reporter) -> str | None:
+    """Walk the DAG, running whatever has no unfinished dependency left.
 
-    params = template.resolve(node.params, ctx)
-    signature = cache.signature(node, params, ctx.input.get("source"))
+    The steps used to run strictly in topological order, one at a time, although
+    ``Node.deps`` and the topological sort already knew which of them were
+    independent. Now every node whose dependencies are done starts immediately,
+    so two branches of a fan-out overlap instead of queueing.
 
-    if (
-        node.common.get("cache", True)
-        and not (node.deps & cache.reran)  # an upstream re-ran -> our inputs changed
-        and cache.load(node, signature, ctx)
-    ):
-        # A cache hit reused a prior successful result, so it counts as success
-        # for downstream `requires` gates — only the recompute is skipped.
-        ctx.state[node.step_id] = SUCCESS
-        report(f"  ⊙ {node.step_id} ({node.block}) — cached")
-        return
+    Most pipelines feel nothing: a short-form edit is a chain (``stt`` →
+    ``detect_clips`` → ``cut`` → ``export`` → ``captions`` → ``concat``) and a
+    chain has nothing to overlap. This pays on multi-source and multi-channel
+    edits, where two independent branches meet only at a final ``concat``.
 
-    cache.reran.add(node.index)
-    ctx.state[node.step_id] = RUNNING
+    Three things this has to keep, which the plain sequence gave for free:
+
+    * **Abort.** ``on_failure: abort`` stopped the loop with a ``break``. Here it
+      stops *scheduling*: nothing new is dispatched, the work already in flight is
+      awaited rather than orphaned, and the first error raised is the one reported.
+    * **Report order.** Each node writes into its own buffer, flushed as a block
+      when it finishes, so two concurrent steps cannot interleave their lines.
+    * **Bookkeeping.** Signatures, cache entries and step states are touched under
+      one lock. It is held for microseconds and never across a block's execution,
+      so it costs nothing and removes every question about two nodes finishing at
+      the same moment.
+    """
+    pending = {node.index: set(node.deps) for node in nodes}
+    by_index = {node.index: node for node in nodes}
+    dependents: dict[int, list[int]] = {node.index: [] for node in nodes}
+    for node in nodes:
+        for dep in node.deps:
+            dependents[dep].append(node.index)
+
+    lock = threading.Lock()
+    error: str | None = None
+    ready = sorted(i for i, deps in pending.items() if not deps)
+
+    def work(index: int) -> tuple[int, list[str], ExecutionError | None]:
+        lines: list[str] = []
+        try:
+            _run_node(by_index[index], ctx, cache, lines.append, lock)
+        except ExecutionError as exc:
+            return index, lines, exc
+        return index, lines, None
+
+    with ThreadPoolExecutor(max_workers=_pool_size(len(nodes))) as pool:
+        running = {pool.submit(work, i): i for i in ready}
+        while running:
+            done, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in done:
+                running.pop(future)
+                index, lines, failure = future.result()
+                for line in lines:
+                    report(line)
+                if failure is not None:
+                    # Keep the first failure, and schedule nothing further. The
+                    # steps still in flight are left to finish on their own.
+                    error = error or str(failure)
+                    continue
+                if error is not None:
+                    continue
+                for dependent in dependents[index]:
+                    pending[dependent].discard(index)
+                    if not pending[dependent]:
+                        running[pool.submit(work, dependent)] = dependent
+    return error
+
+
+def _run_node(
+    node: Node,
+    ctx: RunContext,
+    cache: _Cache,
+    report: Reporter,
+    lock: threading.Lock | None = None,
+) -> None:
+    """Run one step. ``lock`` guards the shared bookkeeping when steps overlap.
+
+    It is taken around signature/cache/state work only — never around
+    :func:`_execute`, which is where all the time goes.
+    """
+    guard = lock or nullcontext()
+
+    with guard:
+        if not _requires_met(node, ctx):
+            ctx.state[node.step_id] = SKIPPED
+            report(f"  ⊘ {node.step_id} ({node.block}) — skipped, requires unmet")
+            return
+
+        params = template.resolve(node.params, ctx)
+        signature = cache.signature(node, params, ctx.input.get("source"))
+
+        if (
+            node.common.get("cache", True)
+            and not (node.deps & cache.reran)  # an upstream re-ran -> our inputs changed
+            and cache.load(node, signature, ctx)
+        ):
+            # A cache hit reused a prior successful result, so it counts as success
+            # for downstream `requires` gates — only the recompute is skipped.
+            ctx.state[node.step_id] = SUCCESS
+            report(f"  ⊙ {node.step_id} ({node.block}) — cached")
+            return
+
+        cache.reran.add(node.index)
+        ctx.state[node.step_id] = RUNNING
+
     block = REGISTRY[node.block]
     attempts = _max_attempts(node)
     report(f"  → {node.step_id} ({node.block}) running…")
@@ -314,8 +393,9 @@ def _run_node(node: Node, ctx: RunContext, cache: _Cache, report: Reporter) -> N
     for attempt in range(1, attempts + 1):
         try:
             _execute(node, block, params, ctx)
-            ctx.state[node.step_id] = SUCCESS
-            cache.save(node, signature, ctx)
+            with guard:
+                ctx.state[node.step_id] = SUCCESS
+                cache.save(node, signature, ctx)
             report(f"  ✓ {node.step_id} ({node.block})")
             return
         except Exception as exc:  # noqa: BLE001 - the engine owns failure policy
@@ -324,10 +404,12 @@ def _run_node(node: Node, ctx: RunContext, cache: _Cache, report: Reporter) -> N
                 report(f"  ↻ {node.step_id} ({node.block}) — retry {attempt}/{attempts - 1}")
                 continue
             if on_failure == "skip":
-                ctx.state[node.step_id] = SKIPPED
+                with guard:
+                    ctx.state[node.step_id] = SKIPPED
                 report(f"  ⊘ {node.step_id} ({node.block}) — failed, skipped: {exc}")
                 return
-            ctx.state[node.step_id] = FAILED
+            with guard:
+                ctx.state[node.step_id] = FAILED
             report(f"  ✗ {node.step_id} ({node.block}) — {exc}")
             raise ExecutionError(f"step '{node.step_id}' failed: {exc}") from exc
 

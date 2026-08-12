@@ -99,15 +99,59 @@ def test_on_failure_abort_stops_pipeline(patch_registry, tmp_path):
     doc = base_doc(
         [
             {"id": "a", "stt": {}, "on_failure": "abort"},
-            {"id": "b", "export": {}},
+            {"id": "b", "export": {"value": "{{ steps.a.ran }}"}},
         ],
         output={"dir": str(tmp_path)},
     )
     result = run(doc, reporter=lambda m: None)
     assert not result.ok
     assert result.cells[0].states["a"] == executor.FAILED
-    # 'b' never reached -> stays pending.
+    # 'b' reads 'a', so it depends on it and is never reached -> stays pending.
     assert result.cells[0].states["b"] == executor.PENDING
+
+
+def test_abort_lets_an_already_started_independent_step_finish(patch_registry, tmp_path):
+    """The one semantic that concurrency could not preserve, pinned deliberately.
+
+    A step that depends on nothing now starts at the same moment as the step that
+    fails, so it runs to completion instead of staying `pending`. Sequentially the
+    failure came first and the `break` caught it. `abort` therefore means "schedule
+    nothing further", not "nothing else happens" -- a dependent step is still
+    never reached, which is the case every chain-shaped pipeline is in.
+    """
+    patch_registry["stt"] = RecordingBlock("stt", fail_times=1)
+    patch_registry["export"] = RecordingBlock("export")
+    doc = base_doc(
+        [
+            {"id": "a", "stt": {}, "on_failure": "abort"},
+            {"id": "b", "export": {}},  # depends on nothing
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+    assert not result.ok
+    assert result.cells[0].states["a"] == executor.FAILED
+    assert result.cells[0].states["b"] == executor.SUCCESS
+
+
+def test_abort_schedules_nothing_further(patch_registry, tmp_path):
+    """A step waiting behind the failure must never start."""
+    patch_registry["stt"] = RecordingBlock("stt", fail_times=1)
+    patch_registry["cut"] = RecordingBlock("cut")
+    later = RecordingBlock("export")
+    patch_registry["export"] = later
+    doc = base_doc(
+        [
+            {"id": "a", "stt": {}, "on_failure": "abort"},
+            {"id": "b", "cut": {"value": "{{ steps.a.ran }}"}},
+            {"id": "c", "export": {"value": "{{ steps.b.ran }}"}},
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+    assert not result.ok
+    assert later.calls == 0
+    assert result.cells[0].states["c"] == executor.PENDING
 
 
 def test_on_failure_skip_continues(patch_registry, tmp_path):
@@ -707,3 +751,104 @@ def test_shared_cells_do_not_multiply_the_machine(patch_registry, tmp_path):
 def test_a_single_cell_matrix_is_not_shared():
     doc = {"steps": [{"id": "x", "export": {}}]}
     assert executor._shareable_cells(doc, [{"k": "only"}], lambda m: None) == 1
+
+
+# -- concurrent DAG steps (executor._run_steps) -------------------------------
+
+
+class Overlapping(Block):
+    """Records how many steps were running at the same moment."""
+
+    def __init__(self, name, delay=0.05):
+        self.name = name
+        self._delay = delay
+        self._lock = threading.Lock()
+        self.live = 0
+        self.peak = 0
+
+    def execute(self, params, ctx, step_id):
+        import time
+
+        with self._lock:
+            self.live += 1
+            self.peak = max(self.peak, self.live)
+        time.sleep(self._delay)
+        with self._lock:
+            self.live -= 1
+        return BlockResult(outputs={"ran": step_id})
+
+
+def test_independent_steps_overlap(patch_registry, tmp_path):
+    block = Overlapping("stt")
+    patch_registry["stt"] = block
+    patch_registry["cut"] = block
+    doc = base_doc(
+        [{"id": "a", "stt": {}}, {"id": "b", "cut": {}}],
+        output={"dir": str(tmp_path)},
+    )
+    run(doc, reporter=lambda m: None)
+    assert block.peak == 2, "two independent steps queued instead of overlapping"
+
+
+def test_dependent_steps_never_overlap(patch_registry, tmp_path):
+    """The whole point of the DAG: an edge is still a barrier."""
+    block = Overlapping("stt")
+    patch_registry["stt"] = block
+    patch_registry["cut"] = block
+    doc = base_doc(
+        [{"id": "a", "stt": {}}, {"id": "b", "cut": {"value": "{{ steps.a.ran }}"}}],
+        output={"dir": str(tmp_path)},
+    )
+    run(doc, reporter=lambda m: None)
+    assert block.peak == 1, "a step ran before its dependency finished"
+
+
+def test_concurrent_steps_do_not_interleave_their_lines(patch_registry, tmp_path):
+    patch_registry["stt"] = Overlapping("stt")
+    patch_registry["cut"] = Overlapping("cut")
+    lines = []
+    doc = base_doc(
+        [{"id": "a", "stt": {}}, {"id": "b", "cut": {}}],
+        output={"dir": str(tmp_path)},
+    )
+    run(doc, reporter=lines.append)
+
+    # Each step's "running…" line must be immediately followed by its own "✓".
+    for i, line in enumerate(lines):
+        if "running" in line:
+            step = line.split()[1]
+            assert step in lines[i + 1], f"{step}'s lines were interleaved: {lines}"
+
+
+def test_every_step_still_runs_exactly_once(patch_registry, tmp_path):
+    """A diamond: c and d both depend on a, e depends on both. e runs once."""
+    calls = {}
+    lock = threading.Lock()
+
+    class Counting(Block):
+        def __init__(self, name):
+            self.name = name
+
+        def execute(self, params, ctx, step_id):
+            with lock:
+                calls[step_id] = calls.get(step_id, 0) + 1
+            return BlockResult(outputs={"ran": step_id})
+
+    for name in ("stt", "cut", "captions", "export"):
+        patch_registry[name] = Counting(name)
+
+    doc = base_doc(
+        [
+            {"id": "a", "stt": {}},
+            {"id": "c", "cut": {"value": "{{ steps.a.ran }}"}},
+            {"id": "d", "captions": {"value": "{{ steps.a.ran }}"}},
+            # A list, not one string: the template resolves a single reference
+            # per string, and the DAG walks lists just the same.
+            {"id": "e", "export": {"value": ["{{ steps.c.ran }}", "{{ steps.d.ran }}"]}},
+        ],
+        output={"dir": str(tmp_path)},
+    )
+    result = run(doc, reporter=lambda m: None)
+
+    assert result.ok
+    assert calls == {"a": 1, "c": 1, "d": 1, "e": 1}

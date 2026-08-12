@@ -16,8 +16,24 @@ may still introduce breaking changes, and those changes must be called out here.
   a delta inside that spread a gain — measured at 5% on the channel control,
   which is wider than several of the gains being chased.
 
+### Fixed
+
+- **`requires:` is now a real dependency.** A step gated on another with
+  `requires: <step>.success` had no edge to it in the DAG, so the gate worked
+  only because steps ran in declaration order. Written *above* its gate, the step
+  read `pending` instead of `success` and skipped itself on every run, silently.
+
 ### Changed
 
+- **Independent steps run concurrently.** A pipeline whose steps form two or more
+  branches no longer runs them one after another: 198.80s → 186.54s on
+  `pipeline_canadair.yaml` (-6.1%, faster in 3 rounds of 3), -9.8% on the DAG
+  control, byte-identical output both times. Chain-shaped pipelines (the usual
+  short-form edit) have nothing to overlap and are unaffected.
+  `on_failure: abort` changes meaning slightly as a result: it stops anything
+  from being *scheduled* after the failure, but a step that depends on nothing
+  may already have started and will finish. A dependent step is still never
+  reached, so a chain aborts exactly as it always did.
 - **Matrix cells render concurrently**, when it is safe to do so: 34.58s → 30.01s
   on the four-cell control (-17.9%, faster in 8 rounds out of 8, byte-identical
   output). "Safe" is checked, not assumed — `export`, `concat` and `music` build

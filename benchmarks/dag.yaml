@@ -1,0 +1,90 @@
+lemontage: "1.0"
+name: bench-dag
+description: "Control pipeline for concurrent DAG steps (see benchmarks/README.md)"
+
+# The third control, and the only one where independent steps exist at all.
+# `channel.yaml` is a chain -- stt -> detect_clips -> cut -> export -> concat --
+# and a chain has nothing to overlap, which is exactly the shape of most
+# short-form pipelines. So a scheduler that runs independent nodes at once cannot
+# be measured on it.
+#
+# Here two branches run from the same source and meet only at the final concat:
+#
+#     takes_a -> cut_a -> export_a --.
+#                                     >-- reel
+#     takes_b -> cut_b -> export_b --'
+#
+# Sequentially that is six steps end to end. With independent nodes overlapping,
+# the two branches interleave and only the concat has to wait for both.
+#
+# The detection step is a real analysis pass (`loudness` / `silence`), not the
+# hard-coded `method: agent` the other controls use, and that is the whole point.
+# A first version of this file used `agent`, so every step in a branch was a
+# fan-out that already spread itself across the worker pool and filled the
+# machine on its own -- the control measured -2.3%, inside its own noise, and
+# concluded there was nothing to win. There was: a real pipeline with a
+# single-threaded detection pass per branch measured -6.1%. What the scheduler
+# recovers is the time a *single-mode* step leaves the machine idle, so a control
+# without one cannot see it.
+#
+#   python3 scripts/bench.py benchmarks/dag.yaml --var source=media/lotr.mp4
+
+vars:
+  source: ./media/lotr.mp4
+
+input:
+  type: video
+  source: "{{ vars.source }}"
+
+steps:
+  # Branch A: one full single-threaded ffmpeg read of the audio (ebur128/astats).
+  - id: takes_a
+    detect_clips:
+      method: loudness
+      min_duration: 3s
+      max_duration: 3s
+      max_clips: 4
+      emit: chan_a
+
+  # Branch B: a different single-threaded pass over the same file. Nothing it
+  # needs comes from branch A, so the two analyses can overlap.
+  - id: takes_b
+    detect_clips:
+      method: silence
+      min_duration: 3s
+      max_duration: 3s
+      max_clips: 4
+      emit: chan_b
+
+  - id: cut_a
+    cut:
+      from: chan_a
+
+  - id: cut_b
+    cut:
+      from: chan_b
+
+  - id: export_a
+    export:
+      from: chan_a
+      format: vertical
+      resolution: 720x1280
+      fps: 30
+      output: "./output/bench-dag/a-{{ index }}.mp4"
+
+  - id: export_b
+    export:
+      from: chan_b
+      format: vertical
+      resolution: 720x1280
+      fps: 30
+      output: "./output/bench-dag/b-{{ index }}.mp4"
+
+  # The join: the only step that depends on both branches.
+  - id: reel
+    concat:
+      from: [chan_a, chan_b]
+      output: ./output/bench-dag/reel.mp4
+
+output:
+  dir: ./output/bench-dag
