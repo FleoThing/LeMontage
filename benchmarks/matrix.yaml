@@ -1,0 +1,62 @@
+lemontage: "1.0"
+name: bench-matrix
+description: "Control pipeline for matrix-cell concurrency (see benchmarks/README.md)"
+
+# The companion to channel.yaml, for the branch that runs matrix cells at the
+# same time. Four cells, four clips each: enough cells for concurrency to show,
+# few enough clips that a cell is not itself a long fan-out -- otherwise the two
+# levels of parallelism blur into one number.
+#
+# The matrix varies `resolution`, which changes every cell's encode. A cell whose
+# output was identical to its neighbour's would share a cache namespace in spirit
+# and hide a bug in the per-cell isolation.
+#
+#   python3 scripts/bench.py benchmarks/matrix.yaml --var source=media/lotr.mp4
+
+vars:
+  source: ./media/lotr.mp4
+
+matrix:
+  resolution: ["540x960", "600x1066", "660x1174", "720x1280"]
+
+input:
+  type: video
+  source: "{{ vars.source }}"
+
+steps:
+  - id: takes
+    detect_clips:
+      method: agent
+      clips:
+        - { start: 5, end: 8 }
+        - { start: 40, end: 43 }
+        - { start: 75, end: 78 }
+        - { start: 110, end: 113 }
+      emit: takes
+
+  - cut:
+      from: takes
+
+  # Every path carries the cell key, and that is not decoration. `export`'s
+  # default name is `<pipeline name>-<index>.mp4`, which contains nothing about
+  # the cell -- so four cells would write the same four files. Sequentially they
+  # merely overwrite each other after each cell's concat has read them; run
+  # concurrently they would race on the same file and corrupt it. The cache is
+  # namespaced per cell (`_Cache(output_dir, matrix)`), the rendered filenames
+  # are not.
+  - export:
+      from: takes
+      format: vertical
+      resolution: "{{ matrix.resolution }}"
+      fps: 30
+      output: "./output/bench-matrix/{{ matrix.resolution }}/clip-{{ index }}.mp4"
+
+  # Under `output.dir`, and keyed on the cell: a bare relative name would land at
+  # the repo root, and a name shared by four cells would have them overwrite each
+  # other's reel. See the note in channel.yaml.
+  - concat:
+      from: takes
+      output: "./output/bench-matrix/reel-{{ matrix.resolution }}.mp4"
+
+output:
+  dir: ./output/bench-matrix

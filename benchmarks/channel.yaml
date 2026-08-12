@@ -1,0 +1,72 @@
+lemontage: "1.0"
+name: bench-channel
+description: "Control pipeline for the channel-mapping fan-out (see benchmarks/README.md)"
+
+# Built for measurement, not for looking at. Two rules shape it:
+#
+# 1. **No Whisper.** On a 10-minute source transcription eats the whole wall
+#    clock and hides every other change, so there is no `stt` step and the clip
+#    boundaries are hard-coded (`method: agent`) instead of detected.
+# 2. **Many small clips.** The time has to land in the per-item fan-out
+#    (`_execute_mapped`), which is what the v0.9.0 branches touch. Sixteen 3s
+#    clips through `cut` then `export` is 32 mapped ffmpeg runs; a single long
+#    clip would measure one encode instead.
+#
+# Everything else is deliberately plain: no captions, no smart_crop, no filter.
+# A knob that is not being measured is a knob that adds variance.
+#
+#   python3 scripts/bench.py benchmarks/channel.yaml --var source=media/lotr.mp4
+
+vars:
+  source: ./media/lotr.mp4
+
+input:
+  type: video
+  source: "{{ vars.source }}"
+
+steps:
+  # Fixed boundaries: the same 16 clips every run, whatever the source's content.
+  # They must all fall inside the source -- lotr.mp4 is 300s, so 3s clips on a
+  # 15s grid from 5s to 230s stays well clear of the end.
+  - id: takes
+    detect_clips:
+      method: agent
+      clips:
+        - { start: 5, end: 8 }
+        - { start: 20, end: 23 }
+        - { start: 35, end: 38 }
+        - { start: 50, end: 53 }
+        - { start: 65, end: 68 }
+        - { start: 80, end: 83 }
+        - { start: 95, end: 98 }
+        - { start: 110, end: 113 }
+        - { start: 125, end: 128 }
+        - { start: 140, end: 143 }
+        - { start: 155, end: 158 }
+        - { start: 170, end: 173 }
+        - { start: 185, end: 188 }
+        - { start: 200, end: 203 }
+        - { start: 215, end: 218 }
+        - { start: 230, end: 233 }
+      emit: takes
+
+  - cut:
+      from: takes
+
+  # 720x1280 rather than 1080x1920: real encode work per clip, but a run that
+  # finishes in a minute or so, which is what makes it usable as a control.
+  - export:
+      from: takes
+      format: vertical
+      resolution: 720x1280
+      fps: 30
+
+  # The path is spelled out under `output.dir` on purpose. A bare relative name
+  # resolves against the working directory -- which `safepath` allows -- so the
+  # reel would land at the repo root, outside the tree the harness fingerprints.
+  - concat:
+      from: takes
+      output: ./output/bench-channel/reel.mp4
+
+output:
+  dir: ./output/bench-channel
