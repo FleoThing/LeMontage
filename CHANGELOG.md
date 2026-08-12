@@ -18,6 +18,15 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Changed
 
+- **Matrix cells render concurrently**, when it is safe to do so: 34.58s → 30.01s
+  on the four-cell control (-17.9%, faster in 8 rounds out of 8, byte-identical
+  output). "Safe" is checked, not assumed — `export`, `concat` and `music` build
+  their default file name from the pipeline name, the step id and the clip index,
+  none of which vary by cell, so cells that would overwrite each other still run
+  one after another and the run says so. Give those steps an `output:` containing
+  `{{ matrix.<key> }}` and they run at once. See SPEC §9.1.
+  Each cell now also gets its own scratch directory under `.lemontage/work/`;
+  pipelines without a `matrix` keep the old path, so no checkpoint is invalidated.
 - **`lemontage analyze` is 18% faster**: its three ffmpeg passes (scene cuts,
   loudness, silence) are independent full reads of the same file and now run at
   once instead of one after another. On a 300s 1080p source, 44.18s → 36.38s, with
