@@ -158,6 +158,78 @@ def test_music_block_accepted():
     assert validate_doc(d) == []
 
 
+def compose_doc(compose_params):
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [{"id": "comp", "compose": compose_params}]
+    return d
+
+
+def test_compose_block_accepted():
+    d = compose_doc(
+        {
+            "format": "vertical",
+            "layers": [
+                {"image": "bg.jpg", "fit": "cover"},
+                {
+                    "video": "person.mp4",
+                    "y": "25%",
+                    "height": "50%",
+                    "fit": "contain",
+                    "key": {"color": "green"},
+                    "on_short": "loop",
+                },
+            ],
+            "audio": 1,
+            "emit": "reel",
+        }
+    )
+    assert validate_doc(d) == []
+
+
+def test_compose_requires_layers():
+    errors = validate_doc(compose_doc({"format": "vertical"}))
+    assert any("compose requires a non-empty 'layers'" in e for e in errors)
+
+
+def test_compose_layer_needs_a_source():
+    errors = validate_doc(compose_doc({"layers": [{"x": 0}]}))
+    assert any("needs a 'video' or an 'image'" in e for e in errors)
+
+
+def test_compose_layer_cannot_be_both_video_and_image():
+    errors = validate_doc(compose_doc({"layers": [{"video": "a.mp4", "image": "b.jpg"}]}))
+    assert any("pick one" in e for e in errors)
+
+
+@pytest.mark.parametrize("extent", ["half", "fifty%", "abc%"])
+def test_compose_rejects_unreadable_geometry(extent):
+    errors = validate_doc(compose_doc({"layers": [{"image": "bg.jpg", "width": extent}]}))
+    assert any("percentage" in e for e in errors)
+
+
+@pytest.mark.parametrize("good", [540, "50%", "33.5%", -40])
+def test_compose_accepts_pixels_and_percentages(good):
+    assert validate_doc(compose_doc({"layers": [{"image": "bg.jpg", "x": good}]})) == []
+
+
+def test_compose_rejects_unknown_fit_and_on_short():
+    errors = validate_doc(
+        compose_doc({"layers": [{"video": "a.mp4", "fit": "squish", "on_short": "stretch"}]})
+    )
+    assert any(".fit must be one of" in e for e in errors)
+    assert any(".on_short must be one of" in e for e in errors)
+
+
+def test_compose_rejects_an_audio_layer_that_does_not_exist():
+    errors = validate_doc(compose_doc({"layers": [{"image": "bg.jpg"}], "audio": 3}))
+    assert any("compose.audio" in e for e in errors)
+
+
+@pytest.mark.parametrize("audio", ["mix", "none", 0])
+def test_compose_accepts_the_audio_selectors(audio):
+    assert validate_doc(compose_doc({"layers": [{"video": "a.mp4"}], "audio": audio})) == []
+
+
 def test_music_requires_source():
     d = copy.deepcopy(VALID_PIPELINE)
     d["steps"] = [{"music": {"fade_out": "2s"}}]
@@ -487,6 +559,12 @@ BLOCK_CASES = [
         {"from": "clip_channel", "style": "tiktok", "case": "upper", "max_words": 3},
         {"from": "clip_channel", "style": "no-such-style"},
         "unknown captions style",
+    ),
+    (
+        "compose",
+        {"layers": [{"image": "bg.jpg"}, {"video": "person.mp4", "fit": "contain"}]},
+        {"layers": [{"image": "bg.jpg", "fit": "squish"}]},
+        ".fit must be one of",
     ),
     (
         "concat",

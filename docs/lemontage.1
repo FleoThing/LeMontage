@@ -137,7 +137,12 @@ timed texts in one pass),
 \fBmusic\fR (lay a music track over the reel: \fBsource\fR, \fBstart_at\fR to
 skip into the track, \fBdelay\fR to make the music enter later over the video,
 \fBfade_out\fR, \fBmix\fR), \fBsfx\fR (drop a sample at chosen \fBat\fR
-times, \fBgain\fR in dB, mixed under the existing audio).
+times, \fBgain\fR in dB, mixed under the existing audio),
+\fBcompose\fR (several sources in one frame: \fBlayers\fR, bottom first, each a
+\fBvideo\fR or \fBimage\fR placed with \fBx\fR/\fBy\fR/\fBwidth\fR/\fBheight\fR
+in pixels or percent of the canvas, \fBfit\fR, \fBon_short\fR for a layer
+shorter than the composition, and \fBkey\fR to make one colour transparent;
+\fBaudio\fR picks which layer is heard).
 Common per\-step fields: \fBid\fR, \fBcache\fR,
 \fBon_failure\fR (\fBabort\fR|\fBskip\fR|\fBretry\fR), \fBretries\fR,
 \fBrequires\fR. Step ids must be unique; an anonymous step defaults its id

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .base import Block, BlockResult, ItemResult
 from .captions import CaptionsBlock
+from .compose import ComposeBlock
 from .concat import ConcatBlock
 from .cut import CutBlock
 from .detect_clips import DetectClipsBlock
@@ -27,6 +28,7 @@ REGISTRY: dict[str, Block] = {
         DetectClipsBlock(),
         CutBlock(),
         CaptionsBlock(),
+        ComposeBlock(),
         ExportBlock(),
         FilterBlock(),
         OverlayBlock(),

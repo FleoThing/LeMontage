@@ -1059,6 +1059,92 @@ with it.
 
 ---
 
+### 6.17 `compose`: several sources in one frame
+
+Every other block works on **one** source at a time: `concat` joins clips in
+time, `overlay` draws glyphs and composites a still PNG. Nothing put two moving
+pictures in the same frame. `compose` is that primitive: a canvas, and a stack
+of layers laid into it, each with its own rectangle.
+
+It is deliberately **not** a dual-screen block. A split screen is two layers at
+half height; a picture-in-picture is a small layer in a corner; a subject over a
+backdrop is an image layer under a keyed video layer. Same block, different
+coordinates.
+
+```yaml
+# a green-screened subject over a still backdrop
+- id: comp
+  compose:
+    format: vertical
+    layers:
+      - image: ./bg.jpg
+        fit: cover
+      - video: ./person.mp4
+        y: "25%"
+        height: "50%"
+        fit: contain
+        key: { color: green }
+    emit: reel
+
+# the TikTok dual screen: two layers, half the canvas each
+- compose:
+    format: vertical
+    layers:
+      - video: ./talking.mp4
+        height: "50%"
+      - video: ./gameplay.mp4
+        y: "50%"
+        height: "50%"
+        on_short: loop       # the gameplay runs under the shorter clip
+    audio: 0                 # only the talking head is heard
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `layers` | list | — | **Required.** The stack, bottom first. Each entry is one source and its rectangle (below). |
+| `format` | string | `vertical` | Canvas preset: `vertical`, `horizontal`, `square`. |
+| `size` | string | — | Explicit canvas as `WxH` (e.g. `1440x1440`). Overrides `format`. |
+| `background` | colour | `black` | What shows where no layer covers the canvas. |
+| `duration` | duration | longest layer | Composition length. **Required** when every layer is a still. |
+| `fps` | int | fastest layer | Output frame rate. |
+| `audio` | int / string | first audible layer | Layer index to hear, `mix` to fold them all, or `none`. |
+| `output` | path | `<name>-<id>.mp4` | Where the composition lands. |
+| `emit` | channel | — | Publish the result as a one-clip channel. |
+
+Each layer:
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `video` | path / channel | — | A video file, or the name of a channel emitted earlier (it must hold **one** clip: run `concat` first). |
+| `image` | path | — | A still. Mutually exclusive with `video`. |
+| `x`, `y` | int / percent | `0` | Top-left corner. An **int is pixels**, a **`"50%"` string is a share of the canvas axis**. A negative value counts back from the opposite edge (`x: -40` = 40px in from the right), like `overlay`. |
+| `width`, `height` | int / percent | `"100%"` | The layer's rectangle, same units. |
+| `fit` | string | `cover` | How the source fills its rectangle: `cover` (crop the overflow), `contain` (fit whole, centred, **no padding** so lower layers stay visible), `stretch`. |
+| `on_short` | string | `freeze` | What a layer shorter than the composition does: `freeze` (hold its last frame), `loop` (restart), `hide` (end, revealing what is under it). Ignored for a still, which is looped to the full length. |
+| `key` | mapping | — | Make one colour transparent so the layers underneath show through (see below). |
+
+**Percentages are what make a composition portable.** Written in pixels, a
+layout is nailed to one canvas size; written in percent, the same `layers` block
+replays in vertical, square or horizontal untouched.
+
+**`key`, the green screen.** A per-layer option rather than a block, because
+"remove the background" is a property of a source, not a kind of edit.
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `color` | string | `green` | `green`, `blue`, or a `#rrggbb` hex. The named shorthands are the **bright** primaries (`#00FF00`), which is what a screen is lit to, not FFmpeg's dark `green`. |
+| `tolerance` | 0..1 | `0.12` | How far from the key colour still counts as background. Raising it is the usual mistake: past ~0.2 the *subject* starts going translucent, because skin and cloth land within that distance in UV space. |
+| `softness` | 0..1 | `0.02` | Edge gradient. `0` gives a hard matte, higher values semi-transparent edges. |
+| `spill` | 0..1 | `0.5` | Removes the colour the screen bounced onto the subject. Without it, keying alone leaves a green halo on hair. `0` disables it. |
+
+Rendering is one `filter_complex`: a `color` canvas, then each layer keyed,
+scaled and `overlay`-ed in order. A layer that ends early does not freeze the
+whole frame (`eof_action=pass`).
+
+**Outputs:** `file` (the composition), plus a one-clip channel when `emit` is set.
+
+---
+
 ## 7. Common output namespaces
 
 Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
@@ -1075,6 +1161,7 @@ Quick reference of what each block exposes for `{{ steps.<id>.* }}`:
 | `still` | `clips` / `clip` |
 | `overlay` | `clips` / `clip` |
 | `music` | `file` |
+| `compose` | `file`, + channel |
 
 ---
 

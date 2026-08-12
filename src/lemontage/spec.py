@@ -22,6 +22,7 @@ BUILTIN_BLOCKS = frozenset(
         "detect_clips",
         "cut",
         "captions",
+        "compose",
         "export",
         "filter",
         "overlay",
@@ -40,6 +41,14 @@ BUILTIN_BLOCKS = frozenset(
 # separately (brightness/contrast/saturation/gamma).
 FILTER_LOOKS = frozenset({"bw", "vignette", "grain", "sharpen"})
 FILTER_EQ_KEYS = frozenset({"brightness", "contrast", "saturation", "gamma"})
+
+# How a `compose` layer fills its rectangle. `contain` deliberately does not pad:
+# bars would hide the layers underneath, which is the opposite of compositing.
+COMPOSE_FIT_MODES = frozenset({"cover", "contain", "stretch"})
+
+# What a `compose` layer shorter than the composition does: hold its last frame,
+# restart, or end and let the layers below show through.
+COMPOSE_ON_SHORT = frozenset({"freeze", "loop", "hide"})
 
 # Channel aggregators that may merge several channels via a list-valued `from`
 # (e.g. `concat: {from: [viral, montage]}`). Mapped blocks read a single channel.
