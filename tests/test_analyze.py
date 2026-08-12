@@ -155,7 +155,15 @@ def test_format_packed_renders_ranges():
 
 
 def test_analysis_passes_run_concurrently(monkeypatch):
-    """Scene cuts, loudness and silence are independent: they must not queue."""
+    """Scene cuts, loudness and silence are independent: they must not queue.
+
+    The check is the peak number of passes in flight at once, not the wall
+    clock. Three passes all inside `run_capture` simultaneously *is* the
+    property, and it is the stronger evidence: a duration under some threshold
+    can be met on a fast machine even when two of the three queued up. Timing
+    the run instead measures how loaded the CI runner is, which is how this
+    test used to fail on Windows while still observing all three in flight.
+    """
     import threading
     import time
 
@@ -177,13 +185,9 @@ def test_analysis_passes_run_concurrently(monkeypatch):
     monkeypatch.setattr(analyze.ffmpeg, "run_capture", slow_capture)
     monkeypatch.setattr(analyze, "_transcribe_words", lambda *a: [])
 
-    start = time.perf_counter()
     analyze.analyze_video("v.mp4", transcribe=False)
-    elapsed = time.perf_counter() - start
 
     assert peak == 3, f"expected all three passes in flight at once, saw {peak}"
-    # Three 0.15s passes: overlapped is ~0.15s, sequential would be ~0.45s.
-    assert elapsed < 0.40, f"passes did not overlap ({elapsed:.2f}s)"
 
 
 def test_analysis_passes_skip_audio_work_on_a_silent_file(monkeypatch):
