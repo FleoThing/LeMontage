@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import os
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -268,7 +269,7 @@ def _execute_mapped(node: Node, block: Block, params: dict[str, Any], ctx: RunCo
         return item, block.execute_item(params, item, ctx, node.step_id)
 
     aggregated: dict[str, list[Any]] = {}
-    with ThreadPoolExecutor(max_workers=min(8, len(items))) as pool:
+    with ThreadPoolExecutor(max_workers=_pool_size(len(items))) as pool:
         results = list(pool.map(work, items))
 
     for item, item_result in results:
@@ -277,6 +278,48 @@ def _execute_mapped(node: Node, block: Block, params: dict[str, Any], ctx: RunCo
             aggregated.setdefault(key, []).append(value)
 
     ctx.step_outputs[node.step_id] = aggregated
+
+
+# Floor for the channel worker pool. It was the whole of the old
+# `min(8, len(items))`, and measurement says it is well placed: on the
+# `benchmarks/channel.yaml` control (16 clips, 4 cores) the medians were 38.30s at
+# 2 workers, 36.14s at 4, 35.72s at 8, 35.45s at 16 — monotone, and flat past 8.
+# So the arbitrary constant was not the problem. Not scaling *up* was.
+_MIN_WORKERS = 8
+
+
+def _pool_size(item_count: int) -> int:
+    """How many channel items to render at once.
+
+    The expectation going in was that 8 oversubscribes a small machine — every
+    worker starts an ffmpeg that already takes every core for its own encoding, so
+    on four cores this is eight concurrent encodes over four cores. Measured, that
+    costs nothing: the encodes spend enough time blocked that the kernel packs
+    them fine, and sizing the pool *down* to ``os.cpu_count()`` came out 1.2%
+    slower, not faster.
+
+    What the same curve does show is the opposite failure: 8 is a ceiling as well
+    as a floor, and on a 32-core box it would leave most of the machine idle. So
+    the floor stays and the pool grows with the machine.
+
+    ``LEMONTAGE_WORKERS`` overrides it, for the machine where this is wrong. An
+    environment variable and not a pipeline field, deliberately: how many encodes
+    to run at once is a property of the machine, not of the edit — a pipeline from
+    the hub has to render the same on a laptop and on a build box.
+    """
+    override = os.environ.get("LEMONTAGE_WORKERS", "").strip()
+    if override:
+        try:
+            wanted = int(override)
+        except ValueError:
+            raise ValueError(
+                f"LEMONTAGE_WORKERS must be a positive integer, got '{override}'"
+            ) from None
+        if wanted < 1:
+            raise ValueError(f"LEMONTAGE_WORKERS must be >= 1, got {wanted}")
+    else:
+        wanted = max(_MIN_WORKERS, os.cpu_count() or 1)
+    return max(1, min(item_count, wanted))
 
 
 def _requires_met(node: Node, ctx: RunContext) -> bool:
