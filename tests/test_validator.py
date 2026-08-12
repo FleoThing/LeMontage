@@ -453,3 +453,160 @@ def test_concat_new_xfade_types_accepted():
     # 5 names for however many gaps -- count is a runtime check, names must pass.
     errors = [e for e in validate_doc(d) if "unknown transition" in e]
     assert errors == []
+
+
+# -- per-block dispatch (validator._BLOCK_CHECKS) ------------------------------
+#
+# _check_block_params dispatches on the block name through a dict. A typo in a
+# key, or a handler left out of the table, would silently stop validating a whole
+# block -- pipelines would then fail at render time instead of at `validate`.
+# These tests pin the wiring: one accepted doc and one rejected doc per block.
+
+
+def _with_step(block, params, *, extra_steps=()):
+    d = copy.deepcopy(VALID_PIPELINE)
+    d["steps"] = [
+        {"id": "clips", "detect_clips": {"max_clips": 2, "emit": "clip_channel"}},
+        *extra_steps,
+        {"id": "under-test", block: params},
+    ]
+    return d
+
+
+# (block, params that must validate, params that must not, expected error text)
+BLOCK_CASES = [
+    (
+        "captions",
+        {"from": "clip_channel", "style": "tiktok", "case": "upper", "max_words": 3},
+        {"from": "clip_channel", "style": "no-such-style"},
+        "unknown captions style",
+    ),
+    (
+        "concat",
+        {"from": "clip_channel", "transitions_at": "boundaries"},
+        {"from": "clip_channel", "transitions_at": "sometimes"},
+        "concat.transitions_at",
+    ),
+    (
+        "detect_clips",
+        {"method": "silence", "silence_db": -30, "emit": "other"},
+        {"method": "engagement", "emit": "other"},
+        "is reserved in v1",
+    ),
+    (
+        "export",
+        {"from": "clip_channel", "fit": "contain", "canvas": "1080x1920"},
+        {"from": "clip_channel", "fit": "squish"},
+        "unknown export fit",
+    ),
+    (
+        "filter",
+        {"from": "clip_channel", "look": "bw", "grain": 12},
+        {"from": "clip_channel", "look": "sepia"},
+        "unknown filter look",
+    ),
+    (
+        "music",
+        {"from": "clip_channel", "source": "./track.mp3", "fade_out": "2s"},
+        {"from": "clip_channel"},
+        "music requires a 'source'",
+    ),
+    (
+        "overlay",
+        {"from": "clip_channel", "text": "hi", "position": "top-left"},
+        {"from": "clip_channel", "text": "hi", "position": "north"},
+        "unknown overlay.position",
+    ),
+    (
+        "sfx",
+        {"from": "clip_channel", "source": "./whoosh.mp3", "at": [1, "0:02"], "gain": -6},
+        {"from": "clip_channel", "at": 1},
+        "sfx.source",
+    ),
+    (
+        "still",
+        {"image": "./a.jpg", "motion": "zoomin", "motion_amount": 1.2, "emit": "other"},
+        {"image": "./a.jpg", "motion": "spin", "emit": "other"},
+        "unknown still motion",
+    ),
+    (
+        "zoom",
+        {"from": "clip_channel", "amount": 1.3, "duration": "0.2s"},
+        {"from": "clip_channel", "amount": 0.5},
+        "zoom.amount",
+    ),
+]
+
+
+@pytest.mark.parametrize("block,good,_bad,_msg", BLOCK_CASES, ids=[c[0] for c in BLOCK_CASES])
+def test_block_valid_params_pass(block, good, _bad, _msg):
+    assert validate_doc(_with_step(block, good)) == []
+
+
+@pytest.mark.parametrize("block,_good,bad,msg", BLOCK_CASES, ids=[c[0] for c in BLOCK_CASES])
+def test_block_bad_params_rejected(block, _good, bad, msg):
+    errors = validate_doc(_with_step(block, bad))
+    assert any(msg in e for e in errors), errors
+
+
+def test_every_dispatched_block_is_a_real_block():
+    """A key that isn't a block name would never be reached."""
+    from lemontage import spec
+    from lemontage.validator import _BLOCK_CHECKS
+
+    assert set(_BLOCK_CHECKS) <= spec.BUILTIN_BLOCKS
+
+
+def test_every_block_case_is_dispatched():
+    """The table above must cover every block that has its own checks."""
+    from lemontage.validator import _BLOCK_CHECKS
+
+    assert {case[0] for case in BLOCK_CASES} == set(_BLOCK_CHECKS)
+
+
+# -- captions params (no coverage before the split) ----------------------------
+
+
+@pytest.mark.parametrize(
+    "params,msg",
+    [
+        ({"uppercase": "yes"}, "captions.uppercase must be a boolean"),
+        ({"case": "title"}, "captions.case must be 'upper' or 'lower'"),
+        ({"pop": 300}, "captions.pop must be a boolean or a scale percent"),
+        ({"pop": "loud"}, "captions.pop must be a boolean or a scale percent"),
+        ({"pop_duration": "0s"}, "captions.pop_duration must be > 0"),
+        ({"pop_duration": "soon"}, "captions.pop_duration must be a duration"),
+        ({"pop_on": "letter"}, "captions.pop_on must be 'word' or 'line'"),
+        ({"max_words": 0}, "captions.max_words must be an integer >= 1"),
+        ({"max_words": True}, "captions.max_words must be an integer >= 1"),
+        ({"outline": -1}, "captions.outline must be a number of pixels >= 0"),
+        ({"outline": True}, "captions.outline must be a number of pixels >= 0"),
+    ],
+)
+def test_captions_bad_params_rejected(params, msg):
+    errors = validate_doc(_with_step("captions", {"from": "clip_channel", **params}))
+    assert any(msg in e for e in errors), errors
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"uppercase": False},
+        {"case": "lower"},
+        {"pop": True},
+        {"pop": 140},
+        {"pop_duration": "0.06s"},
+        {"pop_on": "line"},
+        {"max_words": 1},
+        {"outline": 0},
+        {"outline": 3.5},
+    ],
+)
+def test_captions_good_params_pass(params):
+    assert validate_doc(_with_step("captions", {"from": "clip_channel", **params})) == []
+
+
+def test_cloud_model_still_rejected_per_block():
+    """The shared provider check must run for every block, not just stt."""
+    errors = validate_doc(_with_step("captions", {"from": "clip_channel", "model": "openai"}))
+    assert any("reserved for a later phase" in e for e in errors)
