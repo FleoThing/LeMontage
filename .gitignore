@@ -34,6 +34,11 @@ CLAUDE.md
 TODO.md
 # working pipelines at the root (examples/ holds the public ones)
 /pipeline*.yaml
+# scratch workspaces from a `video-use` session: a source clip, an edit tree and
+# its renders. The media inside is already ignored by extension, but an edit
+# workspace is mostly *not* media — EDLs, transcripts, SRTs, verification
+# screenshots — so it needs ignoring as a directory, not as a set of suffixes.
+/videouse-test/
 
 # OS / editor
 .DS_Store
