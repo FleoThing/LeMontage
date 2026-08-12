@@ -382,8 +382,7 @@ def _check_compose_params(params: dict, label: str, errors: list[str]) -> None:
         or (isinstance(audio, int) and not isinstance(audio, bool) and 0 <= audio < len(layers))
     ):
         errors.append(
-            f"{label}: compose.audio must be 'mix', 'none' or a layer index "
-            f"(0..{len(layers) - 1})"
+            f"{label}: compose.audio must be 'mix', 'none' or a layer index (0..{len(layers) - 1})"
         )
 
 
