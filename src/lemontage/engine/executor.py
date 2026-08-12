@@ -17,12 +17,14 @@ import hashlib
 import itertools
 import json
 import os
+import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .. import spec
 from . import template
 from .blocks import REGISTRY
 from .blocks.base import Block
@@ -88,16 +90,117 @@ def run_pipeline(
     nodes = build_dag(doc["steps"])
     result = RunResult()
 
-    for cell in cells:
-        if cell:
-            report(f"━━ matrix {_cell_label(cell)} ━━")
-        cell_result = _run_cell(doc, nodes, cell, var_overrides or {}, report)
-        result.cells.append(cell_result)
+    shared = _shareable_cells(doc, cells, report)
+    if shared > 1:
+        result.cells = _run_cells_concurrently(
+            doc, nodes, cells, var_overrides or {}, report, shared
+        )
+    else:
+        for cell in cells:
+            if cell:
+                report(f"━━ matrix {_cell_label(cell)} ━━")
+            result.cells.append(_run_cell(doc, nodes, cell, var_overrides or {}, report))
 
     if result.ok and _should_clean(doc, clean):
         _cleanup(doc, result, report)
 
     return result
+
+
+# Blocks that write a *deliverable* into the output directory. Their default file
+# names are built from the pipeline name, the step id and the clip index — none of
+# which vary by matrix cell — so two cells collide there unless the pipeline gave
+# them an explicit, cell-dependent `output:`.
+_OUTPUT_DIR_BLOCKS = frozenset({"export", "concat", "music"})
+_MATRIX_REF = re.compile(r"\{\{\s*matrix\.")
+
+
+def _shareable_cells(doc: dict[str, Any], cells: list[dict[str, Any]], report: Reporter) -> int:
+    """How many matrix cells may run at once. 1 means "run them in order".
+
+    Concurrency is only safe when the cells write different files. Intermediates
+    are handled by the engine (a per-cell work directory), but deliverables are
+    named by the pipeline, and the defaults carry nothing about the cell: four
+    cells would all render `<name>-0.mp4`. Sequentially that merely overwrites
+    scratch that has already been consumed; concurrently it is a race on one file.
+
+    So a pipeline qualifies only when every step that writes a deliverable has an
+    explicit `output:` mentioning `{{ matrix.… }}`. That test is exact rather than
+    merely cautious: a cell differs from its siblings by its matrix values and
+    nothing else, so a path that does not mention them cannot differ either.
+
+    A pipeline that does not qualify runs exactly as it always has, and is told
+    why — silently rendering it half as fast as it could be would be worse.
+    """
+    if len(cells) < 2:
+        return 1
+    blockers = [
+        step_id
+        for step_id, block, params in _steps_with_params(doc)
+        if block in _OUTPUT_DIR_BLOCKS and not _MATRIX_REF.search(str(params.get("output", "")))
+    ]
+    if blockers:
+        report(
+            f"  ⓘ matrix cells run in order: {', '.join(blockers)} would write the same "
+            "file in every cell. Give them an 'output:' containing {{ matrix.<key> }} "
+            "to render the cells concurrently."
+        )
+        return 1
+    return min(len(cells), _pool_size(len(cells)))
+
+
+def _steps_with_params(doc: dict[str, Any]):
+    """``(step_id, block, params)`` for each step, skipping malformed ones."""
+    for step in doc.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        block_keys = [k for k in step if k not in spec.COMMON_STEP_FIELDS]
+        if len(block_keys) != 1:
+            continue
+        params = step.get(block_keys[0])
+        yield (
+            str(step.get("id", block_keys[0])),
+            block_keys[0],
+            params if isinstance(params, dict) else {},
+        )
+
+
+def _run_cells_concurrently(
+    doc: dict[str, Any],
+    nodes: list[Node],
+    cells: list[dict[str, Any]],
+    var_overrides: dict[str, Any],
+    report: Reporter,
+    workers: int,
+) -> list[CellResult]:
+    """Render the cells at once, and report them as if they had run in order.
+
+    Two things are deliberately not left to chance:
+
+    * **Logs.** Each cell writes into its own buffer instead of straight to the
+      reporter, so two cells cannot interleave their step lines.
+    * **Order.** ``pool.map`` yields in the order the cells were declared, whatever
+      order they finish in, so both the report and ``RunResult.cells`` follow the
+      matrix as written.
+
+    Each cell also gets a slice of the worker budget rather than the whole of it:
+    four cells each opening a full pool would multiply the machine's concurrency
+    by four.
+    """
+    budget = max(1, _pool_size(len(cells) * _MIN_WORKERS) // workers)
+
+    def work(cell: dict[str, Any]) -> tuple[dict[str, Any], list[str], CellResult]:
+        lines: list[str] = []
+        return cell, lines, _run_cell(doc, nodes, cell, var_overrides, lines.append, budget)
+
+    results: list[CellResult] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for cell, lines, cell_result in pool.map(work, cells):
+            report(f"━━ matrix {_cell_label(cell)} ━━")
+            for line in lines:
+                report(line)
+            results.append(cell_result)
+    return results
 
 
 def _should_clean(doc: dict[str, Any], clean: bool | None) -> bool:
@@ -146,6 +249,7 @@ def _run_cell(
     matrix: dict[str, Any],
     var_overrides: dict[str, Any],
     report: Reporter,
+    worker_budget: int | None = None,
 ) -> CellResult:
     base_vars = {**(doc.get("vars") or {}), **var_overrides}
     output_dir = Path((doc.get("output") or {}).get("dir", "./output"))
@@ -155,6 +259,11 @@ def _run_cell(
         matrix=matrix,
         output_dir=output_dir,
         pipeline_name=str(doc.get("name", "pipeline")),
+        # Only a cell sharing the run with others needs its own scratch directory.
+        # A sequential run keeps the historical path, so upgrading LeMontage does
+        # not throw away a working checkpoint cache.
+        cell_key=_signature_str(matrix) if (matrix and worker_budget) else "",
+        worker_budget=worker_budget,
     )
     # Resolve templates in the input against vars/matrix (steps haven't run yet),
     # so a reusable pipeline can take its source via `--var` (e.g.
@@ -268,8 +377,12 @@ def _execute_mapped(node: Node, block: Block, params: dict[str, Any], ctx: RunCo
     def work(item: dict[str, Any]):
         return item, block.execute_item(params, item, ctx, node.step_id)
 
+    workers = _pool_size(len(items))
+    if ctx.worker_budget is not None:
+        workers = max(1, min(workers, ctx.worker_budget))
+
     aggregated: dict[str, list[Any]] = {}
-    with ThreadPoolExecutor(max_workers=_pool_size(len(items))) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(work, items))
 
     for item, item_result in results:

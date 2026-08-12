@@ -4,6 +4,9 @@ Blocks are replaced with lightweight fakes so the executor logic is exercised
 without FFmpeg or any model.
 """
 
+import itertools
+import threading
+
 import pytest
 
 from lemontage.engine import executor
@@ -519,3 +522,188 @@ def test_pool_size_rejects_a_bad_override(monkeypatch, value):
         return
     with pytest.raises(ValueError, match="LEMONTAGE_WORKERS"):
         executor._pool_size(100)
+
+
+# -- concurrent matrix cells --------------------------------------------------
+#
+# Cells only share a run when they write different files. Intermediates the
+# engine handles itself (a per-cell work directory); deliverables it cannot,
+# because their default names are built from the pipeline name, the step id and
+# the clip index -- none of which vary by cell.
+
+
+class SlowCell(Block):
+    """Records which cells overlap, and how each cell's work dir was named."""
+
+    name = "export"
+
+    def __init__(self, delay=0.05):
+        self.name = "export"
+        self._delay = delay
+        self._lock = threading.Lock()
+        self.peak = 0
+        self.live = 0
+        self.work_dirs = []
+
+    def execute(self, params, ctx, step_id):
+        import time
+
+        with self._lock:
+            self.live += 1
+            self.peak = max(self.peak, self.live)
+            self.work_dirs.append(str(ctx.work_dir()))
+        time.sleep(self._delay)
+        with self._lock:
+            self.live -= 1
+        return BlockResult(outputs={"cell": params.get("output")})
+
+
+def matrix_doc(output, tmp_path, cells=("a", "b", "c", "d")):
+    params = {"format": "vertical"}
+    if output is not None:
+        params["output"] = output
+    return base_doc(
+        [{"id": "x", "export": params}],
+        matrix={"k": list(cells)},
+        output={"dir": str(tmp_path)},
+    )
+
+
+def test_matrix_cells_run_concurrently_when_outputs_are_cell_keyed(patch_registry, tmp_path):
+    block = SlowCell()
+    patch_registry["export"] = block
+    doc = matrix_doc("{{ matrix.k }}/clip.mp4", tmp_path)
+
+    result = run(doc, reporter=lambda m: None)
+
+    assert result.ok
+    assert block.peak > 1, "cells did not overlap"
+    assert len(set(block.work_dirs)) == 4, "cells shared a work directory"
+
+
+def test_matrix_cells_stay_sequential_when_outputs_would_collide(patch_registry, tmp_path):
+    """The default export name is the same in every cell: that must not race."""
+    block = SlowCell()
+    patch_registry["export"] = block
+    lines = []
+
+    result = run(matrix_doc(None, tmp_path), reporter=lines.append)
+
+    assert result.ok
+    assert block.peak == 1, "cells overlapped despite colliding output paths"
+    assert any("run in order" in line and "x" in line for line in lines), lines
+
+
+def test_an_output_without_a_matrix_ref_also_blocks_sharing(patch_registry, tmp_path):
+    """An explicit path is not enough -- it has to differ per cell."""
+    block = SlowCell()
+    patch_registry["export"] = block
+    run(matrix_doc("same-for-every-cell.mp4", tmp_path), reporter=lambda m: None)
+    assert block.peak == 1
+
+
+def test_concurrent_cells_keep_the_declared_order(patch_registry, tmp_path):
+    """Cell 'd' finishes first; RunResult.cells must still read a, b, c, d."""
+
+    class Uneven(Block):
+        name = "export"
+
+        def execute(self, params, ctx, step_id):
+            import time
+
+            # Reverse the finishing order: 'a' sleeps longest.
+            time.sleep({"a": 0.20, "b": 0.15, "c": 0.10, "d": 0.05}[ctx.matrix["k"]])
+            return BlockResult(outputs={"k": ctx.matrix["k"]})
+
+    patch_registry["export"] = Uneven()
+    result = run(matrix_doc("{{ matrix.k }}/c.mp4", tmp_path), reporter=lambda m: None)
+
+    assert [c.matrix["k"] for c in result.cells] == ["a", "b", "c", "d"]
+    assert [c.outputs["x"]["k"] for c in result.cells] == ["a", "b", "c", "d"]
+
+
+def test_concurrent_cells_do_not_interleave_their_logs(patch_registry, tmp_path):
+    """Each cell's lines must arrive as one block, under its own header."""
+    patch_registry["export"] = SlowCell()
+    lines = []
+
+    run(matrix_doc("{{ matrix.k }}/c.mp4", tmp_path), reporter=lines.append)
+
+    headers = [i for i, line in enumerate(lines) if line.startswith("━━")]
+    assert len(headers) == 4
+    # Between two headers, every line must belong to the same cell's step.
+    for start, end in itertools.pairwise([*headers, len(lines)]):
+        body = lines[start + 1 : end]
+        assert body, "a cell reported nothing"
+        assert all("x (export)" in line for line in body), body
+
+
+def test_a_plain_pipeline_keeps_the_historical_work_dir(patch_registry, tmp_path):
+    """No matrix: the work path must not move, or every cache entry is voided."""
+    block = SlowCell()
+    patch_registry["export"] = block
+    run(
+        base_doc([{"id": "x", "export": {}}], output={"dir": str(tmp_path)}),
+        reporter=lambda m: None,
+    )
+    assert block.work_dirs == [str(tmp_path / ".lemontage" / "work")]
+
+
+def test_sequential_matrix_also_keeps_the_historical_work_dir(patch_registry, tmp_path):
+    """Colliding outputs mean sequential, and sequential means the old path."""
+    block = SlowCell()
+    patch_registry["export"] = block
+    run(matrix_doc(None, tmp_path), reporter=lambda m: None)
+    assert set(block.work_dirs) == {str(tmp_path / ".lemontage" / "work")}
+
+
+def test_shared_cells_do_not_multiply_the_machine(patch_registry, tmp_path):
+    """Four cells each opening a full pool would be 4x the intended concurrency.
+
+    Counts the items actually in flight across every cell at once, rather than
+    re-deriving the executor's own arithmetic.
+    """
+    import time
+
+    lock = threading.Lock()
+    live = 0
+    peak = 0
+
+    class CountingMapper(Block):
+        name = "export"
+
+        def execute(self, params, ctx, step_id):  # pragma: no cover
+            raise AssertionError("should map")
+
+        def execute_item(self, params, item, ctx, step_id):
+            nonlocal live, peak
+            with lock:
+                live += 1
+                peak = max(peak, live)
+            time.sleep(0.02)
+            with lock:
+                live -= 1
+            return ItemResult(item={}, outputs={"f": item["index"]})
+
+    patch_registry["detect_clips"] = Producer()
+    patch_registry["export"] = CountingMapper()
+    doc = base_doc(
+        [
+            {"id": "clips", "detect_clips": {"n": 12, "emit": "ch"}},
+            {"id": "x", "export": {"from": "ch", "output": "{{ matrix.k }}/c.mp4"}},
+        ],
+        matrix={"k": ["a", "b", "c", "d"]},
+        output={"dir": str(tmp_path)},
+    )
+
+    run(doc, reporter=lambda m: None)
+
+    assert peak > 1, "nothing ran concurrently at all"
+    # The whole point: four cells share one machine's budget, they do not each
+    # take one. `_pool_size` of a large count is that budget.
+    assert peak <= executor._pool_size(10_000), peak
+
+
+def test_a_single_cell_matrix_is_not_shared():
+    doc = {"steps": [{"id": "x", "export": {}}]}
+    assert executor._shareable_cells(doc, [{"k": "only"}], lambda m: None) == 1

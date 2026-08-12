@@ -1137,6 +1137,35 @@ The example above produces **4 runs** (`fr×vertical`, `fr×square`,
 
 > Channels (§8) parallelize *within* a run; matrix parallelizes *across* runs.
 
+### 9.1 Give each cell its own output path
+
+The example above is subtly incomplete. `export`, `concat` and `music` name their
+default output from the pipeline name, the step id and the clip index — and none
+of those change from one cell to the next. So all 4 runs write the *same* files,
+and only the last one survives.
+
+Name the file after the cell:
+
+```yaml
+  - export:
+      format: "{{ matrix.format }}"
+      output: "./output/{{ matrix.lang }}-{{ matrix.format }}/clip-{{ index }}.mp4"
+```
+
+This has always been true. What is new is that it also decides **how fast the run
+goes**: cells whose deliverables are cell-keyed are rendered concurrently, and
+cells that would overwrite each other are rendered one after another, which is
+the only way to keep them correct. `lemontage run` says which it chose:
+
+```text
+  ⓘ matrix cells run in order: export would write the same file in every cell.
+    Give them an 'output:' containing {{ matrix.<key> }} to render the cells
+    concurrently.
+```
+
+Intermediate files are not your problem — the engine gives each cell its own
+scratch directory under `.lemontage/work/`.
+
 ---
 
 ## 10. Output
