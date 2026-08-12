@@ -14,8 +14,9 @@ A perf change without both answers is a claim, not a result.
 |---|---|
 | `channel.yaml` | The per-item fan-out: 16 clips through `cut` then `export`, 32 mapped ffmpeg runs. |
 | `matrix.yaml` | Matrix cells: 4 cells of 4 clips each. |
+| `dag.yaml` | Independent DAG steps: two branches that meet only at a final `concat`. |
 
-Both avoid `stt` on purpose. Whisper dominates the wall clock on any real source
+All three avoid `stt` on purpose. Whisper dominates the wall clock on any real source
 and would hide everything else, so the clip boundaries are hard-coded
 (`detect_clips: method: agent`) and nothing is transcribed.
 
@@ -95,6 +96,24 @@ checkouts and `--compare`.
 
 The numbers are only comparable to each other on the same machine, with the same
 source and the same ffmpeg. There is no absolute score here.
+
+## A control can be wrong about its own subject
+
+`dag.yaml` first used `detect_clips: method: agent`, like the other two, so every
+step in a branch was a fan-out. A fan-out already spreads itself across the
+worker pool and fills the machine on its own, so there was nothing idle for
+concurrent branches to recover: the control measured -2.3% over 11 rounds, inside
+its own noise, and said the DAG scheduler bought nothing.
+
+It was measuring the wrong thing. A real pipeline from the repo
+(`pipeline_canadair.yaml`, three branches with a beat-detection pass each) put the
+same change at -6.1%, faster in 3 rounds of 3. What the scheduler recovers is the
+time a **single-mode** step leaves the machine idle — and the control had none.
+With a real analysis pass per branch it now reports -9.8%, faster in 4 of 4.
+
+The lesson is not about this file. Before trusting a control that reports "no
+change", check that it contains the thing the change acts on. A control that
+cannot see the effect looks exactly like an effect that is not there.
 
 ### One thing the fingerprint cannot absorb
 
