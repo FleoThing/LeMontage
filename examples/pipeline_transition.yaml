@@ -7,33 +7,46 @@ input:
   source: ./video-example.mp4
 
 steps:
+  # Every step is named. A step without an `id:` takes its block name, so the two
+  # parts below — which run the same four blocks each — would collide on the ids
+  # 'detect_clips', 'cut', 'export' and 'concat'. The id also lands in the clip
+  # filenames, so both exports would overwrite each other's output.
+
   # === Part 1: the loudest moments -> ONE finished clip =====================
-  - detect_clips:
+  - id: p1-detect
+    detect_clips:
       method: loudness
       max_clips: 4
       min_duration: 3s
       max_duration: 6s
       emit: p1_clips
-  - cut:
+  - id: p1-cut
+    cut:
       from: p1_clips
-  - export:
+  - id: p1-export
+    export:
       from: p1_clips
-  - concat:
+  - id: p1-reel
+    concat:
       from: p1_clips
       emit: part1
 
   # === Part 2: a scene-change montage -> ONE finished clip ==================
-  - detect_clips:
-      method: scene
+  - id: p2-detect
+    detect_clips:
+      method: scene_change
       max_clips: 4
       min_duration: 2s
       max_duration: 5s
       emit: p2_clips
-  - cut:
+  - id: p2-cut
+    cut:
       from: p2_clips
-  - export:
+  - id: p2-export
+    export:
       from: p2_clips
-  - concat:
+  - id: p2-reel
+    concat:
       from: p2_clips
       emit: part2
 
@@ -42,7 +55,8 @@ steps:
   # parts. `at` starts the fade at an absolute offset in the final timeline
   # (default: the natural boundary between the parts); anything after `at` in
   # part1 is truncated by the crossfade.
-  - concat:
+  - id: final
+    concat:
       from: [part1, part2]
       transition: { type: fadewhite, duration: 0.5s, at: 11s }
       output: "./output/{{ name }}-final.mp4"

@@ -1,6 +1,7 @@
 """Tests for the LeMontage v1 pipeline validator."""
 
 import copy
+from pathlib import Path
 
 import pytest
 
@@ -371,19 +372,25 @@ def test_validate_file_bad_yaml(tmp_path):
     assert any("invalid YAML" in e for e in errors)
 
 
-def test_example_pipeline_is_valid():
-    """The shipped example must validate."""
-    from pathlib import Path
-
-    example = Path(__file__).resolve().parents[1] / "examples" / "pipeline_clips.yaml"
-    assert validate_file(example) == []
+EXAMPLES = sorted((Path(__file__).resolve().parents[1] / "examples").glob("*.yaml"))
 
 
-def test_multi_channel_example_is_valid():
-    """The channel-merge example (concat over a list of channels) must validate."""
-    from pathlib import Path
+def test_examples_directory_is_not_empty():
+    """Guard the guard: a bad glob would make the test below vacuously pass."""
+    assert len(EXAMPLES) >= 15, EXAMPLES
 
-    example = Path(__file__).resolve().parents[1] / "examples" / "pipeline_merge.yaml"
+
+@pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.stem)
+def test_every_shipped_example_is_valid(example):
+    """Every example in examples/ must validate.
+
+    Only two of them used to be checked, by name. The other eighteen were never
+    read by anything, and two had gone invalid without anyone noticing: when the
+    duplicate-step-id rule landed, `pipeline_carousel.yaml` and
+    `pipeline_transition.yaml` kept anonymous steps that collide on their
+    default id. A parametrised sweep costs nothing and would have caught it the
+    day the rule was added.
+    """
     assert validate_file(example) == []
 
 

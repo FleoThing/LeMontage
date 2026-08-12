@@ -21,9 +21,15 @@ steps:
       min_duration: 6s
       max_duration: 10s
       emit: highlight
-  - cut:
+  - id: hl-cut
+    cut:
       from: highlight
-  - export:
+  # A pipeline with several export steps has to name them: a step without an
+  # `id:` takes its block name, so two anonymous exports would share the id
+  # 'export' — and the id is part of the clip filename, so they would also
+  # overwrite each other's output.
+  - id: hl-export
+    export:
       from: highlight
       format: vertical
       fit: cover
@@ -39,17 +45,24 @@ steps:
       input: ./photos/     # folder of images (jpg/png/webp)
       duration: 2s
       emit: carousel
-  - still:                 # each image -> a 2s video clip (no audio)
+  - id: carousel-still     # each image -> a 2s video clip (no audio)
+    still:
       from: carousel
-  - export:
+  - id: carousel-export
+    export:
       from: carousel
       format: vertical
       fit: cover           # crop each photo to fill the vertical frame
   - id: carousel-reel
     concat:
       from: carousel
-      # 5 photos -> 4 gaps: alternate slide directions between the photos.
-      transitions: [slideleft, slideright, slideleft, slideright]
+      # One name, applied to every gap — so this works whatever the folder holds.
+      # A *list* must have exactly one entry per gap (photos - 1), which means a
+      # pipeline written for 5 photos fails on a folder of 6. LeMontage cannot
+      # alternate two directions across a channel whose length it does not know
+      # in advance; a list that cycles when it is shorter than the gap count
+      # would be the missing primitive.
+      transitions: slideleft
       duration: 0.2s        # quick slide (default is 0.5s)
       output: "./output/slideshow.mp4"
       emit: slideshow
