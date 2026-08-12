@@ -368,6 +368,72 @@ def _check_concat_params(params: dict, label: str, errors: list[str]) -> None:
     _check_concat_transition(params, label, errors)
 
 
+def _check_compose_params(params: dict, label: str, errors: list[str]) -> None:
+    layers = params.get("layers")
+    if not isinstance(layers, list) or not layers:
+        errors.append(f"{label}: compose requires a non-empty 'layers' list")
+        return
+    for index, layer in enumerate(layers):
+        _check_compose_layer(layer, index, label, errors)
+
+    audio = params.get("audio")
+    if audio is not None and not (
+        (isinstance(audio, str) and audio.lower() in ("mix", "none"))
+        or (isinstance(audio, int) and not isinstance(audio, bool) and 0 <= audio < len(layers))
+    ):
+        errors.append(
+            f"{label}: compose.audio must be 'mix', 'none' or a layer index "
+            f"(0..{len(layers) - 1})"
+        )
+
+
+def _check_compose_layer(layer: object, index: int, label: str, errors: list[str]) -> None:
+    """One layer: exactly one source, and geometry that parses."""
+    where = f"{label}: compose.layers[{index}]"
+    if not isinstance(layer, dict):
+        errors.append(f"{where} must be a mapping")
+        return
+    has_video, has_image = layer.get("video") is not None, layer.get("image") is not None
+    if has_video and has_image:
+        errors.append(f"{where} has both 'video' and 'image' (pick one)")
+    elif not has_video and not has_image:
+        errors.append(f"{where} needs a 'video' or an 'image'")
+
+    for field in ("x", "y", "width", "height"):
+        value = layer.get(field)
+        # An int is pixels, a "50%" string is a share of the canvas axis. The
+        # engine resolves both; here we only reject what can never parse.
+        if value is None or (isinstance(value, int) and not isinstance(value, bool)):
+            continue
+        text = str(value).strip()
+        if not _is_extent(text):
+            errors.append(f"{where}.{field} must be pixels (540) or a percentage ('50%')")
+
+    fit = layer.get("fit")
+    if fit is not None and str(fit).lower() not in spec.COMPOSE_FIT_MODES:
+        valid = ", ".join(sorted(spec.COMPOSE_FIT_MODES))
+        errors.append(f"{where}.fit must be one of: {valid}")
+
+    on_short = layer.get("on_short")
+    if on_short is not None and str(on_short).lower() not in spec.COMPOSE_ON_SHORT:
+        valid = ", ".join(sorted(spec.COMPOSE_ON_SHORT))
+        errors.append(f"{where}.on_short must be one of: {valid}")
+
+    key = layer.get("key")
+    if key is not None and key is not True and not isinstance(key, dict):
+        errors.append(f"{where}.key must be a mapping (color/tolerance/softness)")
+
+
+def _is_extent(text: str) -> bool:
+    """True when the string is a pixel count or a percentage the engine can read."""
+    body = text[:-1] if text.endswith("%") else text
+    try:
+        float(body)
+    except ValueError:
+        return False
+    return True
+
+
 def _check_music_params(params: dict, label: str, errors: list[str]) -> None:
     source = params.get("source")
     if source is None:
@@ -681,6 +747,7 @@ def _check_from(
 # deliberately absent rather than mapped to a no-op.
 _BLOCK_CHECKS: dict[str, Callable[[dict, str, list[str]], None]] = {
     "captions": _check_captions_params,
+    "compose": _check_compose_params,
     "concat": _check_concat_params,
     "detect_clips": _check_detect_clips_params,
     "export": _check_export_params,

@@ -1,0 +1,77 @@
+lemontage: "1.0"
+name: compose
+description: "A green-screened subject composited over a still backdrop, titled and scored, then the same block used as a dual screen"
+
+# `compose` layers name their own sources, so the pipeline input is only what the
+# other blocks work on. A layer takes a path (like the per-step `input:` override
+# the rest of the engine uses) or the name of a channel emitted earlier.
+input:
+  type: video
+  source: ./video-example.mp4
+
+steps:
+  # === A subject over a backdrop ===========================================
+  # Layer 0 is the backdrop, layer 1 the subject with its green keyed out. The
+  # subject sits in the middle half of the frame, so the backdrop reads above
+  # and below it.
+  - id: comp
+    compose:
+      format: vertical
+      layers:
+        - image: ./photos/backdrop.jpg
+          fit: cover              # crop the still to fill the vertical frame
+        - video: ./greenscreen.mp4
+          y: "25%"
+          height: "50%"
+          # `contain` fits the whole source in its rectangle and does NOT pad:
+          # bars would hide the backdrop, which is the point of compositing.
+          fit: contain
+          key:
+            color: green
+            # The defaults (tolerance 0.12, softness 0.02, spill 0.5) are tuned
+            # for an ordinary lit screen. Raising `tolerance` is the usual
+            # mistake: past ~0.2 the subject itself starts going translucent.
+            tolerance: 0.12
+      emit: reel
+
+  - id: titled
+    export:
+      from: reel
+      format: vertical
+      title: "When the backdrop does the talking"
+      title_position: top
+      title_box: white
+      title_color: black
+      title_size: 62
+      author: fillouxdev
+      author_position: bottom-center
+
+  # `music` trims the track to the video length on its own, so a full-length
+  # song lands at the composition's duration without any cutting here.
+  - id: scored
+    music:
+      from: reel
+      source: ./music.mp3
+      fade_out: 0.5s
+      output: "./output/{{ name }}.mp4"
+
+  # === The same block as a dual screen =====================================
+  # Nothing new is used here: two layers, half the canvas each. That is the
+  # whole difference between a split screen and a picture-in-picture.
+  - id: dual
+    compose:
+      format: vertical
+      layers:
+        - video: ./talking.mp4
+          height: "50%"
+        - video: ./gameplay.mp4
+          y: "50%"
+          height: "50%"
+          # The gameplay is usually longer or shorter than the clip above it;
+          # `loop` keeps it running under the talking head either way.
+          on_short: loop
+      audio: 0                    # only the talking head is heard
+      output: "./output/{{ name }}-dual.mp4"
+
+output:
+  dir: ./output

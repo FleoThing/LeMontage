@@ -5,6 +5,47 @@ All notable changes to LeMontage are tracked here.
 This project follows SemVer-style versioning while it is pre-1.0: minor versions
 may still introduce breaking changes, and those changes must be called out here.
 
+## [Unreleased]
+
+### Added
+
+- **`compose`: several sources in one frame.** Every other block worked on one
+  source at a time (`concat` joins clips in time, `overlay` composites a still
+  PNG), so nothing could put two moving pictures in the same frame. `compose`
+  takes a canvas and a stack of layers, each a video or an image with its own
+  rectangle. It is deliberately not a dual-screen block: a split screen is two
+  layers at half height, a picture-in-picture is a small layer in a corner, a
+  subject over a backdrop is an image under a keyed video. Same block, different
+  coordinates.
+
+  Geometry is `x`/`y`/`width`/`height`, where an int is pixels and a `"50%"`
+  string is a share of the canvas axis, so one layout replays in vertical,
+  square or horizontal untouched. A negative `x`/`y` counts back from the
+  opposite edge, the convention `overlay` already used.
+
+  A layer names its own source, following the per-step `input:` override the
+  rest of the engine uses, so this needed no pipeline-level "multiple inputs"
+  concept. `video:` also accepts the name of a channel emitted earlier; a
+  channel holding several clips is refused rather than silently truncated to its
+  first.
+
+  Layers rarely share a length: the composition runs as long as its longest
+  layer, and a shorter one holds its last frame (`on_short: freeze`, the
+  default), restarts (`loop`) or ends and reveals what is under it (`hide`).
+  `audio:` picks which layer is heard, defaulting to the first that has sound.
+
+- **`key:` on a compose layer: the green screen.** Makes one colour transparent
+  so the layers underneath show through. It is a per-layer option rather than a
+  block, because "remove the background" is a property of a source, not a kind
+  of edit.
+
+  The defaults were measured on real footage, not guessed, and two of them are
+  the difference between working and plausibly broken. `tolerance` is `0.12`:
+  the obvious-looking `0.3` keys the *subject* too, because skin and cloth land
+  within 30% of the key colour in UV space, and the person comes out
+  translucent. And keying alone leaves a green halo on hair from the light the
+  screen bounced back, so `spill` despills by default.
+
 ## [0.9.0] - 2026-08-12
 
 ### Added
