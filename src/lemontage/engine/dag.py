@@ -93,6 +93,7 @@ def build_dag(steps: list[dict[str, Any]]) -> list[Node]:
     emitters = {n.emits: n for n in nodes if n.emits}
 
     _add_template_edges(nodes, by_id)
+    _add_requires_edges(nodes, by_id)
     _add_channel_edges(nodes, emitters)
 
     return _topo_sort(nodes)
@@ -106,6 +107,30 @@ def _add_template_edges(nodes: list[Node], by_id: dict[str, Node]) -> None:
                 raise DagError(f"step '{node.step_id}' references unknown step '{ref_id}'")
             if target.index != node.index:
                 node.deps.add(target.index)
+
+
+def _add_requires_edges(nodes: list[Node], by_id: dict[str, Node]) -> None:
+    """``requires: <step>.<state>`` is a dependency, so make it an edge.
+
+    It was not one. ``requires`` is a plain string, not a ``{{ steps.… }}``
+    reference, so :func:`_add_template_edges` never saw it and the gate worked by
+    the accident of steps running in declaration order. A step that required one
+    written *below* it read that step's state as ``pending`` and skipped itself,
+    every time, silently — and nothing could order the two once steps stopped
+    running strictly in sequence.
+
+    An unknown step id is deliberately left alone rather than raised on: today it
+    means "state never matches, so skip", and turning a typo into a hard error is
+    a change for a different release.
+    """
+    for node in nodes:
+        requires = node.common.get("requires")
+        if not requires:
+            continue
+        step_id, _, _state = str(requires).rpartition(".")
+        target = by_id.get(step_id)
+        if target is not None and target.index != node.index:
+            node.deps.add(target.index)
 
 
 def _add_channel_edges(nodes: list[Node], emitters: dict[str, Node]) -> None:

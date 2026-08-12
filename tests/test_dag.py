@@ -98,3 +98,55 @@ def test_unknown_channel_in_list_raises():
     ]
     with pytest.raises(DagError, match="ghost"):
         build_dag(steps)
+
+
+# -- `requires` is a dependency (dag._add_requires_edges) ----------------------
+
+
+def test_requires_orders_the_step_after_its_gate():
+    """A step that requires one written *below* it used to run first, and skip.
+
+    `requires` is a plain string, not a `{{ steps.… }}` reference, so it created
+    no edge: ordering came from declaration order alone. Declared above its gate,
+    the step read `pending` instead of `success` and skipped itself every run.
+    """
+    nodes = build_dag(
+        [
+            {"id": "b", "export": {}, "requires": "a.success"},
+            {"id": "a", "stt": {}},
+        ]
+    )
+    assert [n.step_id for n in nodes] == ["a", "b"]
+
+
+def test_requires_edge_survives_the_usual_order():
+    nodes = build_dag(
+        [
+            {"id": "a", "stt": {}},
+            {"id": "b", "export": {}, "requires": "a.success"},
+        ]
+    )
+    by_id = {n.step_id: n for n in nodes}
+    assert by_id["a"].index in by_id["b"].deps
+
+
+def test_requires_on_an_unknown_step_is_left_alone():
+    """A typo still means "never matches, so skip" -- not a hard error."""
+    nodes = build_dag([{"id": "b", "export": {}, "requires": "nope.success"}])
+    assert [n.step_id for n in nodes] == ["b"]
+    assert nodes[0].deps == set()
+
+
+def test_requires_cannot_depend_on_itself():
+    nodes = build_dag([{"id": "a", "stt": {}, "requires": "a.success"}])
+    assert nodes[0].deps == set()
+
+
+def test_requires_cycle_is_reported():
+    with pytest.raises(DagError, match="cycle"):
+        build_dag(
+            [
+                {"id": "a", "stt": {}, "requires": "b.success"},
+                {"id": "b", "export": {}, "requires": "a.success"},
+            ]
+        )
