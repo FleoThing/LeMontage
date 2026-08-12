@@ -5,7 +5,7 @@ All notable changes to LeMontage are tracked here.
 This project follows SemVer-style versioning while it is pre-1.0: minor versions
 may still introduce breaking changes, and those changes must be called out here.
 
-## [Unreleased]
+## [0.9.0] - 2026-08-12
 
 ### Added
 
@@ -18,6 +18,15 @@ may still introduce breaking changes, and those changes must be called out here.
 
 ### Fixed
 
+- **Two shipped examples did not validate**, and one of them did not run.
+  `pipeline_carousel.yaml` and `pipeline_transition.yaml` left steps unnamed, so
+  a pipeline running the same block twice collided with itself on the default
+  step id — which also meant the two branches overwrote each other's clips, since
+  the id is part of the filename. `pipeline_transition.yaml` additionally asked
+  for `method: scene`, which does not exist (`scene_change`), and
+  `pipeline_carousel.yaml` fixed a transition count that only matched a folder of
+  exactly five photos. Every example in `examples/` is now validated by a test;
+  before, two of the twenty were checked by name and the rest by nothing.
 - **`requires:` is now a real dependency.** A step gated on another with
   `requires: <step>.success` had no edge to it in the DAG, so the gate worked
   only because steps ran in declaration order. Written *above* its gate, the step
