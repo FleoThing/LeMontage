@@ -7,7 +7,7 @@
 # Only what the code imports directly is listed here.
 
 # Pipeline parsing / validation + CLI (always required)
-pyyaml==6.0.3
+pyyaml==6.0.4
 typer==0.27.1             # typed CLI sub-commands + shell completion
 rich==15.0.0              # coloured terminal output
 
